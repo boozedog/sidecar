@@ -1,8 +1,11 @@
 package tdmonitor
 
 import (
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/sst/sidecar/internal/plugin"
 )
 
 func TestNew(t *testing.T) {
@@ -24,8 +27,8 @@ func TestPluginID(t *testing.T) {
 
 func TestPluginName(t *testing.T) {
 	p := New()
-	if name := p.Name(); name != "TD Monitor" {
-		t.Errorf("expected Name 'TD Monitor', got %q", name)
+	if name := p.Name(); name != "td monitor" {
+		t.Errorf("expected Name 'td monitor', got %q", name)
 	}
 }
 
@@ -155,4 +158,100 @@ func TestFormatIssueCount(t *testing.T) {
 
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
+}
+
+func TestInitWithNonExistentDatabase(t *testing.T) {
+	p := New()
+	ctx := &plugin.Context{
+		WorkDir: "/nonexistent/path",
+	}
+
+	// Init should NOT return an error even if database doesn't exist
+	// This is silent degradation - plugin loads but shows "no database"
+	err := p.Init(ctx)
+	if err != nil {
+		t.Errorf("Init should not return error for missing database, got: %v", err)
+	}
+
+	// Plugin should still be usable
+	if p.ctx == nil {
+		t.Error("context should be set")
+	}
+	if p.data == nil {
+		t.Error("data provider should be created")
+	}
+}
+
+func TestInitWithValidDatabase(t *testing.T) {
+	// Find project root by walking up to find .todos
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Skip("couldn't get working directory")
+	}
+
+	// The test runs from internal/plugins/tdmonitor, so go up to project root
+	projectRoot := cwd
+	for i := 0; i < 5; i++ {
+		if _, err := os.Stat(projectRoot + "/.todos/issues.db"); err == nil {
+			break
+		}
+		projectRoot = projectRoot + "/.."
+	}
+
+	// Verify we found a .todos directory
+	if _, err := os.Stat(projectRoot + "/.todos/issues.db"); err != nil {
+		t.Skip("no .todos database found in project hierarchy")
+	}
+
+	p := New()
+	ctx := &plugin.Context{
+		WorkDir: projectRoot,
+	}
+
+	err = p.Init(ctx)
+	if err != nil {
+		t.Errorf("Init failed: %v", err)
+	}
+
+	// Check if we can detect the database exists
+	if p.data == nil || p.data.db == nil {
+		t.Error("Database connection should be established")
+	}
+}
+
+func TestDiagnosticsWithDatabase(t *testing.T) {
+	// Find project root by walking up to find .todos
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Skip("couldn't get working directory")
+	}
+
+	projectRoot := cwd
+	for i := 0; i < 5; i++ {
+		if _, err := os.Stat(projectRoot + "/.todos/issues.db"); err == nil {
+			break
+		}
+		projectRoot = projectRoot + "/.."
+	}
+
+	// Verify we found a .todos directory
+	if _, err := os.Stat(projectRoot + "/.todos/issues.db"); err != nil {
+		t.Skip("no .todos database found in project hierarchy")
+	}
+
+	p := New()
+	ctx := &plugin.Context{
+		WorkDir: projectRoot,
+	}
+	p.Init(ctx)
+
+	diags := p.Diagnostics()
+	if len(diags) != 1 {
+		t.Fatalf("expected 1 diagnostic, got %d", len(diags))
+	}
+
+	// With database, status should be "ok"
+	if diags[0].Status != "ok" {
+		t.Errorf("expected status 'ok' with database, got %q", diags[0].Status)
+	}
 }

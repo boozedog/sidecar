@@ -11,7 +11,7 @@ import (
 
 const (
 	pluginID   = "td-monitor"
-	pluginName = "TD Monitor"
+	pluginName = "td monitor"
 	pluginIcon = "T"
 
 	pollInterval = 2 * time.Second
@@ -76,9 +76,9 @@ func (p *Plugin) Init(ctx *plugin.Context) error {
 	p.ctx = ctx
 	p.data = NewDataProvider(ctx.WorkDir)
 
-	if err := p.data.Open(); err != nil {
-		return err // No .todos database, silent degradation
-	}
+	// Try to open database - if it fails, plugin still loads but shows "no database"
+	// This is silent degradation - the plugin is available but non-functional
+	_ = p.data.Open()
 
 	return nil
 }

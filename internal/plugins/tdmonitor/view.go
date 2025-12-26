@@ -9,7 +9,7 @@ import (
 
 // renderNoDatabase renders the view when no database is available.
 func renderNoDatabase() string {
-	return styles.Muted.Render(" TD database not found (.todos/issues.db)")
+	return styles.Muted.Render(" td database not found (.todos/issues.db)")
 }
 
 // renderList renders the main list view.
@@ -21,7 +21,7 @@ func (p *Plugin) renderList() string {
 	if p.session != nil {
 		sessionInfo = fmt.Sprintf("session: %s", p.session.ID[:8])
 	}
-	header := fmt.Sprintf(" TD Monitor                               %s", sessionInfo)
+	header := fmt.Sprintf(" td monitor                               %s", sessionInfo)
 	sb.WriteString(styles.PanelHeader.Render(header))
 	sb.WriteString("\n")
 	sb.WriteString(styles.Muted.Render(strings.Repeat("━", p.width-2)))
