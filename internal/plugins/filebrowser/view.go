@@ -49,8 +49,9 @@ func (p *Plugin) renderView() string {
 		searchBarHeight = 1
 	}
 
-	// Calculate pane height: total - footer (1 line) - search bar - pane border (2 lines)
-	paneHeight := p.height - 1 - searchBarHeight - 2
+	// Calculate pane height: total - search bar - pane border (2 lines)
+	// Note: footer is rendered by the app, not by the plugin
+	paneHeight := p.height - searchBarHeight - 2
 	if paneHeight < 4 {
 		paneHeight = 4
 	}
@@ -87,10 +88,6 @@ func (p *Plugin) renderView() string {
 	}
 
 	parts = append(parts, panes)
-
-	// Add footer
-	footer := p.renderFooter()
-	parts = append(parts, footer)
 
 	return lipgloss.JoinVertical(lipgloss.Top, parts...)
 }
@@ -266,19 +263,6 @@ func (p *Plugin) renderPreviewPane(visibleHeight int) string {
 	}
 
 	return sb.String()
-}
-
-// renderFooter renders the keybinding hints.
-func (p *Plugin) renderFooter() string {
-	var hints string
-	if p.searchMode {
-		hints = "esc cancel  enter jump  up/down select match"
-	} else if p.activePane == PaneTree {
-		hints = "j/k nav  l open/preview  h close  e edit  / search  n/N match"
-	} else {
-		hints = "h back  e edit  j/k scroll  g top  G bottom  ctrl+d/u page"
-	}
-	return styles.Muted.Render(hints)
 }
 
 // truncatePath shortens a path to fit width.

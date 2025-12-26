@@ -1,75 +1,204 @@
 # Sidecar Keyboard Shortcuts Guide
 
-Comprehensive guidance for plugin and core implementers on defining, wiring, and presenting keyboard shortcuts.
+How to implement keyboard shortcuts for plugins.
 
-## Core components (where things live)
-- Keymap registry: `internal/keymap/registry.go`
-- Default bindings: `internal/keymap/bindings.go`
-- Plugin command contract: `internal/plugin/plugin.go` (`Commands()`, `FocusContext()`)
-- Footer/help rendering: `internal/app/view.go`
+## Quick Start: Adding a New Shortcut
 
-## Concepts
-- **Command**: A logical action with an ID, human name, and handler. Registered in `keymap.Registry` or exposed by plugins via `Commands()`.
-- **Binding**: A key or key sequence mapped to a command within a *context*.
-- **Context**: A string namespace (e.g., `global`, `git-status`, `git-diff`, `td-monitor`). Key lookup first checks active context, then global.
-- **Sequence**: Multi-key binding (e.g., `g g`) with a 500ms timeout (`sequenceTimeout`).
-- **Active context**: Returned by `Plugin.FocusContext()`; must reflect current view mode so lookup and footer hints stay correct.
+**Three things must match for a shortcut to work:**
 
-## Adding or updating shortcuts
-1. **Define a command** (if global/core): register in `keymap.Registry` with a stable `ID` and user-facing `Name`. Keep handlers cheap.
-2. **Expose plugin commands**: return `[]plugin.Command` from `Plugin.Commands()`, one per action per context.
-3. **Bind keys**: add `keymap.Binding` entries in `internal/keymap/bindings.go` for each command/context pair. Prefer mnemonic, conflict-free keys.
-4. **Set the focus context**: ensure `FocusContext()` returns the correct context for the current view state; update it when view modes change.
-5. **Test footer/help**: with the plugin focused, footer hints and `?` help should show your bindings. If not, check that command IDs + contexts match bindings.
+1. **Command ID** in `Commands()` → e.g., `"stage-file"`
+2. **Binding command** in `bindings.go` → e.g., `Command: "stage-file"`
+3. **Context** in both places → e.g., `"git-status"`
 
-## Context and focus rules
-- **Plugin-specific bindings take precedence over global bindings.** When a plugin returns a non-global context from `FocusContext()`, its bindings are checked first.
-- **Only `tab` and `shift+tab` always work for plugin switching.** These are the only keys that unconditionally switch plugins regardless of context.
-- **All other plugin-switch keys are context-aware**: Keys like `g`, `t`, `c`, `f` and `1-9` only switch plugins in "global" context. In plugin-specific contexts (e.g., `git-status`), they are forwarded to the plugin. This allows plugins to use these keys for internal actions (e.g., `c` for commit in git-status, `1-3` for pane switching in td-monitor).
-- Switching plugins calls `SetFocused` on the old/new plugin; update any context-dependent state there if needed.
-- When inside subviews (e.g., diff modal, commit editor), return a sub-context (`git-diff`, `git-commit`) so only relevant bindings display and global shortcuts don't interfere.
+```go
+// 1. In your plugin's Commands() method:
+func (p *Plugin) Commands() []plugin.Command {
+    return []plugin.Command{
+        {ID: "stage-file", Name: "Stage", Context: "git-status"},
+    }
+}
 
-## Sequences
-- Register multi-key bindings using space separation (e.g., `g g`).
-- Sequences start when the first key matches a binding prefix; if the second key is not pressed within 500ms, the pending state resets.
-- Avoid ambiguous prefixes unless intentional (keep the set small to reduce UX confusion).
+// 2. In your plugin's FocusContext() method:
+func (p *Plugin) FocusContext() string {
+    return "git-status"  // Must match the Context above
+}
 
-## Naming conventions
-- Command IDs: kebab-case verbs (`open-file`, `toggle-help`, `approve-issue`).
-- Contexts: kebab-case matching plugin IDs or view modes (`git-status`, `conversation-detail`).
-- Keys: lowercase for letters (`j`, `k`, `g g`), `ctrl+<key>` for control, `shift+tab`, `enter`, `esc`, `up/down/left/right`.
+// 3. In internal/keymap/bindings.go:
+{Key: "s", Command: "stage-file", Context: "git-status"},
+```
 
-## User overrides
-- Users can override bindings via config (`cfg.Keymap.Overrides`). Registry checks overrides before context/global bindings.
-- Keep command IDs stable; changing them breaks overrides. If renaming is necessary, add a backwards-compat alias period when feasible.
+## How It Works
 
-## Collision avoidance checklist
-- Search `bindings.go` for your chosen key/context before adding.
-- Avoid stealing widely expected globals (`q`, `ctrl+c`, `?`, tab navigation) unless justified.
-- Prefer context-specific bindings over global when the action is view-local.
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│  FocusContext() │───▶│   bindings.go   │───▶│   Commands()    │
+│  returns context│    │  key→command    │    │  shows in footer│
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+        │                      │                      │
+        │                      │                      │
+        ▼                      ▼                      ▼
+   "git-status"          Key: "s"              Name: "Stage"
+                         Command: "stage-file"  ID: "stage-file"
+                         Context: "git-status"  Context: "git-status"
+```
 
-## Accessibility and ergonomics
-- Provide alternatives for critical actions (e.g., arrow keys in addition to `j/k`).
-- Keep high-frequency actions on home-row keys; reserve shifted/ctrl combos for less common tasks.
-- Ensure commands remain reachable on 60% keyboards (avoid F-keys unless optional).
+1. User presses a key
+2. App calls `FocusContext()` on active plugin → gets `"git-status"`
+3. App looks up key in `bindings.go` for that context
+4. App finds `{Key: "s", Command: "stage-file", Context: "git-status"}`
+5. App dispatches the command to the plugin
+6. Footer shows commands from `Commands()` that match the current context
 
-## Surfacing shortcuts to users
-- Footer hints: supplied by `Commands()` + matching bindings in the active context.
-- Help overlay (`?`): built from registry bindings; shows global plus active-context bindings.
-- Toasts/status: avoid relying solely on hints; confirm important shortcuts in onboarding copy where relevant.
+## Critical Rule: Plugins Must NOT Render Footers
 
-## Testing shortcuts quickly
-- Run Sidecar with `--debug` to see key handling logs.
-- Verify: key triggers command → state changes → footer/help reflect correct bindings when switching contexts/plugins.
-- For sequences, check timeout behavior and that partial sequences don’t block single-key actions.
+The app renders a unified footer bar using `Commands()`. Plugins must:
+- **Never render their own footer/hint line in `View()`**
+- Define commands with short names in `Commands()` method
 
-## Plugin checklist (per context/view)
-- Command list covers all user-facing actions.
-- Context name returned by `FocusContext()` matches bindings.
-- Default bindings added in `bindings.go`.
-- No blocking work in command handlers; they should return `tea.Cmd` for async tasks.
-- `SetFocused` flips any flags needed for focus-specific behavior (optional).
+Keep command names short (1 word preferred) to prevent footer wrapping:
+- ✅ `"Stage"` not `"Stage file"`
+- ✅ `"Diff"` not `"Show diff"`
+- ✅ `"History"` not `"Show history"`
 
-## Migration tips
-- When altering bindings, keep old keys temporarily as secondary bindings if possible to avoid user breakage.
-- Document breaking changes in release notes; keep command IDs stable to preserve overrides.
+## Complete Example: Adding "edit" to File Browser
+
+### Step 1: Add to Commands()
+
+```go
+// internal/plugins/filebrowser/plugin.go
+func (p *Plugin) Commands() []plugin.Command {
+    return []plugin.Command{
+        {ID: "refresh", Name: "Refresh", Context: "file-browser-tree"},
+        {ID: "expand", Name: "Open", Context: "file-browser-tree"},
+        {ID: "edit", Name: "Edit", Context: "file-browser-tree"},  // NEW
+    }
+}
+```
+
+### Step 2: Add to bindings.go
+
+```go
+// internal/keymap/bindings.go
+{Key: "e", Command: "edit", Context: "file-browser-tree"},
+```
+
+### Step 3: Handle in Update()
+
+```go
+// internal/plugins/filebrowser/plugin.go
+func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
+    switch msg := msg.(type) {
+    case keymap.CommandMsg:
+        switch msg.Command {
+        case "edit":
+            return p, p.openInEditor()
+        }
+    }
+    return p, nil
+}
+```
+
+## Multiple Contexts (View Modes)
+
+When your plugin has different modes, use different contexts:
+
+```go
+func (p *Plugin) FocusContext() string {
+    switch p.viewMode {
+    case ViewDiff:
+        return "git-diff"      // Different bindings active
+    case ViewCommit:
+        return "git-commit"    // Different bindings active
+    default:
+        return "git-status"    // Default bindings
+    }
+}
+
+func (p *Plugin) Commands() []plugin.Command {
+    return []plugin.Command{
+        // Main view commands
+        {ID: "stage-file", Name: "Stage", Context: "git-status"},
+        {ID: "show-diff", Name: "Diff", Context: "git-status"},
+
+        // Diff view commands
+        {ID: "close-diff", Name: "Close", Context: "git-diff"},
+        {ID: "scroll", Name: "Scroll", Context: "git-diff"},
+
+        // Commit view commands
+        {ID: "cancel", Name: "Cancel", Context: "git-commit"},
+        {ID: "execute-commit", Name: "Commit", Context: "git-commit"},
+    }
+}
+```
+
+## Core Files
+
+| File | Purpose |
+|------|---------|
+| `internal/plugin/plugin.go` | `Command` struct, `Commands()`, `FocusContext()` interface |
+| `internal/keymap/bindings.go` | Default key→command mappings |
+| `internal/keymap/registry.go` | Runtime binding lookup |
+| `internal/app/view.go` | Footer rendering from `Commands()` |
+
+## Common Mistakes
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Shortcut doesn't work | Command ID mismatch | Ensure ID in `Commands()` matches `Command` in `bindings.go` |
+| Shortcut doesn't work | Context mismatch | Ensure `FocusContext()` returns same context as binding |
+| Double footer | Plugin renders own footer | Remove footer rendering from plugin's `View()` |
+| Wrong hints shown | `FocusContext()` not updated | Return correct context for current view mode |
+| Footer too long | Command names too verbose | Use 1-word names: "Stage" not "Stage file" |
+
+## Checklist for New Shortcuts
+
+- [ ] Command added to `Commands()` with ID, Name, Context
+- [ ] `FocusContext()` returns matching context for current view
+- [ ] Binding added to `bindings.go` with Key, Command, Context
+- [ ] Key handled in `Update()` via `keymap.CommandMsg`
+- [ ] No duplicate/conflicting keys in same context
+- [ ] Command name is short (1-2 words max)
+- [ ] Plugin does NOT render its own footer
+
+## Key Format Reference
+
+```go
+// Letters (lowercase)
+{Key: "j", Command: "cursor-down", Context: "global"}
+
+// Shifted letters (uppercase)
+{Key: "G", Command: "cursor-bottom", Context: "global"}
+
+// Control combos
+{Key: "ctrl+d", Command: "page-down", Context: "global"}
+{Key: "ctrl+c", Command: "quit", Context: "global"}
+
+// Alt combos
+{Key: "alt+enter", Command: "execute-commit", Context: "git-commit"}
+
+// Special keys
+{Key: "enter", Command: "select", Context: "global"}
+{Key: "esc", Command: "back", Context: "global"}
+{Key: "tab", Command: "next-plugin", Context: "global"}
+{Key: "shift+tab", Command: "prev-plugin", Context: "global"}
+{Key: "up", Command: "cursor-up", Context: "global"}
+{Key: "down", Command: "cursor-down", Context: "global"}
+
+// Sequences (space-separated, 500ms timeout)
+{Key: "g g", Command: "cursor-top", Context: "global"}
+```
+
+## Context Precedence
+
+1. Plugin-specific context checked first (e.g., `git-status`)
+2. Falls back to `global` context if no match
+
+This means `c` in `git-status` context triggers `commit`, but `c` in `global` context triggers `focus-conversations`.
+
+## Testing
+
+1. Run `sidecar --debug` to see key handling logs
+2. Press `?` to verify help overlay shows your bindings
+3. Check footer shows your command names
+4. Test that keys trigger correct actions
+5. Test context switches (enter subview, verify new bindings active)
