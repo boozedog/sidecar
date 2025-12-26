@@ -197,16 +197,6 @@ func (p *Plugin) handleKey(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 		return p.handleSearchKey(msg)
 	}
 
-	// Tab switches panes
-	if key == "tab" {
-		if p.activePane == PaneTree {
-			p.activePane = PanePreview
-		} else {
-			p.activePane = PaneTree
-		}
-		return p, nil
-	}
-
 	// Handle keys based on active pane
 	if p.activePane == PanePreview {
 		return p.handlePreviewKey(key)
@@ -228,19 +218,39 @@ func (p *Plugin) handleTreeKey(key string) (plugin.Plugin, tea.Cmd) {
 			p.ensureTreeCursorVisible()
 		}
 
-	case "l", "right", "enter":
+	case "l", "right":
 		node := p.tree.GetNode(p.treeCursor)
 		if node != nil {
 			if node.IsDir {
 				_ = p.tree.Expand(node)
 			} else {
-				// Load file preview
+				// Load file preview and switch to preview pane
 				p.previewFile = node.Path
 				p.previewScroll = 0
 				p.previewLines = nil
 				p.previewError = nil
 				p.isBinary = false
 				p.isTruncated = false
+				p.activePane = PanePreview // Switch to preview pane
+				return p, LoadPreview(p.ctx.WorkDir, node.Path)
+			}
+		}
+
+	case "enter":
+		node := p.tree.GetNode(p.treeCursor)
+		if node != nil {
+			if node.IsDir {
+				// Toggle expand/collapse
+				_ = p.tree.Toggle(node)
+			} else {
+				// Load file preview and switch to preview pane
+				p.previewFile = node.Path
+				p.previewScroll = 0
+				p.previewLines = nil
+				p.previewError = nil
+				p.isBinary = false
+				p.isTruncated = false
+				p.activePane = PanePreview
 				return p, LoadPreview(p.ctx.WorkDir, node.Path)
 			}
 		}
@@ -267,6 +277,38 @@ func (p *Plugin) handleTreeKey(key string) (plugin.Plugin, tea.Cmd) {
 			p.treeCursor = p.tree.Len() - 1
 			p.ensureTreeCursorVisible()
 		}
+
+	case "ctrl+d":
+		visibleHeight := p.visibleContentHeight()
+		p.treeCursor += visibleHeight / 2
+		if p.treeCursor >= p.tree.Len() {
+			p.treeCursor = p.tree.Len() - 1
+		}
+		p.ensureTreeCursorVisible()
+
+	case "ctrl+u":
+		visibleHeight := p.visibleContentHeight()
+		p.treeCursor -= visibleHeight / 2
+		if p.treeCursor < 0 {
+			p.treeCursor = 0
+		}
+		p.ensureTreeCursorVisible()
+
+	case "ctrl+f", "pgdown":
+		visibleHeight := p.visibleContentHeight()
+		p.treeCursor += visibleHeight
+		if p.treeCursor >= p.tree.Len() {
+			p.treeCursor = p.tree.Len() - 1
+		}
+		p.ensureTreeCursorVisible()
+
+	case "ctrl+b", "pgup":
+		visibleHeight := p.visibleContentHeight()
+		p.treeCursor -= visibleHeight
+		if p.treeCursor < 0 {
+			p.treeCursor = 0
+		}
+		p.ensureTreeCursorVisible()
 
 	case "r":
 		return p, p.refresh()
@@ -309,7 +351,8 @@ func (p *Plugin) handlePreviewKey(key string) (plugin.Plugin, tea.Cmd) {
 	if len(lines) == 0 {
 		lines = p.previewLines
 	}
-	maxScroll := len(lines) - (p.height - 6)
+	visibleHeight := p.visibleContentHeight()
+	maxScroll := len(lines) - visibleHeight
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
@@ -332,27 +375,60 @@ func (p *Plugin) handlePreviewKey(key string) (plugin.Plugin, tea.Cmd) {
 		p.previewScroll = maxScroll
 
 	case "ctrl+d":
-		p.previewScroll += (p.height - 6) / 2
+		p.previewScroll += visibleHeight / 2
 		if p.previewScroll > maxScroll {
 			p.previewScroll = maxScroll
 		}
 
 	case "ctrl+u":
-		p.previewScroll -= (p.height - 6) / 2
+		p.previewScroll -= visibleHeight / 2
 		if p.previewScroll < 0 {
 			p.previewScroll = 0
+		}
+
+	case "ctrl+f", "pgdown":
+		p.previewScroll += visibleHeight
+		if p.previewScroll > maxScroll {
+			p.previewScroll = maxScroll
+		}
+
+	case "ctrl+b", "pgup":
+		p.previewScroll -= visibleHeight
+		if p.previewScroll < 0 {
+			p.previewScroll = 0
+		}
+
+	case "h", "left", "esc":
+		// Return to tree pane
+		p.activePane = PaneTree
+
+	case "e":
+		// Open previewed file in editor
+		if p.previewFile != "" {
+			return p, p.openFile(p.previewFile)
 		}
 	}
 
 	return p, nil
 }
 
+// visibleContentHeight returns the number of lines available for content.
+func (p *Plugin) visibleContentHeight() int {
+	// height - footer (1) - search bar (0 or 1) - pane border (2) - header (2)
+	searchBar := 0
+	if p.searchMode {
+		searchBar = 1
+	}
+	h := p.height - 1 - searchBar - 2 - 2
+	if h < 1 {
+		return 1
+	}
+	return h
+}
+
 // ensureTreeCursorVisible adjusts scroll offset to keep cursor visible.
 func (p *Plugin) ensureTreeCursorVisible() {
-	visibleHeight := p.height - 6
-	if visibleHeight < 1 {
-		visibleHeight = 1
-	}
+	visibleHeight := p.visibleContentHeight()
 
 	if p.treeCursor < p.treeScrollOff {
 		p.treeScrollOff = p.treeCursor

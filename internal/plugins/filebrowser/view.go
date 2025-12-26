@@ -49,21 +49,30 @@ func (p *Plugin) renderView() string {
 		searchBarHeight = 1
 	}
 
-	contentHeight := p.height - 2 - searchBarHeight // Account for footer + search
+	// Calculate pane height: total - footer (1 line) - search bar - pane border (2 lines)
+	paneHeight := p.height - 1 - searchBarHeight - 2
+	if paneHeight < 4 {
+		paneHeight = 4
+	}
 
-	// Render panes
-	treeContent := p.renderTreePane()
-	previewContent := p.renderPreviewPane()
+	// Inner content height = pane height - header lines (2)
+	innerHeight := paneHeight - 2
+	if innerHeight < 1 {
+		innerHeight = 1
+	}
+
+	treeContent := p.renderTreePane(innerHeight)
+	previewContent := p.renderPreviewPane(innerHeight)
 
 	// Apply styles
 	leftPane := treeBorder.
 		Width(p.treeWidth).
-		Height(contentHeight).
+		Height(paneHeight).
 		Render(treeContent)
 
 	rightPane := previewBorder.
 		Width(p.previewWidth).
-		Height(contentHeight).
+		Height(paneHeight).
 		Render(previewContent)
 
 	// Join panes horizontally
@@ -101,7 +110,7 @@ func (p *Plugin) renderSearchBar() string {
 }
 
 // renderTreePane renders the file tree in the left pane.
-func (p *Plugin) renderTreePane() string {
+func (p *Plugin) renderTreePane(visibleHeight int) string {
 	var sb strings.Builder
 
 	// Header
@@ -112,12 +121,6 @@ func (p *Plugin) renderTreePane() string {
 	if p.tree == nil || p.tree.Len() == 0 {
 		sb.WriteString(styles.Muted.Render("No files"))
 		return sb.String()
-	}
-
-	// Calculate visible height (pane height - header - padding)
-	visibleHeight := p.height - 6
-	if visibleHeight < 1 {
-		visibleHeight = 1
 	}
 
 	end := p.treeScrollOff + visibleHeight
@@ -136,7 +139,10 @@ func (p *Plugin) renderTreePane() string {
 		line := p.renderTreeNode(node, selected, maxWidth)
 
 		sb.WriteString(line)
-		sb.WriteString("\n")
+		// Don't add newline after last line
+		if i < end-1 {
+			sb.WriteString("\n")
+		}
 	}
 
 	return sb.String()
@@ -189,7 +195,7 @@ func (p *Plugin) renderTreeNode(node *FileNode, selected bool, maxWidth int) str
 }
 
 // renderPreviewPane renders the file preview in the right pane.
-func (p *Plugin) renderPreviewPane() string {
+func (p *Plugin) renderPreviewPane(visibleHeight int) string {
 	var sb strings.Builder
 
 	// Header
@@ -215,12 +221,6 @@ func (p *Plugin) renderPreviewPane() string {
 		return sb.String()
 	}
 
-	// Content with line numbers
-	visibleHeight := p.height - 6
-	if visibleHeight < 1 {
-		visibleHeight = 1
-	}
-
 	// Use highlighted lines if available
 	lines := p.previewHighlighted
 	if len(lines) == 0 {
@@ -233,13 +233,32 @@ func (p *Plugin) renderPreviewPane() string {
 		end = len(lines)
 	}
 
-	for i := start; i < end; i++ {
+	// Calculate max line width (pane width - line number - padding)
+	lineNumWidth := 5 // "1234 " = 5 chars
+	maxLineWidth := p.previewWidth - lineNumWidth - 4
+	if maxLineWidth < 10 {
+		maxLineWidth = 10
+	}
+
+	// Style for truncating lines with ANSI codes
+	lineStyle := lipgloss.NewStyle().MaxWidth(maxLineWidth)
+
+	// Reserve 1 line for truncation message if needed
+	contentEnd := end
+	if p.isTruncated && end-start > 1 {
+		contentEnd = end - 1
+	}
+
+	for i := start; i < contentEnd; i++ {
 		lineNum := styles.FileBrowserLineNumber.Render(fmt.Sprintf("%4d ", i+1))
-		line := lines[i]
+		line := lineStyle.Render(lines[i]) // Truncates while preserving ANSI codes
 
 		sb.WriteString(lineNum)
-		sb.WriteString(line) // Already contains ANSI codes from chroma
-		sb.WriteString("\n")
+		sb.WriteString(line)
+		// Don't add newline after last line
+		if i < contentEnd-1 || p.isTruncated {
+			sb.WriteString("\n")
+		}
 	}
 
 	if p.isTruncated {
@@ -255,9 +274,9 @@ func (p *Plugin) renderFooter() string {
 	if p.searchMode {
 		hints = "esc cancel  enter jump  up/down select match"
 	} else if p.activePane == PaneTree {
-		hints = "tab pane  j/k nav  l open  h close  / search  n/N next/prev match"
+		hints = "j/k nav  l open/preview  h close  e edit  / search  n/N match"
 	} else {
-		hints = "tab pane  j/k scroll  g top  G bottom  ctrl+d/u page"
+		hints = "h back  e edit  j/k scroll  g top  G bottom  ctrl+d/u page"
 	}
 	return styles.Muted.Render(hints)
 }
