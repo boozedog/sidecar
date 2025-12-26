@@ -58,6 +58,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+		if !m.showHelp && !m.showDiagnostics {
+			m.updateContext()
+		}
 	}
 
 	return m, tea.Batch(cmds...)
@@ -142,6 +145,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.activePlugin < len(plugins) {
 			plugins[m.activePlugin] = newPlugin
 		}
+		m.updateContext()
 		return m, cmd
 	}
 

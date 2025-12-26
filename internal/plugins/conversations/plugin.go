@@ -244,7 +244,8 @@ func (p *Plugin) SetFocused(f bool) { p.focused = f }
 func (p *Plugin) Commands() []plugin.Command {
 	return []plugin.Command{
 		{ID: "view-session", Name: "View session", Context: "conversations"},
-		{ID: "back", Name: "Back to sessions", Context: "conversation-detail"},
+		{ID: "back", Name: "Back", Context: "conversation-detail"},
+		{ID: "scroll", Name: "Scroll", Context: "conversation-detail"},
 	}
 }
 
@@ -325,7 +326,7 @@ func (p *Plugin) startWatcher() tea.Cmd {
 
 // ensureCursorVisible adjusts scroll to keep cursor visible.
 func (p *Plugin) ensureCursorVisible() {
-	visibleRows := p.height - 6
+	visibleRows := p.height - 2
 	if visibleRows < 1 {
 		visibleRows = 1
 	}
@@ -339,7 +340,7 @@ func (p *Plugin) ensureCursorVisible() {
 
 // ensureMsgCursorVisible adjusts scroll to keep message cursor visible.
 func (p *Plugin) ensureMsgCursorVisible() {
-	visibleRows := p.height - 6
+	visibleRows := p.height - 2
 	if visibleRows < 1 {
 		visibleRows = 1
 	}

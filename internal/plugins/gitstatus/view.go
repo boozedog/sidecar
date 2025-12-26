@@ -24,7 +24,7 @@ func (p *Plugin) renderMain() string {
 	sb.WriteString("\n")
 
 	// Calculate visible area
-	contentHeight := p.height - 5 // header + footer
+	contentHeight := p.height - 2 // header
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
@@ -58,12 +58,6 @@ func (p *Plugin) renderMain() string {
 			sb.WriteString(p.renderSection("Untracked", p.tree.Untracked, &lineNum, &globalIdx, contentHeight))
 		}
 	}
-
-	// Footer
-	sb.WriteString("\n")
-	sb.WriteString(styles.Muted.Render(strings.Repeat("━", p.width-2)))
-	sb.WriteString("\n")
-	sb.WriteString(p.renderFooter())
 
 	return sb.String()
 }
@@ -162,18 +156,6 @@ func (p *Plugin) renderEntry(entry *FileEntry, selected bool) string {
 	return lineStyle.Render(fmt.Sprintf("%s%s %s%s", cursor, status, path, stats))
 }
 
-// renderFooter renders the keybinding hints.
-func (p *Plugin) renderFooter() string {
-	hints := []string{
-		styles.KeyHint.Render("s") + " stage",
-		styles.KeyHint.Render("u") + " unstage",
-		styles.KeyHint.Render("d") + " diff",
-		styles.KeyHint.Render("enter") + " open",
-		styles.KeyHint.Render("?") + " help",
-	}
-	return styles.Muted.Render(" " + strings.Join(hints, "  "))
-}
-
 // renderDiffModal renders the diff modal.
 func (p *Plugin) renderDiffModal() string {
 	var sb strings.Builder
@@ -190,7 +172,10 @@ func (p *Plugin) renderDiffModal() string {
 		sb.WriteString(styles.Muted.Render(" Loading diff..."))
 	} else {
 		lines := strings.Split(p.diffContent, "\n")
-		visibleLines := p.height - 6
+		visibleLines := p.height - 2
+		if visibleLines < 1 {
+			visibleLines = 1
+		}
 
 		start := p.diffScroll
 		if start >= len(lines) {
@@ -206,15 +191,6 @@ func (p *Plugin) renderDiffModal() string {
 			sb.WriteString("\n")
 		}
 	}
-
-	// Footer
-	sb.WriteString(styles.Muted.Render(strings.Repeat("━", p.width-2)))
-	sb.WriteString("\n")
-	hints := []string{
-		styles.KeyHint.Render("esc") + " close",
-		styles.KeyHint.Render("j/k") + " scroll",
-	}
-	sb.WriteString(styles.Muted.Render(" " + strings.Join(hints, "  ")))
 
 	return sb.String()
 }

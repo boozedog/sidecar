@@ -197,7 +197,7 @@ func (p *Plugin) updateDiffModal(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 
 	case "G":
 		lines := countLines(p.diffContent)
-		maxScroll := lines - (p.height - 6)
+		maxScroll := lines - (p.height - 2)
 		if maxScroll > 0 {
 			p.diffScroll = maxScroll
 		}
@@ -230,6 +230,9 @@ func (p *Plugin) Commands() []plugin.Command {
 		{ID: "stage-file", Name: "Stage file", Context: "git-status"},
 		{ID: "unstage-file", Name: "Unstage file", Context: "git-status"},
 		{ID: "show-diff", Name: "Show diff", Context: "git-status"},
+		{ID: "open-file", Name: "Open file", Context: "git-status"},
+		{ID: "close-diff", Name: "Close diff", Context: "git-diff"},
+		{ID: "scroll", Name: "Scroll", Context: "git-diff"},
 	}
 }
 
@@ -300,7 +303,7 @@ func (p *Plugin) openFile(path string) tea.Cmd {
 
 // ensureCursorVisible adjusts scroll to keep cursor visible.
 func (p *Plugin) ensureCursorVisible() {
-	visibleRows := p.height - 6 // Account for header/footer
+	visibleRows := p.height - 4 // Account for header and section spacing
 	if visibleRows < 1 {
 		visibleRows = 1
 	}

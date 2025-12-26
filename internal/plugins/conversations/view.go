@@ -29,7 +29,7 @@ func (p *Plugin) renderSessions() string {
 	if len(p.sessions) == 0 {
 		sb.WriteString(styles.Muted.Render(" No sessions found for this project"))
 	} else {
-		contentHeight := p.height - 5
+		contentHeight := p.height - 2
 		if contentHeight < 1 {
 			contentHeight = 1
 		}
@@ -46,11 +46,6 @@ func (p *Plugin) renderSessions() string {
 			sb.WriteString("\n")
 		}
 	}
-
-	// Footer
-	sb.WriteString(styles.Muted.Render(strings.Repeat("━", p.width-2)))
-	sb.WriteString("\n")
-	sb.WriteString(p.renderSessionFooter())
 
 	return sb.String()
 }
@@ -93,16 +88,6 @@ func (p *Plugin) renderSessionRow(session adapter.Session, selected bool) string
 	return lineStyle.Render(fmt.Sprintf("%s%s  %s%s", cursor, ts, name, active))
 }
 
-// renderSessionFooter renders the session list footer.
-func (p *Plugin) renderSessionFooter() string {
-	hints := []string{
-		styles.KeyHint.Render("enter") + " view",
-		styles.KeyHint.Render("r") + " refresh",
-		styles.KeyHint.Render("?") + " help",
-	}
-	return styles.Muted.Render(" " + strings.Join(hints, "  "))
-}
-
 // renderMessages renders the message view.
 func (p *Plugin) renderMessages() string {
 	var sb strings.Builder
@@ -130,7 +115,7 @@ func (p *Plugin) renderMessages() string {
 	if len(p.messages) == 0 {
 		sb.WriteString(styles.Muted.Render(" No messages in this session"))
 	} else {
-		contentHeight := p.height - 5
+		contentHeight := p.height - 2
 		if contentHeight < 1 {
 			contentHeight = 1
 		}
@@ -150,11 +135,6 @@ func (p *Plugin) renderMessages() string {
 			}
 		}
 	}
-
-	// Footer
-	sb.WriteString(styles.Muted.Render(strings.Repeat("━", p.width-2)))
-	sb.WriteString("\n")
-	sb.WriteString(p.renderMessageFooter())
 
 	return sb.String()
 }
@@ -207,16 +187,6 @@ func (p *Plugin) renderMessage(msg adapter.Message, maxWidth int) []string {
 	lines = append(lines, "")
 
 	return lines
-}
-
-// renderMessageFooter renders the message view footer.
-func (p *Plugin) renderMessageFooter() string {
-	hints := []string{
-		styles.KeyHint.Render("esc") + " back",
-		styles.KeyHint.Render("j/k") + " scroll",
-		styles.KeyHint.Render("?") + " help",
-	}
-	return styles.Muted.Render(" " + strings.Join(hints, "  "))
 }
 
 // wrapText wraps text to fit within maxWidth.

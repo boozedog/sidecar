@@ -242,8 +242,12 @@ func (p *Plugin) SetFocused(f bool) { p.focused = f }
 // Commands returns the available commands.
 func (p *Plugin) Commands() []plugin.Command {
 	return []plugin.Command{
+		{ID: "view-details", Name: "Details", Context: "td-monitor"},
 		{ID: "approve-issue", Name: "Approve issue", Context: "td-monitor"},
 		{ID: "delete-issue", Name: "Delete issue", Context: "td-monitor"},
+		{ID: "back", Name: "Back", Context: "td-detail"},
+		{ID: "approve-issue", Name: "Approve issue", Context: "td-detail"},
+		{ID: "delete-issue", Name: "Delete issue", Context: "td-detail"},
 	}
 }
 
@@ -325,7 +329,7 @@ func (p *Plugin) runTDCommand(action, issueID string) tea.Cmd {
 
 // ensureCursorVisible adjusts scroll to keep cursor visible.
 func (p *Plugin) ensureCursorVisible() {
-	visibleRows := p.height - 8
+	visibleRows := p.height - 6
 	if visibleRows < 1 {
 		visibleRows = 1
 	}

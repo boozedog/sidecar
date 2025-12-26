@@ -42,11 +42,6 @@ func (p *Plugin) renderList() string {
 		sb.WriteString(p.renderSection("Reviewable", p.reviewable, p.activeList == "reviewable"))
 	}
 
-	// Footer
-	sb.WriteString(styles.Muted.Render(strings.Repeat("━", p.width-2)))
-	sb.WriteString("\n")
-	sb.WriteString(p.renderFooter())
-
 	return sb.String()
 }
 
@@ -76,7 +71,7 @@ func (p *Plugin) renderSection(title string, issues []Issue, active bool) string
 		sb.WriteString("\n")
 
 		// Check if we're at max visible
-		if active && i >= p.scrollOff+p.height-10 && i < len(activeList)-1 {
+		if active && i >= p.scrollOff+p.height-8 && i < len(activeList)-1 {
 			sb.WriteString(styles.Muted.Render(fmt.Sprintf("   ... and %d more\n", len(activeList)-i-1)))
 			break
 		}
@@ -131,18 +126,6 @@ func (p *Plugin) renderIssueRow(issue Issue, selected bool) string {
 	return lineStyle.Render(fmt.Sprintf("%s%s %s  %s  %s", cursor, idStr, priority, typeStr, title))
 }
 
-// renderFooter renders the key hints footer.
-func (p *Plugin) renderFooter() string {
-	hints := []string{
-		styles.KeyHint.Render("enter") + " details",
-		styles.KeyHint.Render("a") + " approve",
-		styles.KeyHint.Render("x") + " delete",
-		styles.KeyHint.Render("tab") + " switch",
-		styles.KeyHint.Render("?") + " help",
-	}
-	return styles.Muted.Render(" " + strings.Join(hints, "  "))
-}
-
 // renderDetail renders the issue detail view.
 func (p *Plugin) renderDetail() string {
 	if p.detailIssue == nil {
@@ -178,17 +161,6 @@ func (p *Plugin) renderDetail() string {
 			sb.WriteString(" " + line + "\n")
 		}
 	}
-
-	// Footer
-	sb.WriteString("\n")
-	sb.WriteString(styles.Muted.Render(strings.Repeat("━", p.width-2)))
-	sb.WriteString("\n")
-	hints := []string{
-		styles.KeyHint.Render("esc") + " back",
-		styles.KeyHint.Render("a") + " approve",
-		styles.KeyHint.Render("x") + " delete",
-	}
-	sb.WriteString(styles.Muted.Render(" " + strings.Join(hints, "  ")))
 
 	return sb.String()
 }

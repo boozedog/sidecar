@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sst/sidecar/internal/keymap"
 	"github.com/sst/sidecar/internal/plugin"
 	"github.com/sst/sidecar/internal/styles"
 )
@@ -26,6 +27,9 @@ func (m Model) View() string {
 	contentHeight := m.height - headerHeight
 	if m.showFooter {
 		contentHeight -= footerHeight
+	}
+	if contentHeight < 0 {
+		contentHeight = 0
 	}
 
 	// Build layout
@@ -106,14 +110,16 @@ func (m Model) renderContent(width, height int) string {
 	}
 
 	content := p.View(width, height)
-	return content
+	if height == 0 {
+		return ""
+	}
+	return lipgloss.NewStyle().Width(width).Height(height).Render(content)
 }
 
 // renderFooter renders the bottom bar with key hints and status.
 func (m Model) renderFooter() string {
 	// Key hints (context-aware)
-	hints := m.getContextHints()
-	hintsStr := styles.KeyHint.Render(hints)
+	hintsStr := renderHintLine(m.footerHints())
 
 	// Toast/status message
 	var status string
@@ -141,17 +147,87 @@ func (m Model) renderFooter() string {
 	return styles.Footer.Width(m.width).Render(footer)
 }
 
-// getContextHints returns context-appropriate key hints.
-func (m Model) getContextHints() string {
-	common := "tab switch  ? help  q quit"
-	switch m.activeContext {
-	case "git-status":
-		return common + "  s stage  u unstage  d diff"
-	case "td-monitor":
-		return common + "  a approve  x delete"
-	default:
-		return common
+type footerHint struct {
+	keys  string
+	label string
+}
+
+func (m Model) footerHints() []footerHint {
+	hints := m.globalFooterHints()
+	if p := m.ActivePlugin(); p != nil {
+		hints = append(hints, m.pluginFooterHints(p, m.activeContext)...)
 	}
+	return hints
+}
+
+func (m Model) globalFooterHints() []footerHint {
+	bindings := m.keymap.BindingsForContext("global")
+	keysByCmd := bindingKeysByCommand(bindings)
+
+	specs := []struct {
+		id    string
+		label string
+	}{
+		{id: "next-plugin", label: "switch"},
+		{id: "toggle-help", label: "help"},
+		{id: "quit", label: "quit"},
+	}
+
+	var hints []footerHint
+	for _, spec := range specs {
+		keys := keysByCmd[spec.id]
+		if len(keys) == 0 {
+			continue
+		}
+		hints = append(hints, footerHint{keys: keys[0], label: spec.label})
+	}
+	return hints
+}
+
+func (m Model) pluginFooterHints(p plugin.Plugin, context string) []footerHint {
+	if context == "" || context == "global" {
+		return nil
+	}
+
+	keysByCmd := bindingKeysByCommand(m.keymap.BindingsForContext(context))
+
+	var hints []footerHint
+	for _, cmd := range p.Commands() {
+		if cmd.Context != context {
+			continue
+		}
+		keys := keysByCmd[cmd.ID]
+		if len(keys) == 0 {
+			continue
+		}
+		hints = append(hints, footerHint{
+			keys:  formatBindingKeys(keys),
+			label: cmd.Name,
+		})
+	}
+	return hints
+}
+
+func bindingKeysByCommand(bindings []keymap.Binding) map[string][]string {
+	keysByCmd := make(map[string][]string, len(bindings))
+	for _, b := range bindings {
+		keysByCmd[b.Command] = append(keysByCmd[b.Command], b.Key)
+	}
+	return keysByCmd
+}
+
+func renderHintLine(hints []footerHint) string {
+	if len(hints) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(hints))
+	for _, hint := range hints {
+		if hint.keys == "" || hint.label == "" {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s %s", styles.KeyHint.Render(hint.keys), hint.label))
+	}
+	return strings.Join(parts, "  ")
 }
 
 // renderHelpOverlay renders the help modal over content.
