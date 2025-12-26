@@ -367,7 +367,7 @@ func (p *Plugin) updateDiff(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 		}
 		p.diffHorizOff = 0
 
-	case "<", "h" + "shift":
+	case "<", "H":
 		// Horizontal scroll left in side-by-side mode
 		if p.diffViewMode == DiffViewSideBySide && p.diffHorizOff > 0 {
 			p.diffHorizOff -= 10
@@ -376,7 +376,7 @@ func (p *Plugin) updateDiff(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 			}
 		}
 
-	case ">", "l" + "shift":
+	case ">", "L":
 		// Horizontal scroll right in side-by-side mode
 		if p.diffViewMode == DiffViewSideBySide {
 			p.diffHorizOff += 10
