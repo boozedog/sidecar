@@ -260,6 +260,8 @@ func (p *Plugin) renderRecentCommits() string {
 		return sb.String()
 	}
 
+	// Cursor selection: cursor indexes files first, then commits
+	fileCount := len(p.tree.AllEntries())
 	maxWidth := p.sidebarWidth - 4
 	maxCommits := 5
 	if len(p.recentCommits) < maxCommits {
@@ -268,6 +270,15 @@ func (p *Plugin) renderRecentCommits() string {
 
 	for i := 0; i < maxCommits; i++ {
 		commit := p.recentCommits[i]
+		selected := p.cursor == fileCount+i
+
+		// Cursor indicator
+		var cursor string
+		if selected {
+			cursor = styles.ListCursor.Render("> ")
+		} else {
+			cursor = "  "
+		}
 
 		// Push indicator: ↑ for unpushed, nothing for pushed
 		var indicator string
@@ -277,15 +288,21 @@ func (p *Plugin) renderRecentCommits() string {
 			indicator = "  " // Two spaces to align with indicator
 		}
 
-		// Format: "↑ abc1234 commit message..."
+		// Format: "> ↑ abc1234 commit message..."
 		hash := styles.Code.Render(commit.Hash[:7])
-		msgWidth := maxWidth - 10 // indicator + hash + space
+		msgWidth := maxWidth - 14 // cursor + indicator + hash + space
 		msg := commit.Subject
 		if len(msg) > msgWidth && msgWidth > 3 {
 			msg = msg[:msgWidth-1] + "…"
 		}
 
-		sb.WriteString(fmt.Sprintf("%s%s %s", indicator, hash, styles.Muted.Render(msg)))
+		// Compose line with selection styling
+		lineStyle := styles.ListItemNormal
+		if selected {
+			lineStyle = styles.ListItemSelected
+		}
+
+		sb.WriteString(lineStyle.Render(fmt.Sprintf("%s%s%s %s", cursor, indicator, hash, msg)))
 		if i < maxCommits-1 {
 			sb.WriteString("\n")
 		}

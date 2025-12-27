@@ -197,6 +197,14 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		return p, tea.Batch(p.refresh(), p.loadRecentCommits(), p.listenForWatchEvents())
 
 	case RefreshDoneMsg:
+		// Clamp cursor to valid range if files changed
+		maxCursor := p.totalSelectableItems() - 1
+		if maxCursor < 0 {
+			maxCursor = 0
+		}
+		if p.cursor > maxCursor {
+			p.cursor = maxCursor
+		}
 		// Auto-load diff for first file if nothing selected
 		if p.selectedDiffFile == "" && p.viewMode == ViewModeStatus {
 			return p, p.autoLoadDiff()
@@ -248,6 +256,14 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 	case RecentCommitsLoadedMsg:
 		p.recentCommits = msg.Commits
 		p.pushStatus = msg.PushStatus
+		// Clamp cursor to valid range if commits changed
+		maxCursor := p.totalSelectableItems() - 1
+		if maxCursor < 0 {
+			maxCursor = 0
+		}
+		if p.cursor > maxCursor {
+			p.cursor = maxCursor
+		}
 		return p, nil
 
 	case PushSuccessMsg:
@@ -270,6 +286,27 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 	return p, nil
 }
 
+// totalSelectableItems returns the count of all selectable items (files + commits).
+func (p *Plugin) totalSelectableItems() int {
+	entries := p.tree.AllEntries()
+	commits := len(p.recentCommits)
+	if commits > 5 {
+		commits = 5 // Match renderRecentCommits limit
+	}
+	return len(entries) + commits
+}
+
+// cursorOnCommit returns true if cursor is on a commit (past all files).
+func (p *Plugin) cursorOnCommit() bool {
+	return p.cursor >= len(p.tree.AllEntries())
+}
+
+// selectedCommitIndex returns the index into recentCommits when cursor is on commit.
+func (p *Plugin) selectedCommitIndex() int {
+	entries := p.tree.AllEntries()
+	return p.cursor - len(entries)
+}
+
 // updateStatus handles key events in the status view.
 func (p *Plugin) updateStatus(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 	// Handle diff pane keys when focused on diff
@@ -278,21 +315,28 @@ func (p *Plugin) updateStatus(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 	}
 
 	entries := p.tree.AllEntries()
+	totalItems := p.totalSelectableItems()
 
 	switch msg.String() {
 	case "j", "down":
-		if p.cursor < len(entries)-1 {
+		if p.cursor < totalItems-1 {
 			p.cursor++
 			p.ensureCursorVisible()
-			return p, p.autoLoadDiff()
+			if !p.cursorOnCommit() {
+				return p, p.autoLoadDiff()
+			}
 		}
+		return p, nil
 
 	case "k", "up":
 		if p.cursor > 0 {
 			p.cursor--
 			p.ensureCursorVisible()
-			return p, p.autoLoadDiff()
+			if !p.cursorOnCommit() {
+				return p, p.autoLoadDiff()
+			}
 		}
+		return p, nil
 
 	case "g":
 		p.cursor = 0
@@ -300,15 +344,18 @@ func (p *Plugin) updateStatus(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 		return p, p.autoLoadDiff()
 
 	case "G":
-		if len(entries) > 0 {
-			p.cursor = len(entries) - 1
+		if totalItems > 0 {
+			p.cursor = totalItems - 1
 			p.ensureCursorVisible()
-			return p, p.autoLoadDiff()
+			if !p.cursorOnCommit() {
+				return p, p.autoLoadDiff()
+			}
 		}
+		return p, nil
 
 	case "l", "right":
-		// Focus diff pane
-		if p.sidebarVisible && p.selectedDiffFile != "" {
+		// Focus diff pane (only when on a file)
+		if p.sidebarVisible && p.selectedDiffFile != "" && !p.cursorOnCommit() {
 			p.activePane = PaneDiff
 		}
 
@@ -352,8 +399,17 @@ func (p *Plugin) updateStatus(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 		}
 
 	case "d":
-		// Open full-screen diff view
-		if len(entries) > 0 && p.cursor < len(entries) {
+		// Open full-screen diff view (for files) or commit detail (for commits)
+		if p.cursorOnCommit() {
+			commitIdx := p.selectedCommitIndex()
+			if commitIdx >= 0 && commitIdx < len(p.recentCommits) {
+				commit := p.recentCommits[commitIdx]
+				p.viewMode = ViewModeCommitDetail
+				p.commitDetailCursor = 0
+				p.commitDetailScroll = 0
+				return p, p.loadCommitDetail(commit.Hash)
+			}
+		} else if len(entries) > 0 && p.cursor < len(entries) {
 			entry := entries[p.cursor]
 			p.viewMode = ViewModeDiff
 			p.diffFile = entry.Path
@@ -363,7 +419,17 @@ func (p *Plugin) updateStatus(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 		}
 
 	case "enter":
-		if len(entries) > 0 && p.cursor < len(entries) {
+		// Open file (for files) or commit detail (for commits)
+		if p.cursorOnCommit() {
+			commitIdx := p.selectedCommitIndex()
+			if commitIdx >= 0 && commitIdx < len(p.recentCommits) {
+				commit := p.recentCommits[commitIdx]
+				p.viewMode = ViewModeCommitDetail
+				p.commitDetailCursor = 0
+				p.commitDetailScroll = 0
+				return p, p.loadCommitDetail(commit.Hash)
+			}
+		} else if len(entries) > 0 && p.cursor < len(entries) {
 			entry := entries[p.cursor]
 			return p, p.openFile(entry.Path)
 		}
@@ -759,7 +825,7 @@ func (p *Plugin) SetFocused(f bool) { p.focused = f }
 // Commands returns the available commands.
 func (p *Plugin) Commands() []plugin.Command {
 	return []plugin.Command{
-		// git-status context
+		// git-status context (files)
 		{ID: "stage-file", Name: "Stage", Description: "Stage selected file for commit", Category: plugin.CategoryGit, Context: "git-status"},
 		{ID: "unstage-file", Name: "Unstage", Description: "Remove file from staging area", Category: plugin.CategoryGit, Context: "git-status"},
 		{ID: "stage-all", Name: "Stage all", Description: "Stage all modified files", Category: plugin.CategoryGit, Context: "git-status"},
@@ -768,6 +834,10 @@ func (p *Plugin) Commands() []plugin.Command {
 		{ID: "show-diff", Name: "Diff", Description: "View file changes", Category: plugin.CategoryView, Context: "git-status"},
 		{ID: "show-history", Name: "History", Description: "View commit history", Category: plugin.CategoryView, Context: "git-status"},
 		{ID: "open-file", Name: "Open", Description: "Open file in editor", Category: plugin.CategoryActions, Context: "git-status"},
+		// git-status-commits context (recent commits in sidebar)
+		{ID: "view-commit", Name: "View", Description: "View commit details", Category: plugin.CategoryView, Context: "git-status-commits"},
+		{ID: "show-history", Name: "History", Description: "View commit history", Category: plugin.CategoryView, Context: "git-status-commits"},
+		{ID: "push", Name: "Push", Description: "Push commits to remote", Category: plugin.CategoryGit, Context: "git-status-commits"},
 		// git-history context
 		{ID: "back", Name: "Back", Description: "Return to file list", Category: plugin.CategoryNavigation, Context: "git-history"},
 		{ID: "view-commit", Name: "View", Description: "View commit details", Category: plugin.CategoryView, Context: "git-history"},
@@ -798,6 +868,10 @@ func (p *Plugin) FocusContext() string {
 	default:
 		if p.activePane == PaneDiff {
 			return "git-status-diff"
+		}
+		// Show different context when on a commit
+		if p.cursorOnCommit() {
+			return "git-status-commits"
 		}
 		return "git-status"
 	}

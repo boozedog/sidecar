@@ -28,7 +28,7 @@ func DefaultBindings() []Binding {
 		{Key: "enter", Command: "select", Context: "global"},
 		{Key: "esc", Command: "back", Context: "global"},
 
-		// Git Status context
+		// Git Status context (files)
 		{Key: "s", Command: "stage-file", Context: "git-status"},
 		{Key: "u", Command: "unstage-file", Context: "git-status"},
 		{Key: "S", Command: "stage-all", Context: "git-status"},
@@ -39,6 +39,11 @@ func DefaultBindings() []Binding {
 		{Key: "h", Command: "show-history", Context: "git-status"},
 		{Key: "o", Command: "open-file", Context: "git-status"},
 		{Key: "enter", Command: "show-diff", Context: "git-status"},
+
+		// Git Status commits context (recent commits in sidebar)
+		{Key: "enter", Command: "view-commit", Context: "git-status-commits"},
+		{Key: "d", Command: "view-commit", Context: "git-status-commits"},
+		{Key: "h", Command: "show-history", Context: "git-status-commits"},
 
 		// Git Diff context
 		{Key: "esc", Command: "close-diff", Context: "git-diff"},
