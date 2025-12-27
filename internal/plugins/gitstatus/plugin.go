@@ -90,7 +90,8 @@ type Plugin struct {
 	height int
 
 	// Watcher
-	watcher *Watcher
+	watcher     *Watcher
+	lastRefresh time.Time // Debounce rapid refreshes
 
 	// Commit state
 	commitMessage    textarea.Model
@@ -173,8 +174,22 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 	case app.RefreshMsg:
 		return p, p.refresh()
 
-	case WatchEventMsg:
+	case app.PluginFocusedMsg:
+		// Refresh data when navigating to this plugin
+		p.lastRefresh = time.Now()
 		return p, tea.Batch(p.refresh(), p.loadRecentCommits())
+
+	case WatchStartedMsg:
+		p.watcher = msg.Watcher
+		return p, p.listenForWatchEvents()
+
+	case WatchEventMsg:
+		// File system changed, refresh and continue listening (debounce 500ms)
+		if time.Since(p.lastRefresh) < 500*time.Millisecond {
+			return p, p.listenForWatchEvents() // Skip refresh, keep listening
+		}
+		p.lastRefresh = time.Now()
+		return p, tea.Batch(p.refresh(), p.loadRecentCommits(), p.listenForWatchEvents())
 
 	case RefreshDoneMsg:
 		// Auto-load diff for first file if nothing selected
@@ -484,7 +499,7 @@ func (p *Plugin) autoLoadDiff() tea.Cmd {
 	}
 
 	p.selectedDiffFile = entry.Path
-	p.diffPaneParsedDiff = nil
+	// Keep old diff visible until new one loads (prevents flashing)
 	p.diffPaneScroll = 0
 	return p.loadInlineDiff(entry.Path, entry.Staged, entry.Status)
 }
@@ -774,8 +789,18 @@ func (p *Plugin) startWatcher() tea.Cmd {
 		if err != nil {
 			return ErrorMsg{Err: err}
 		}
-		p.watcher = watcher
-		return WatchStartedMsg{}
+		return WatchStartedMsg{Watcher: watcher}
+	}
+}
+
+// listenForWatchEvents waits for the next file system event.
+func (p *Plugin) listenForWatchEvents() tea.Cmd {
+	if p.watcher == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		<-p.watcher.Events()
+		return WatchEventMsg{}
 	}
 }
 
@@ -849,7 +874,7 @@ func countLines(s string) int {
 // Message types
 type RefreshDoneMsg struct{}
 type WatchEventMsg struct{}
-type WatchStartedMsg struct{}
+type WatchStartedMsg struct{ Watcher *Watcher }
 type ErrorMsg struct{ Err error }
 type DiffLoadedMsg struct {
 	Content string // Rendered content (may be from delta)

@@ -57,10 +57,6 @@ func NewFileTree(workDir string) *FileTree {
 
 // Refresh reloads the git status from disk.
 func (t *FileTree) Refresh() error {
-	t.Staged = nil
-	t.Modified = nil
-	t.Untracked = nil
-
 	// Run git status with porcelain v2 format (null-separated)
 	cmd := exec.Command("git", "status", "--porcelain=v2", "-z")
 	cmd.Dir = t.workDir
@@ -69,14 +65,21 @@ func (t *FileTree) Refresh() error {
 		return err
 	}
 
-	if err := t.parseStatus(output); err != nil {
+	// Build new data into temporary tree to avoid flashing during parse
+	temp := &FileTree{workDir: t.workDir}
+	if err := temp.parseStatus(output); err != nil {
 		return err
 	}
 
 	// Get diff stats for all files
-	if err := t.loadDiffStats(); err != nil {
+	if err := temp.loadDiffStats(); err != nil {
 		// Non-fatal: continue without stats
 	}
+
+	// Swap in new data atomically
+	t.Staged = temp.Staged
+	t.Modified = temp.Modified
+	t.Untracked = temp.Untracked
 
 	return nil
 }
