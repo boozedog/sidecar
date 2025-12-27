@@ -102,6 +102,16 @@ func DefaultBindings() []Binding {
 		{Key: "n", Command: "next-match", Context: "file-browser-content-search"},
 		{Key: "N", Command: "prev-match", Context: "file-browser-content-search"},
 
+		// File browser quick open context
+		{Key: "ctrl+p", Command: "quick-open", Context: "file-browser-tree"},
+		{Key: "ctrl+p", Command: "quick-open", Context: "file-browser-preview"},
+		{Key: "esc", Command: "cancel", Context: "file-browser-quick-open"},
+		{Key: "enter", Command: "select", Context: "file-browser-quick-open"},
+		{Key: "up", Command: "cursor-up", Context: "file-browser-quick-open"},
+		{Key: "down", Command: "cursor-down", Context: "file-browser-quick-open"},
+		{Key: "ctrl+n", Command: "cursor-down", Context: "file-browser-quick-open"},
+		{Key: "ctrl+p", Command: "cursor-up", Context: "file-browser-quick-open"},
+
 		// Git Commit context (commit message editor)
 		{Key: "esc", Command: "cancel", Context: "git-commit"},
 		{Key: "alt+enter", Command: "execute-commit", Context: "git-commit"},

@@ -159,7 +159,11 @@ var (
 var (
 	TabActive = BarChipActive.Padding(0, 2)
 
-	TabInactive = BarChip.Padding(0, 2)
+	// TabInactive uses TextSecondary for better contrast (vs TextMuted)
+	TabInactive = lipgloss.NewStyle().
+			Foreground(TextSecondary).
+			Background(BgTertiary).
+			Padding(0, 2)
 )
 
 // Diff line styles
@@ -210,6 +214,20 @@ var (
 	SearchMatchCurrent = lipgloss.NewStyle().
 				Background(Primary). // Purple background for current match
 				Foreground(TextPrimary)
+
+	// Fuzzy match character highlighting (bold in result list)
+	FuzzyMatchChar = lipgloss.NewStyle().
+			Foreground(Primary).
+			Bold(true)
+
+	// Quick open result row (normal)
+	QuickOpenItem = lipgloss.NewStyle().
+			Foreground(TextPrimary)
+
+	// Quick open result row (selected)
+	QuickOpenItemSelected = lipgloss.NewStyle().
+				Foreground(TextPrimary).
+				Background(BgTertiary)
 )
 
 // Footer and header

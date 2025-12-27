@@ -1,9 +1,13 @@
 package filebrowser
 
 import (
+	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -12,8 +16,13 @@ import (
 
 const (
 	pluginID   = "file-browser"
-	pluginName = "File Browser"
+	pluginName = "files"
 	pluginIcon = "F"
+
+	// Quick open limits
+	quickOpenMaxFiles   = 50000           // Max files to cache (prevents OOM on huge repos)
+	quickOpenMaxResults = 50              // Max matches to show
+	quickOpenTimeout    = 2 * time.Second // Max time to spend scanning
 )
 
 // Message types
@@ -73,6 +82,14 @@ type Plugin struct {
 	contentSearchQuery   string
 	contentSearchMatches []ContentMatch
 	contentSearchCursor  int // Index into contentSearchMatches
+
+	// Quick open state
+	quickOpenMode    bool
+	quickOpenQuery   string
+	quickOpenMatches []QuickOpenMatch
+	quickOpenCursor  int
+	quickOpenFiles   []string // Cached file paths (relative)
+	quickOpenError   string   // Error message if scan failed/limited
 
 	// File watcher
 	watcher *Watcher
@@ -205,6 +222,16 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 
 func (p *Plugin) handleKey(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 	key := msg.String()
+
+	// Quick open can be triggered from any context (except when already open)
+	if key == "ctrl+p" && !p.quickOpenMode {
+		return p.openQuickOpen()
+	}
+
+	// Handle quick open mode
+	if p.quickOpenMode {
+		return p.handleQuickOpenKey(msg)
+	}
 
 	// Handle content search mode input (preview pane search)
 	if p.contentSearchMode {
@@ -551,6 +578,215 @@ func (p *Plugin) scrollToContentMatch() {
 	p.previewScroll = targetScroll
 }
 
+// openQuickOpen enters quick open mode.
+func (p *Plugin) openQuickOpen() (plugin.Plugin, tea.Cmd) {
+	// Build file cache if empty
+	if len(p.quickOpenFiles) == 0 {
+		p.buildFileCache()
+	}
+
+	p.quickOpenMode = true
+	p.quickOpenQuery = ""
+	p.quickOpenCursor = 0
+	p.updateQuickOpenMatches()
+
+	return p, nil
+}
+
+// handleQuickOpenKey handles key input during quick open mode.
+func (p *Plugin) handleQuickOpenKey(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
+	key := msg.String()
+
+	switch key {
+	case "esc":
+		p.quickOpenMode = false
+		p.quickOpenQuery = ""
+		p.quickOpenMatches = nil
+		p.quickOpenCursor = 0
+
+	case "enter":
+		if len(p.quickOpenMatches) > 0 && p.quickOpenCursor < len(p.quickOpenMatches) {
+			return p.selectQuickOpenMatch()
+		}
+
+	case "up", "ctrl+p":
+		if p.quickOpenCursor > 0 {
+			p.quickOpenCursor--
+		}
+
+	case "down", "ctrl+n":
+		if p.quickOpenCursor < len(p.quickOpenMatches)-1 {
+			p.quickOpenCursor++
+		}
+
+	case "backspace":
+		if len(p.quickOpenQuery) > 0 {
+			p.quickOpenQuery = p.quickOpenQuery[:len(p.quickOpenQuery)-1]
+			p.updateQuickOpenMatches()
+		}
+
+	default:
+		// Append printable characters
+		if len(key) == 1 && key[0] >= 32 && key[0] <= 126 {
+			p.quickOpenQuery += key
+			p.updateQuickOpenMatches()
+		}
+	}
+
+	return p, nil
+}
+
+// updateQuickOpenMatches filters files using fuzzy matching.
+func (p *Plugin) updateQuickOpenMatches() {
+	p.quickOpenMatches = FuzzyFilter(p.quickOpenFiles, p.quickOpenQuery, quickOpenMaxResults)
+
+	// Reset cursor if out of bounds
+	if p.quickOpenCursor >= len(p.quickOpenMatches) {
+		if len(p.quickOpenMatches) > 0 {
+			p.quickOpenCursor = len(p.quickOpenMatches) - 1
+		} else {
+			p.quickOpenCursor = 0
+		}
+	}
+}
+
+// selectQuickOpenMatch opens the selected file in preview.
+func (p *Plugin) selectQuickOpenMatch() (plugin.Plugin, tea.Cmd) {
+	if len(p.quickOpenMatches) == 0 || p.quickOpenCursor >= len(p.quickOpenMatches) {
+		return p, nil
+	}
+
+	match := p.quickOpenMatches[p.quickOpenCursor]
+
+	// Close quick open
+	p.quickOpenMode = false
+	p.quickOpenQuery = ""
+	p.quickOpenMatches = nil
+	p.quickOpenCursor = 0
+
+	// Find the file in tree and expand parents
+	var targetNode *FileNode
+	p.walkTree(p.tree.Root, func(node *FileNode) {
+		if node.Path == match.Path {
+			targetNode = node
+		}
+	})
+
+	if targetNode != nil {
+		// Expand parents to make visible
+		p.expandParents(targetNode)
+		p.tree.Flatten()
+
+		// Move tree cursor to file
+		if idx := p.tree.IndexOf(targetNode); idx >= 0 {
+			p.treeCursor = idx
+			p.ensureTreeCursorVisible()
+		}
+	}
+
+	// Load preview
+	p.previewFile = match.Path
+	p.previewScroll = 0
+	p.previewLines = nil
+	p.previewError = nil
+	p.isBinary = false
+	p.isTruncated = false
+	p.activePane = PanePreview
+
+	return p, LoadPreview(p.ctx.WorkDir, match.Path)
+}
+
+// buildFileCache walks the filesystem to build the quick open file list.
+// Respects gitignore and has limits to prevent issues on huge repos.
+func (p *Plugin) buildFileCache() {
+	p.quickOpenFiles = nil
+	p.quickOpenError = ""
+
+	ctx, cancel := context.WithTimeout(context.Background(), quickOpenTimeout)
+	defer cancel()
+
+	count := 0
+	limited := false
+
+	err := filepath.WalkDir(p.ctx.WorkDir, func(path string, d fs.DirEntry, err error) error {
+		// Check timeout
+		select {
+		case <-ctx.Done():
+			limited = true
+			return filepath.SkipAll
+		default:
+		}
+
+		if err != nil {
+			return nil // Skip unreadable entries
+		}
+
+		// Get relative path
+		rel, err := filepath.Rel(p.ctx.WorkDir, path)
+		if err != nil {
+			return nil
+		}
+
+		// Skip root
+		if rel == "." {
+			return nil
+		}
+
+		// Skip common large/irrelevant directories
+		name := d.Name()
+		if d.IsDir() {
+			if name == ".git" || name == "node_modules" || name == "vendor" ||
+				name == ".next" || name == "dist" || name == "build" ||
+				name == "__pycache__" || name == ".venv" || name == "venv" ||
+				name == ".idea" || name == ".vscode" {
+				return filepath.SkipDir
+			}
+			// Check gitignore for directories
+			if p.tree != nil && p.tree.gitIgnore != nil {
+				if p.tree.gitIgnore.IsIgnored(rel, true) {
+					return filepath.SkipDir
+				}
+			}
+			return nil // Don't add directories to file list
+		}
+
+		// Skip hidden files (starting with .)
+		if strings.HasPrefix(name, ".") {
+			return nil
+		}
+
+		// Check gitignore for files
+		if p.tree != nil && p.tree.gitIgnore != nil {
+			if p.tree.gitIgnore.IsIgnored(rel, false) {
+				return nil
+			}
+		}
+
+		// Check file limit
+		if count >= quickOpenMaxFiles {
+			limited = true
+			return filepath.SkipAll
+		}
+
+		p.quickOpenFiles = append(p.quickOpenFiles, rel)
+		count++
+		return nil
+	})
+
+	if err != nil && err != filepath.SkipAll {
+		p.quickOpenError = "scan error: " + err.Error()
+	} else if limited {
+		if ctx.Err() != nil {
+			p.quickOpenError = "scan timed out"
+		} else {
+			p.quickOpenError = "limited to 50000 files"
+		}
+	}
+
+	// Sort files by path for consistent ordering
+	sort.Strings(p.quickOpenFiles)
+}
+
 // visibleContentHeight returns the number of lines available for content.
 func (p *Plugin) visibleContentHeight() int {
 	// height - footer (1) - search bar (0 or 1) - pane border (2) - header (2)
@@ -720,28 +956,30 @@ func (p *Plugin) SetFocused(f bool) { p.focused = f }
 func (p *Plugin) Commands() []plugin.Command {
 	return []plugin.Command{
 		// Tree pane commands
+		{ID: "quick-open", Name: "Open", Context: "file-browser-tree"},
 		{ID: "search", Name: "Search", Context: "file-browser-tree"},
 		{ID: "refresh", Name: "Refresh", Context: "file-browser-tree"},
-		{ID: "expand", Name: "Open", Context: "file-browser-tree"},
-		{ID: "collapse", Name: "Back", Context: "file-browser-tree"},
 		// Preview pane commands
+		{ID: "quick-open", Name: "Open", Context: "file-browser-preview"},
 		{ID: "search-content", Name: "Search", Context: "file-browser-preview"},
 		{ID: "back", Name: "Back", Context: "file-browser-preview"},
 		// Tree search commands
 		{ID: "confirm", Name: "Go", Context: "file-browser-search"},
 		{ID: "cancel", Name: "Cancel", Context: "file-browser-search"},
-		{ID: "next-match", Name: "Next", Context: "file-browser-search"},
-		{ID: "prev-match", Name: "Prev", Context: "file-browser-search"},
 		// Content search commands
 		{ID: "confirm", Name: "Go", Context: "file-browser-content-search"},
 		{ID: "cancel", Name: "Cancel", Context: "file-browser-content-search"},
-		{ID: "next-match", Name: "Next", Context: "file-browser-content-search"},
-		{ID: "prev-match", Name: "Prev", Context: "file-browser-content-search"},
+		// Quick open commands
+		{ID: "select", Name: "Open", Context: "file-browser-quick-open"},
+		{ID: "cancel", Name: "Cancel", Context: "file-browser-quick-open"},
 	}
 }
 
 // FocusContext returns the current focus context.
 func (p *Plugin) FocusContext() string {
+	if p.quickOpenMode {
+		return "file-browser-quick-open"
+	}
 	if p.contentSearchMode {
 		return "file-browser-content-search"
 	}

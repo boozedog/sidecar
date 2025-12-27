@@ -32,6 +32,11 @@ func (p *Plugin) calculatePaneWidths() {
 
 // renderView creates the 2-pane layout.
 func (p *Plugin) renderView() string {
+	// Quick open is a full overlay - render modal instead of normal panes
+	if p.quickOpenMode {
+		return p.renderQuickOpenModal()
+	}
+
 	p.calculatePaneWidths()
 
 	// Determine border styles based on focus
@@ -373,4 +378,170 @@ func truncatePath(path string, maxWidth int) string {
 	}
 	// Show ...end of path
 	return "..." + path[len(path)-maxWidth+3:]
+}
+
+// renderQuickOpenModal renders the quick open overlay.
+func (p *Plugin) renderQuickOpenModal() string {
+	// Modal dimensions
+	modalWidth := p.width - 4
+	if modalWidth > 80 {
+		modalWidth = 80
+	}
+	if modalWidth < 30 {
+		modalWidth = 30
+	}
+	modalHeight := p.height - 4
+	if modalHeight > 20 {
+		modalHeight = 20
+	}
+	if modalHeight < 5 {
+		modalHeight = 5
+	}
+
+	var sb strings.Builder
+
+	// Header with search input
+	cursor := "█"
+	header := fmt.Sprintf("Quick Open: %s%s", p.quickOpenQuery, cursor)
+	sb.WriteString(styles.ModalTitle.Render(header))
+	sb.WriteString("\n\n")
+
+	// Error message if scan was limited
+	if p.quickOpenError != "" {
+		sb.WriteString(styles.Muted.Render("⚠ " + p.quickOpenError))
+		sb.WriteString("\n\n")
+	}
+
+	// Results list
+	listHeight := modalHeight - 5 // Account for header, footer, borders
+	if p.quickOpenError == "" {
+		listHeight += 2
+	}
+	if listHeight < 3 {
+		listHeight = 3
+	}
+
+	if len(p.quickOpenMatches) == 0 {
+		if p.quickOpenQuery != "" {
+			sb.WriteString(styles.Muted.Render("No matches"))
+		} else {
+			sb.WriteString(styles.Muted.Render("Type to search files..."))
+		}
+	} else {
+		// Determine visible range (scroll if cursor out of view)
+		start := 0
+		if p.quickOpenCursor >= listHeight {
+			start = p.quickOpenCursor - listHeight + 1
+		}
+		end := start + listHeight
+		if end > len(p.quickOpenMatches) {
+			end = len(p.quickOpenMatches)
+		}
+
+		for i := start; i < end; i++ {
+			match := p.quickOpenMatches[i]
+			isSelected := i == p.quickOpenCursor
+
+			// Build the display line with highlighted match chars
+			line := p.renderQuickOpenMatch(match, modalWidth-4)
+
+			if isSelected {
+				sb.WriteString(styles.QuickOpenItemSelected.Render("> " + line))
+			} else {
+				sb.WriteString(styles.QuickOpenItem.Render("  " + line))
+			}
+
+			if i < end-1 {
+				sb.WriteString("\n")
+			}
+		}
+	}
+
+	// Footer with match count
+	footer := ""
+	if len(p.quickOpenMatches) > 0 {
+		footer = fmt.Sprintf("\n\n(%d/%d)", p.quickOpenCursor+1, len(p.quickOpenMatches))
+	} else if len(p.quickOpenFiles) > 0 {
+		footer = fmt.Sprintf("\n\n(%d files)", len(p.quickOpenFiles))
+	}
+	if footer != "" {
+		sb.WriteString(styles.Muted.Render(footer))
+	}
+
+	// Wrap in modal box and center
+	content := sb.String()
+	modal := styles.ModalBox.
+		Width(modalWidth).
+		Render(content)
+
+	// Center the modal
+	hPad := (p.width - modalWidth - 4) / 2
+	vPad := (p.height - modalHeight - 2) / 2
+	if hPad < 0 {
+		hPad = 0
+	}
+	if vPad < 0 {
+		vPad = 0
+	}
+
+	centered := lipgloss.NewStyle().
+		PaddingLeft(hPad).
+		PaddingTop(vPad).
+		Render(modal)
+
+	return centered
+}
+
+// renderQuickOpenMatch renders a single match with highlighted chars.
+func (p *Plugin) renderQuickOpenMatch(match QuickOpenMatch, maxWidth int) string {
+	path := match.Path
+
+	// Truncate path if too long
+	if len(path) > maxWidth {
+		path = "..." + path[len(path)-maxWidth+3:]
+		// Can't highlight properly after truncation, just return
+		return path
+	}
+
+	// Apply match highlighting
+	if len(match.MatchRanges) > 0 {
+		return p.highlightFuzzyMatch(path, match.MatchRanges)
+	}
+
+	return path
+}
+
+// highlightFuzzyMatch applies highlighting to matched character ranges.
+func (p *Plugin) highlightFuzzyMatch(text string, ranges []MatchRange) string {
+	if len(ranges) == 0 {
+		return text
+	}
+
+	var result strings.Builder
+	lastEnd := 0
+
+	for _, r := range ranges {
+		if r.Start > len(text) || r.End > len(text) {
+			continue
+		}
+		if r.Start < lastEnd {
+			continue // Skip overlapping
+		}
+
+		// Add text before match
+		if r.Start > lastEnd {
+			result.WriteString(text[lastEnd:r.Start])
+		}
+
+		// Add highlighted match
+		result.WriteString(styles.FuzzyMatchChar.Render(text[r.Start:r.End]))
+		lastEnd = r.End
+	}
+
+	// Add remaining text
+	if lastEnd < len(text) {
+		result.WriteString(text[lastEnd:])
+	}
+
+	return result.String()
 }
