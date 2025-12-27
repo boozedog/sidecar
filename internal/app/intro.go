@@ -15,8 +15,6 @@ type IntroModel struct {
 	Active    bool
 	StartTime time.Time
 	Letters   []*IntroLetter
-	Width     int
-	Height    int
 	Done      bool // Set to true when animation is finished
 }
 
@@ -80,11 +78,12 @@ func NewIntroModel() IntroModel {
 
 		letters[i] = &IntroLetter{
 			Char:         char,
-			CurrentX:     -20.0 - float64(i)*5.0, // Start well offscreen left
+			CurrentX:     -20.0 - float64(i)*10.0, // Start further left and more spaced out
+			TargetX:      float64(i),              // Target is adjacent index
 			StartColor:   hexToRGB(startColors[i%len(startColors)]),
 			EndColor:     targetColor,
 			CurrentColor: hexToRGB(startColors[i%len(startColors)]),
-			Delay:        time.Duration(i) * 100 * time.Millisecond,
+			Delay:        time.Duration(i) * 150 * time.Millisecond,
 		}
 	}
 
@@ -96,22 +95,13 @@ func NewIntroModel() IntroModel {
 
 // Update progresses the animation
 func (m *IntroModel) Update(dt time.Duration) {
-	if !m.Active || m.Done {
+	if !m.Active {
 		return
 	}
 
 	allSettled := true
-	
-	// Center the text
-	// "S i d e c a r" -> 7 chars + 6 spaces = 13 visual width?
-	// Or we can just space them out with padding.
-	// Let's assume a spacing of 3 visual units between centers.
-	totalWidth := float64(len(m.Letters)-1) * 3.0
-	startX := (float64(m.Width) - totalWidth) / 2.0
 
-	for i, l := range m.Letters {
-		l.TargetX = startX + float64(i)*3.0
-
+	for _, l := range m.Letters {
 		// Check delay
 		if m.StartTime.IsZero() {
 			m.StartTime = time.Now()
@@ -124,39 +114,35 @@ func (m *IntroModel) Update(dt time.Duration) {
 
 		// Animation logic (Spring-like or EaseOut)
 		// Move towards TargetX
-		speed := 15.0 // pixels per second
+		speed := 25.0 // pixels per second
 		dist := l.TargetX - l.CurrentX
-		
+
 		// Simple ease-out
-		move := dist * 5.0 * dt.Seconds()
+		move := dist * 8.0 * dt.Seconds()
 		if move > 0 && move < speed*dt.Seconds() {
 			move = speed * dt.Seconds()
 		}
 		if move > dist {
 			move = dist
 		}
-		
+
 		l.CurrentX += move
 
 		// Color interpolation
 		// Interpolate towards EndColor
-		colorSpeed := 2.0 * dt.Seconds()
+		colorSpeed := 3.0 * dt.Seconds()
 		l.CurrentColor.R += (l.EndColor.R - l.CurrentColor.R) * colorSpeed
 		l.CurrentColor.G += (l.EndColor.G - l.CurrentColor.G) * colorSpeed
 		l.CurrentColor.B += (l.EndColor.B - l.CurrentColor.B) * colorSpeed
 
-		if math.Abs(l.TargetX-l.CurrentX) > 0.1 || 
-		   math.Abs(l.EndColor.R-l.CurrentColor.R) > 1.0 {
+		// Check if settled
+		if math.Abs(l.TargetX-l.CurrentX) > 0.1 ||
+			math.Abs(l.EndColor.R-l.CurrentColor.R) > 1.0 {
 			allSettled = false
 		}
 	}
 
 	if allSettled {
-		// Keep it visible for a moment?
-		// Or just mark done.
-		// For now, mark done immediately when settled.
-		// Maybe add a small pause before switching to main UI?
-		// We can handle that in the Model.
 		m.Done = true
 	}
 }
@@ -166,41 +152,27 @@ func (m IntroModel) View() string {
 		return ""
 	}
 
-	// Create a canvas (string builder with spaces)
-	// Since we can't easily do absolute positioning in a string without a 2D buffer,
-	// we'll approximate by rendering lines.
-	// But actually, we just need to render one line with the letters at correct positions?
-	// Or maybe centered vertically.
+	// We need to render the string "Sidecar" (length 7)
+	// We'll create a buffer large enough to hold the text at target positions.
+	// Since TargetX goes from 0 to 6, a buffer of size 7 is sufficient for the final state.
+	// However, during animation, letters might be at negative positions (hidden)
+	// or between positions. We'll map to the nearest integer index.
 
-	var b strings.Builder
-	
-	// Vertical centering
-	centerY := m.Height / 2
-	for y := 0; y < m.Height; y++ {
-		if y == centerY {
-			// Render the line with letters
-			line := make([]string, m.Width)
-			for k := range line {
-				line[k] = " "
-			}
+	length := len(m.Letters)
+	buf := make([]string, length)
+	for i := range buf {
+		buf[i] = " "
+	}
 
-			for _, l := range m.Letters {
-				x := int(math.Round(l.CurrentX))
-				if x >= 0 && x < m.Width {
-					style := lipgloss.NewStyle().Foreground(l.CurrentColor.toLipgloss()).Bold(true)
-					line[x] = style.Render(string(l.Char))
-				}
-			}
-			b.WriteString(strings.Join(line, ""))
-		} else {
-			b.WriteString(strings.Repeat(" ", m.Width))
-		}
-		if y < m.Height-1 {
-			b.WriteString("\n")
+	for _, l := range m.Letters {
+		x := int(math.Round(l.CurrentX))
+		if x >= 0 && x < length {
+			style := lipgloss.NewStyle().Foreground(l.CurrentColor.toLipgloss()).Bold(true)
+			buf[x] = style.Render(string(l.Char))
 		}
 	}
 
-	return b.String()
+	return strings.Join(buf, "")
 }
 
 // IntroTickMsg is sent to update the animation frame.

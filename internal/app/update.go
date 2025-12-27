@@ -19,8 +19,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.intro.Width = msg.Width
-		m.intro.Height = msg.Height
 		m.ready = true
 		return m, nil
 
@@ -28,8 +26,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.intro.Active && !m.intro.Done {
 			m.intro.Update(16 * time.Millisecond)
 			if m.intro.Done {
-				// Animation finished
-				return m, nil
+				// Animation finished - trigger a refresh to ensure final state is rendered
+				return m, Refresh()
 			}
 			return m, IntroTick()
 		}

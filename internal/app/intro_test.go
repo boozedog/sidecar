@@ -7,8 +7,6 @@ import (
 
 func TestIntroModel_Update(t *testing.T) {
 	m := NewIntroModel()
-	m.Width = 80
-	m.Height = 24
 
 	if !m.Active {
 		t.Error("NewIntroModel should be active")
@@ -34,13 +32,11 @@ func TestIntroModel_Update(t *testing.T) {
 	}
 	
 	// Verify final state
-	// Letters should be near target
-	totalWidth := float64(len(m.Letters)-1) * 3.0
-	startX := (float64(m.Width) - totalWidth) / 2.0
+	// Letters should be at target positions (0, 1, 2...)
 	
 	for i, l := range m.Letters {
-		targetX := startX + float64(i)*3.0
-		if l.CurrentX < targetX-0.5 || l.CurrentX > targetX+0.5 {
+		targetX := float64(i)
+		if l.CurrentX < targetX-0.1 || l.CurrentX > targetX+0.1 {
 			t.Errorf("Letter %d not at target X. Got %f, want %f", i, l.CurrentX, targetX)
 		}
 		
