@@ -504,12 +504,20 @@ func TestContentSearch_ExitWithEnter(t *testing.T) {
 	p.contentSearchQuery = "test"
 	p.contentSearchMatches = []ContentMatch{{LineNo: 0, StartCol: 0, EndCol: 4}}
 
+	// First Enter commits the search (vim-style two-phase)
 	_, _ = p.handleContentSearchKey(tea.KeyMsg{Type: tea.KeyEnter})
-
-	if p.contentSearchMode {
-		t.Error("contentSearchMode should be false after enter")
+	if !p.contentSearchCommitted {
+		t.Error("contentSearchCommitted should be true after first enter")
 	}
-	// Query and matches should be preserved (unlike esc)
+	if !p.contentSearchMode {
+		t.Error("contentSearchMode should still be true after commit")
+	}
+
+	// Second Enter exits search mode
+	_, _ = p.handleContentSearchKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if p.contentSearchMode {
+		t.Error("contentSearchMode should be false after second enter")
+	}
 }
 
 func TestContentSearch_FindMatches(t *testing.T) {
@@ -564,6 +572,9 @@ func TestContentSearch_NavigateNext(t *testing.T) {
 		t.Error("cursor should start at 0")
 	}
 
+	// Commit search with Enter first (vim-style two-phase)
+	_, _ = p.handleContentSearchKey(tea.KeyMsg{Type: tea.KeyEnter})
+
 	// Press n
 	_, _ = p.handleContentSearchKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
 	if p.contentSearchCursor != 1 {
@@ -589,6 +600,9 @@ func TestContentSearch_NavigatePrev(t *testing.T) {
 	p.contentSearchMode = true
 	p.contentSearchQuery = "a"
 	p.updateContentMatches()
+
+	// Commit search with Enter first (vim-style two-phase)
+	_, _ = p.handleContentSearchKey(tea.KeyMsg{Type: tea.KeyEnter})
 
 	// Press N at position 0 - should wrap to last
 	_, _ = p.handleContentSearchKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'N'}})

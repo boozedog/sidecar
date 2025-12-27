@@ -104,10 +104,18 @@ func (p *Plugin) renderView() string {
 
 // renderContentSearchBar renders the content search input bar for preview pane.
 func (p *Plugin) renderContentSearchBar() string {
-	cursor := "█"
+	// Show cursor while typing, hide when committed
+	cursor := ""
+	if !p.contentSearchCommitted {
+		cursor = "█"
+	}
+
 	matchInfo := ""
 	if len(p.contentSearchMatches) > 0 {
 		matchInfo = fmt.Sprintf(" (%d/%d)", p.contentSearchCursor+1, len(p.contentSearchMatches))
+		if p.contentSearchCommitted {
+			matchInfo += " [n/N j/k]" // Hint for navigation
+		}
 	} else if p.contentSearchQuery != "" {
 		matchInfo = " (0 matches)"
 	}

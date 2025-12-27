@@ -78,10 +78,11 @@ type Plugin struct {
 	searchCursor  int
 
 	// Content search state (preview pane)
-	contentSearchMode    bool
-	contentSearchQuery   string
-	contentSearchMatches []ContentMatch
-	contentSearchCursor  int // Index into contentSearchMatches
+	contentSearchMode      bool
+	contentSearchCommitted bool // True after Enter confirms query (enables n/N navigation)
+	contentSearchQuery     string
+	contentSearchMatches   []ContentMatch
+	contentSearchCursor    int // Index into contentSearchMatches
 
 	// Quick open state
 	quickOpenMode    bool
@@ -197,6 +198,10 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			p.isTruncated = msg.Result.IsTruncated
 			p.previewError = msg.Result.Error
 			p.previewScroll = 0
+			// Re-run search if still in search mode (e.g., navigating files with j/k)
+			if p.contentSearchMode && p.contentSearchQuery != "" {
+				p.updateContentMatches()
+			}
 		}
 
 	case RefreshMsg:
@@ -458,6 +463,7 @@ func (p *Plugin) handlePreviewKey(key string) (plugin.Plugin, tea.Cmd) {
 		// Enter content search mode if we have content to search
 		if len(p.previewLines) > 0 && !p.isBinary {
 			p.contentSearchMode = true
+			p.contentSearchCommitted = false
 			p.contentSearchQuery = ""
 			p.contentSearchMatches = nil
 			p.contentSearchCursor = 0
@@ -468,36 +474,51 @@ func (p *Plugin) handlePreviewKey(key string) (plugin.Plugin, tea.Cmd) {
 }
 
 // handleContentSearchKey handles key input during content search mode.
+// Implements vim-style two-phase search: type query, Enter to commit, then n/N navigate.
 func (p *Plugin) handleContentSearchKey(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 	key := msg.String()
 
-	switch key {
-	case "esc":
-		// Exit search, clear matches
+	// Esc always exits search mode completely
+	if key == "esc" {
 		p.contentSearchMode = false
+		p.contentSearchCommitted = false
 		p.contentSearchQuery = ""
 		p.contentSearchMatches = nil
 		p.contentSearchCursor = 0
+		return p, nil
+	}
 
-	case "enter":
-		// Exit search, keep position at current match
-		p.contentSearchMode = false
-
-	case "backspace":
-		if len(p.contentSearchQuery) > 0 {
-			p.contentSearchQuery = p.contentSearchQuery[:len(p.contentSearchQuery)-1]
-			p.updateContentMatches()
+	// Phase 1: Typing query (not yet committed)
+	if !p.contentSearchCommitted {
+		switch key {
+		case "enter":
+			// Commit the search - now n/N will navigate matches
+			if len(p.contentSearchQuery) > 0 {
+				p.contentSearchCommitted = true
+			}
+		case "backspace":
+			if len(p.contentSearchQuery) > 0 {
+				p.contentSearchQuery = p.contentSearchQuery[:len(p.contentSearchQuery)-1]
+				p.updateContentMatches()
+			}
+		default:
+			// All printable characters go to query (including n, N, etc.)
+			if len(key) == 1 && key[0] >= 32 && key[0] <= 126 {
+				p.contentSearchQuery += key
+				p.updateContentMatches()
+			}
 		}
+		return p, nil
+	}
 
+	// Phase 2: Search committed - n/N navigate matches, j/k exit and navigate tree
+	switch key {
 	case "n":
-		// Next match (wrap around)
 		if len(p.contentSearchMatches) > 0 {
 			p.contentSearchCursor = (p.contentSearchCursor + 1) % len(p.contentSearchMatches)
 			p.scrollToContentMatch()
 		}
-
 	case "N":
-		// Previous match (wrap around)
 		if len(p.contentSearchMatches) > 0 {
 			p.contentSearchCursor--
 			if p.contentSearchCursor < 0 {
@@ -505,13 +526,28 @@ func (p *Plugin) handleContentSearchKey(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd)
 			}
 			p.scrollToContentMatch()
 		}
-
-	default:
-		// Append printable characters
-		if len(key) == 1 && key[0] >= 32 && key[0] <= 126 {
-			p.contentSearchQuery += key
-			p.updateContentMatches()
+	case "j", "down":
+		// Move to next file, keep search active
+		if p.treeCursor < p.tree.Len()-1 {
+			p.treeCursor++
+			p.ensureTreeCursorVisible()
+			p.contentSearchMatches = nil
+			p.contentSearchCursor = 0
+			return p, p.loadPreviewForCursor()
 		}
+	case "k", "up":
+		// Move to previous file, keep search active
+		if p.treeCursor > 0 {
+			p.treeCursor--
+			p.ensureTreeCursorVisible()
+			p.contentSearchMatches = nil
+			p.contentSearchCursor = 0
+			return p, p.loadPreviewForCursor()
+		}
+	case "enter":
+		// Exit search, keep position at current match
+		p.contentSearchMode = false
+		p.contentSearchCommitted = false
 	}
 
 	return p, nil
@@ -810,6 +846,21 @@ func (p *Plugin) ensureTreeCursorVisible() {
 	} else if p.treeCursor >= p.treeScrollOff+visibleHeight {
 		p.treeScrollOff = p.treeCursor - visibleHeight + 1
 	}
+}
+
+// loadPreviewForCursor loads the preview for the file at the current tree cursor.
+func (p *Plugin) loadPreviewForCursor() tea.Cmd {
+	node := p.tree.GetNode(p.treeCursor)
+	if node == nil || node.IsDir {
+		return nil
+	}
+	p.previewFile = node.Path
+	p.previewScroll = 0
+	p.previewLines = nil
+	p.previewError = nil
+	p.isBinary = false
+	p.isTruncated = false
+	return LoadPreview(p.ctx.WorkDir, node.Path)
 }
 
 // handleSearchKey handles key input during search mode.
