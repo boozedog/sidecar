@@ -108,15 +108,19 @@ func ScoreEntry(entry *PaletteEntry, query string) {
 	catScore, _ := FuzzyMatch(query, string(entry.Category))
 
 	// Weighted combination: name 3x, key 2x, desc 1x, category 0.5x
-	entry.Score = nameScore*3 + keyScore*2 + descScore + catScore/2
+	baseScore := nameScore*3 + keyScore*2 + descScore + catScore/2
 
-	// Layer boost - current mode shortcuts should appear first
-	switch entry.Layer {
-	case LayerCurrentMode:
-		entry.Score += 100
-	case LayerPlugin:
-		entry.Score += 50
+	// Only apply layer boost if there's at least one match
+	if baseScore > 0 {
+		switch entry.Layer {
+		case LayerCurrentMode:
+			baseScore += 100
+		case LayerPlugin:
+			baseScore += 50
+		}
 	}
+
+	entry.Score = baseScore
 
 	// Use name match ranges for highlighting
 	entry.MatchRanges = nameRanges
