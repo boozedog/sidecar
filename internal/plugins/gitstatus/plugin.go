@@ -357,6 +357,9 @@ func (p *Plugin) updateStatus(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 	case "g":
 		p.cursor = 0
 		p.scrollOff = 0
+		if p.cursorOnCommit() {
+			return p, p.autoLoadCommitPreview()
+		}
 		return p, p.autoLoadDiff()
 
 	case "G":
