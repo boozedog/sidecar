@@ -967,7 +967,7 @@ func TestThinkingBlockTogglePersistence(t *testing.T) {
 	p.view = ViewMessages
 	p.height = 20
 
-	// Create messages with thinking blocks
+	// Create messages with thinking blocks - alternating roles to create separate turns
 	p.messages = []adapter.Message{
 		{
 			ID:   "msg-1",
@@ -978,10 +978,8 @@ func TestThinkingBlockTogglePersistence(t *testing.T) {
 		},
 		{
 			ID:   "msg-2",
-			Role: "assistant",
-			ThinkingBlocks: []adapter.ThinkingBlock{
-				{Content: "thinking 2"},
-			},
+			Role: "user",
+			Content: "user message",
 		},
 		{
 			ID:   "msg-3",
@@ -991,14 +989,15 @@ func TestThinkingBlockTogglePersistence(t *testing.T) {
 			},
 		},
 	}
-	p.msgCursor = 0
+	p.turns = GroupMessagesIntoTurns(p.messages)
+	p.turnCursor = 0
 
 	// Initially all thinking blocks should be collapsed
 	if p.expandedThinking["msg-1"] {
 		t.Error("expected msg-1 thinking to be collapsed initially")
 	}
 
-	// Toggle msg-1 thinking block (press 'T')
+	// Toggle turn 0 thinking blocks (press 'T')
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'T'}}
 	_, _ = p.Update(msg)
 
@@ -1006,14 +1005,14 @@ func TestThinkingBlockTogglePersistence(t *testing.T) {
 		t.Error("expected msg-1 thinking to be expanded after toggle")
 	}
 
-	// Scroll to msg-2
-	p.msgCursor = 1
+	// Scroll to turn 2 (assistant with msg-3)
+	p.turnCursor = 2
 
-	// Toggle msg-2 thinking block
+	// Toggle turn 2 thinking block
 	_, _ = p.Update(msg)
 
-	if !p.expandedThinking["msg-2"] {
-		t.Error("expected msg-2 thinking to be expanded after toggle")
+	if !p.expandedThinking["msg-3"] {
+		t.Error("expected msg-3 thinking to be expanded after toggle")
 	}
 
 	// Verify msg-1 is still expanded
@@ -1021,26 +1020,26 @@ func TestThinkingBlockTogglePersistence(t *testing.T) {
 		t.Error("expected msg-1 thinking to remain expanded after scrolling")
 	}
 
-	// Scroll back to msg-1 and verify still expanded
-	p.msgCursor = 0
+	// Scroll back to turn 0 and verify still expanded
+	p.turnCursor = 0
 	if !p.expandedThinking["msg-1"] {
 		t.Error("expected msg-1 thinking to remain expanded after scrolling back")
 	}
 
-	// Toggle msg-1 again to collapse
+	// Toggle turn 0 again to collapse
 	_, _ = p.Update(msg)
 
 	if p.expandedThinking["msg-1"] {
 		t.Error("expected msg-1 thinking to be collapsed after second toggle")
 	}
 
-	// msg-2 should still be expanded
-	if !p.expandedThinking["msg-2"] {
-		t.Error("expected msg-2 thinking to remain expanded")
+	// msg-3 should still be expanded
+	if !p.expandedThinking["msg-3"] {
+		t.Error("expected msg-3 thinking to remain expanded")
 	}
 }
 
-// TestThinkingBlockToggleNoThinkingBlocks tests toggle on message without thinking blocks.
+// TestThinkingBlockToggleNoThinkingBlocks tests toggle on turn without thinking blocks.
 func TestThinkingBlockToggleNoThinkingBlocks(t *testing.T) {
 	p := New()
 	p.adapter = &mockAdapter{}
@@ -1054,7 +1053,8 @@ func TestThinkingBlockToggleNoThinkingBlocks(t *testing.T) {
 			Role: "user",
 		},
 	}
-	p.msgCursor = 0
+	p.turns = GroupMessagesIntoTurns(p.messages)
+	p.turnCursor = 0
 
 	// Try to toggle (should do nothing)
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'T'}}
@@ -1084,7 +1084,8 @@ func TestThinkingBlockResetOnSessionChange(t *testing.T) {
 			},
 		},
 	}
-	p.msgCursor = 0
+	p.turns = GroupMessagesIntoTurns(p.messages)
+	p.turnCursor = 0
 
 	// Toggle to expand
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'T'}}
@@ -1107,35 +1108,36 @@ func TestThinkingBlockResetOnSessionChange(t *testing.T) {
 	}
 }
 
-// TestThinkingBlockToggleMultipleIndependent tests independent toggle state for multiple messages.
+// TestThinkingBlockToggleMultipleIndependent tests independent toggle state for multiple turns.
 func TestThinkingBlockToggleMultipleIndependent(t *testing.T) {
 	p := New()
 	p.adapter = &mockAdapter{}
 	p.view = ViewMessages
 	p.height = 20
 
-	// Create 5 messages with thinking blocks
+	// Create 5 alternating messages to create 5 separate turns
 	p.messages = []adapter.Message{
 		{ID: "msg-0", Role: "assistant", ThinkingBlocks: []adapter.ThinkingBlock{{Content: "t0"}}},
-		{ID: "msg-1", Role: "assistant", ThinkingBlocks: []adapter.ThinkingBlock{{Content: "t1"}}},
+		{ID: "msg-1", Role: "user", Content: "u1"},
 		{ID: "msg-2", Role: "assistant", ThinkingBlocks: []adapter.ThinkingBlock{{Content: "t2"}}},
-		{ID: "msg-3", Role: "assistant", ThinkingBlocks: []adapter.ThinkingBlock{{Content: "t3"}}},
+		{ID: "msg-3", Role: "user", Content: "u3"},
 		{ID: "msg-4", Role: "assistant", ThinkingBlocks: []adapter.ThinkingBlock{{Content: "t4"}}},
 	}
+	p.turns = GroupMessagesIntoTurns(p.messages)
 
 	toggleMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'T'}}
 
-	// Expand messages 0, 2, 4 (skip 1, 3)
-	p.msgCursor = 0
+	// Expand turns 0, 2, 4 (assistant turns with thinking blocks)
+	p.turnCursor = 0
 	_, _ = p.Update(toggleMsg)
 
-	p.msgCursor = 2
+	p.turnCursor = 2
 	_, _ = p.Update(toggleMsg)
 
-	p.msgCursor = 4
+	p.turnCursor = 4
 	_, _ = p.Update(toggleMsg)
 
-	// Verify even messages are expanded
+	// Verify assistant turns are expanded
 	if !p.expandedThinking["msg-0"] {
 		t.Error("expected msg-0 to be expanded")
 	}
@@ -1146,16 +1148,10 @@ func TestThinkingBlockToggleMultipleIndependent(t *testing.T) {
 		t.Error("expected msg-4 to be expanded")
 	}
 
-	// Verify odd messages are still collapsed
-	if p.expandedThinking["msg-1"] {
-		t.Error("expected msg-1 to remain collapsed")
-	}
-	if p.expandedThinking["msg-3"] {
-		t.Error("expected msg-3 to remain collapsed")
-	}
+	// User turns (1, 3) have no thinking blocks so nothing to check there
 
-	// Toggle msg-2 to collapse it
-	p.msgCursor = 2
+	// Toggle turn 2 to collapse it
+	p.turnCursor = 2
 	_, _ = p.Update(toggleMsg)
 
 	if p.expandedThinking["msg-2"] {

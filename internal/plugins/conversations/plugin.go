@@ -56,6 +56,9 @@ type Plugin struct {
 	// Message view state
 	selectedSession  string
 	messages         []adapter.Message
+	turns            []Turn            // messages grouped into turns
+	turnCursor       int               // cursor for turn selection in list view
+	turnScrollOff    int               // scroll offset for turns
 	msgCursor        int
 	msgScrollOff     int
 	pageSize         int
@@ -65,8 +68,8 @@ type Plugin struct {
 	showToolSummary  bool            // toggle for tool impact view
 
 	// Message detail view state
-	detailMessage *adapter.Message
-	detailScroll  int
+	detailTurn   *Turn // turn being viewed in detail
+	detailScroll int
 
 	// Analytics view state
 	analyticsScrollOff int
@@ -178,6 +181,9 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 
 	case MessagesLoadedMsg:
 		p.messages = msg.Messages
+		p.turns = GroupMessagesIntoTurns(msg.Messages)
+		p.turnCursor = 0
+		p.turnScrollOff = 0
 		p.hasMore = len(msg.Messages) >= p.pageSize
 		// Compute session summary
 		var duration time.Duration
@@ -507,7 +513,7 @@ func (p *Plugin) updateAnalytics(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 	return p, nil
 }
 
-// updateMessages handles key events in message view.
+// updateMessages handles key events in message view (now uses turns).
 func (p *Plugin) updateMessages(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
@@ -519,6 +525,7 @@ func (p *Plugin) updateMessages(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 		// In single-pane mode, return to sessions view
 		p.view = ViewSessions
 		p.messages = nil
+		p.turns = nil
 		p.selectedSession = ""
 		p.expandedThinking = make(map[string]bool) // reset thinking state
 		p.sessionSummary = nil
@@ -539,32 +546,36 @@ func (p *Plugin) updateMessages(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 		}
 
 	case "j", "down":
-		if p.msgCursor < len(p.messages)-1 {
-			p.msgCursor++
-			p.ensureMsgCursorVisible()
+		if p.turnCursor < len(p.turns)-1 {
+			p.turnCursor++
+			p.ensureTurnCursorVisible()
 		}
 
 	case "k", "up":
-		if p.msgCursor > 0 {
-			p.msgCursor--
-			p.ensureMsgCursorVisible()
+		if p.turnCursor > 0 {
+			p.turnCursor--
+			p.ensureTurnCursorVisible()
 		}
 
 	case "g":
-		p.msgCursor = 0
-		p.msgScrollOff = 0
+		p.turnCursor = 0
+		p.turnScrollOff = 0
 
 	case "G":
-		if len(p.messages) > 0 {
-			p.msgCursor = len(p.messages) - 1
-			p.ensureMsgCursorVisible()
+		if len(p.turns) > 0 {
+			p.turnCursor = len(p.turns) - 1
+			p.ensureTurnCursorVisible()
 		}
 
 	case "T":
-		// Toggle thinking block expansion for current message
-		if p.msgCursor < len(p.messages) && len(p.messages[p.msgCursor].ThinkingBlocks) > 0 {
-			msgID := p.messages[p.msgCursor].ID
-			p.expandedThinking[msgID] = !p.expandedThinking[msgID]
+		// Toggle thinking block expansion for current turn's messages
+		if p.turnCursor < len(p.turns) {
+			turn := &p.turns[p.turnCursor]
+			for _, m := range turn.Messages {
+				if len(m.ThinkingBlocks) > 0 {
+					p.expandedThinking[m.ID] = !p.expandedThinking[m.ID]
+				}
+			}
 		}
 
 	case "t":
@@ -572,9 +583,9 @@ func (p *Plugin) updateMessages(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 		p.showToolSummary = !p.showToolSummary
 
 	case "enter":
-		// Open full message detail view
-		if p.msgCursor < len(p.messages) {
-			p.detailMessage = &p.messages[p.msgCursor]
+		// Open turn detail view (shows all messages in the turn)
+		if p.turnCursor < len(p.turns) {
+			p.detailTurn = &p.turns[p.turnCursor]
 			p.detailScroll = 0
 			p.view = ViewMessageDetail
 		}
@@ -858,6 +869,28 @@ func (p *Plugin) ensureMsgCursorVisible() {
 	}
 }
 
+// ensureTurnCursorVisible adjusts scroll to keep turn cursor visible.
+func (p *Plugin) ensureTurnCursorVisible() {
+	var visibleRows int
+	if p.twoPane {
+		// In two-pane mode: pane height - borders(2) - header(4-5)
+		paneHeight := p.height - 2
+		visibleRows = paneHeight - 6 // Account for header, stats, resume cmd, separator
+	} else {
+		// Single pane: total height - header lines
+		visibleRows = p.height - 4
+	}
+	if visibleRows < 1 {
+		visibleRows = 1
+	}
+
+	if p.turnCursor < p.turnScrollOff {
+		p.turnScrollOff = p.turnCursor
+	} else if p.turnCursor >= p.turnScrollOff+visibleRows {
+		p.turnScrollOff = p.turnCursor - visibleRows + 1
+	}
+}
+
 // formatSessionCount formats a session count.
 func formatSessionCount(n int) string {
 	if n == 1 {
@@ -885,7 +918,7 @@ func (p *Plugin) updateMessageDetail(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
 		p.view = ViewMessages
-		p.detailMessage = nil
+		p.detailTurn = nil
 		p.detailScroll = 0
 
 	case "j", "down":

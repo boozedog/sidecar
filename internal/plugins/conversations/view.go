@@ -893,8 +893,8 @@ func (p *Plugin) renderMainPane(paneWidth, height int) string {
 	sb.WriteString(styles.Muted.Render(strings.Repeat("─", sepWidth)))
 	sb.WriteString("\n")
 
-	// Messages
-	if len(p.messages) == 0 {
+	// Turns (grouped messages)
+	if len(p.turns) == 0 {
 		// Check if this is an empty session (metadata only)
 		if session != nil && session.MessageCount == 0 {
 			sb.WriteString(styles.Muted.Render("No messages (metadata only)"))
@@ -909,11 +909,11 @@ func (p *Plugin) renderMainPane(paneWidth, height int) string {
 		contentHeight = 1
 	}
 
-	// Render messages
+	// Render turns
 	lineCount := 0
-	for i := p.msgScrollOff; i < len(p.messages) && lineCount < contentHeight; i++ {
-		msg := p.messages[i]
-		lines := p.renderCompactMessage(msg, i, contentWidth)
+	for i := p.turnScrollOff; i < len(p.turns) && lineCount < contentHeight; i++ {
+		turn := p.turns[i]
+		lines := p.renderCompactTurn(turn, i, contentWidth)
 		for _, line := range lines {
 			if lineCount >= contentHeight {
 				break
@@ -925,6 +925,74 @@ func (p *Plugin) renderMainPane(paneWidth, height int) string {
 	}
 
 	return sb.String()
+}
+
+// renderCompactTurn renders a turn (grouped messages) in compact format for two-pane view.
+func (p *Plugin) renderCompactTurn(turn Turn, turnIndex int, maxWidth int) []string {
+	var lines []string
+
+	// Header line: [timestamp] role (N msgs)  tokens
+	ts := turn.FirstTimestamp()
+	var roleStyle lipgloss.Style
+	if turn.Role == "user" {
+		roleStyle = styles.StatusInProgress
+	} else {
+		roleStyle = styles.StatusStaged
+	}
+
+	// Cursor indicator
+	var styledCursor string
+	if turnIndex == p.turnCursor {
+		styledCursor = styles.ListCursor.Render("> ")
+	} else {
+		styledCursor = "  "
+	}
+
+	// Build stats string
+	msgCount := len(turn.Messages)
+	var stats []string
+	if msgCount > 1 {
+		stats = append(stats, fmt.Sprintf("%d msgs", msgCount))
+	}
+	if turn.TotalTokensIn > 0 || turn.TotalTokensOut > 0 {
+		stats = append(stats, fmt.Sprintf("%s→%s", formatK(turn.TotalTokensIn), formatK(turn.TotalTokensOut)))
+	}
+	statsStr := ""
+	if len(stats) > 0 {
+		statsStr = " (" + strings.Join(stats, ", ") + ")"
+	}
+
+	// Build styled header
+	styledHeader := styledCursor + fmt.Sprintf("[%s] %s%s",
+		styles.Muted.Render(ts),
+		roleStyle.Render(turn.Role),
+		styles.Muted.Render(statsStr))
+	lines = append(lines, styledHeader)
+
+	// Thinking indicator (aggregate) - indented under header
+	if turn.ThinkingTokens > 0 {
+		thinkingLine := fmt.Sprintf("     ├─ [thinking] %s tokens", formatK(turn.ThinkingTokens))
+		if len(thinkingLine) > maxWidth {
+			thinkingLine = thinkingLine[:maxWidth-3] + "..."
+		}
+		lines = append(lines, styles.Muted.Render(thinkingLine))
+	}
+
+	// Content preview from first meaningful message - indented under header
+	content := turn.Preview(maxWidth - 7)
+	content = strings.ReplaceAll(content, "\n", " ")
+	content = strings.TrimSpace(content)
+	if content != "" {
+		lines = append(lines, "     "+styles.Body.Render(content))
+	}
+
+	// Tool uses (aggregate) - indented under header
+	if turn.ToolCount > 0 {
+		toolLine := fmt.Sprintf("     └─ %d tools", turn.ToolCount)
+		lines = append(lines, styles.Code.Render(toolLine))
+	}
+
+	return lines
 }
 
 // renderCompactMessage renders a message in compact format for two-pane view.
@@ -1073,81 +1141,111 @@ func (p *Plugin) renderFilterMenu(height int) string {
 	return sb.String()
 }
 
-// renderMessageDetail renders the full message detail view.
+// renderMessageDetail renders the full turn detail view (all messages in the turn).
 func (p *Plugin) renderMessageDetail() string {
 	var sb strings.Builder
 
-	if p.detailMessage == nil {
-		return styles.Muted.Render("No message selected")
+	if p.detailTurn == nil {
+		return styles.Muted.Render("No turn selected")
 	}
 
-	msg := p.detailMessage
+	turn := p.detailTurn
+	msgCount := len(turn.Messages)
 
-	// Header
-	sb.WriteString(styles.PanelHeader.Render(" Message Detail                               [esc to close]"))
+	// Header with date right-aligned
+	roleLabel := turn.Role
+	if msgCount > 1 {
+		roleLabel = fmt.Sprintf("%s (%d messages)", turn.Role, msgCount)
+	}
+	leftPart := fmt.Sprintf(" %s Turn", strings.Title(roleLabel))
+
+	// Get date from first message
+	datePart := ""
+	if msgCount > 0 {
+		datePart = turn.Messages[0].Timestamp.Local().Format("Jan 2, 2006")
+	}
+	rightPart := fmt.Sprintf("%s  [esc]", datePart)
+
+	// Calculate padding to right-align
+	padding := p.width - len(leftPart) - len(rightPart) - 2
+	if padding < 1 {
+		padding = 1
+	}
+	header := leftPart + strings.Repeat(" ", padding) + styles.Muted.Render(rightPart)
+	sb.WriteString(styles.PanelHeader.Render(header))
 	sb.WriteString("\n")
 	sb.WriteString(styles.Muted.Render(strings.Repeat("━", p.width-2)))
 	sb.WriteString("\n")
 
-	// Message metadata
-	ts := msg.Timestamp.Local().Format("2006-01-02 15:04:05")
-	sb.WriteString(fmt.Sprintf(" Role: %s\n", styles.StatusInProgress.Render(msg.Role)))
-	sb.WriteString(fmt.Sprintf(" Time: %s\n", ts))
-	if msg.Model != "" {
-		sb.WriteString(fmt.Sprintf(" Model: %s\n", styles.Code.Render(modelShortName(msg.Model))))
+	// Turn metadata
+	if msgCount > 0 {
+		firstMsg := turn.Messages[0]
+		ts := firstMsg.Timestamp.Local().Format("2006-01-02 15:04:05")
+		sb.WriteString(fmt.Sprintf(" Time: %s\n", ts))
 	}
-	if msg.InputTokens > 0 || msg.OutputTokens > 0 {
-		sb.WriteString(fmt.Sprintf(" Tokens: in=%d, out=%d", msg.InputTokens, msg.OutputTokens))
-		if msg.CacheRead > 0 {
-			sb.WriteString(fmt.Sprintf(", cache=%d", msg.CacheRead))
-		}
-		sb.WriteString("\n")
+	if turn.TotalTokensIn > 0 || turn.TotalTokensOut > 0 {
+		sb.WriteString(fmt.Sprintf(" Tokens: in=%d, out=%d\n", turn.TotalTokensIn, turn.TotalTokensOut))
+	}
+	if turn.ThinkingTokens > 0 {
+		sb.WriteString(fmt.Sprintf(" Thinking: %d tokens\n", turn.ThinkingTokens))
+	}
+	if turn.ToolCount > 0 {
+		sb.WriteString(fmt.Sprintf(" Tools: %d\n", turn.ToolCount))
 	}
 
 	sb.WriteString(styles.Muted.Render(strings.Repeat("─", p.width-2)))
 	sb.WriteString("\n\n")
 
-	// Build content lines
+	// Build content lines for all messages in turn
 	var contentLines []string
 
-	// Thinking blocks
-	for i, tb := range msg.ThinkingBlocks {
-		contentLines = append(contentLines, styles.PanelHeader.Render(fmt.Sprintf(" Thinking Block %d (%d tokens)", i+1, tb.TokenCount)))
-		contentLines = append(contentLines, styles.Muted.Render(strings.Repeat("─", p.width-4)))
-		// Wrap thinking content
-		thinkingLines := wrapText(tb.Content, p.width-4)
-		for _, line := range thinkingLines {
-			contentLines = append(contentLines, " "+styles.Muted.Render(line))
+	for msgIdx, msg := range turn.Messages {
+		// Message separator (except for first)
+		if msgIdx > 0 {
+			contentLines = append(contentLines, "")
+			contentLines = append(contentLines, styles.Muted.Render(fmt.Sprintf("── Message %d/%d ──", msgIdx+1, msgCount)))
+			contentLines = append(contentLines, "")
 		}
-		contentLines = append(contentLines, "")
-	}
 
-	// Main content
-	if msg.Content != "" {
-		contentLines = append(contentLines, styles.PanelHeader.Render(" Content"))
-		contentLines = append(contentLines, styles.Muted.Render(strings.Repeat("─", p.width-4)))
-		// Wrap content
-		msgLines := wrapText(msg.Content, p.width-4)
-		for _, line := range msgLines {
-			contentLines = append(contentLines, " "+styles.Body.Render(line))
-		}
-		contentLines = append(contentLines, "")
-	}
-
-	// Tool uses
-	if len(msg.ToolUses) > 0 {
-		contentLines = append(contentLines, styles.PanelHeader.Render(" Tool Uses"))
-		contentLines = append(contentLines, styles.Muted.Render(strings.Repeat("─", p.width-4)))
-		for _, tu := range msg.ToolUses {
-			contentLines = append(contentLines, " "+styles.Code.Render(tu.Name))
-			if filePath := extractFilePath(tu.Input); filePath != "" {
-				contentLines = append(contentLines, "   Path: "+filePath)
-			}
-			// Show input preview (truncated)
-			if tu.Input != "" && len(tu.Input) < 200 {
-				contentLines = append(contentLines, "   Input: "+tu.Input)
+		// Thinking blocks
+		for i, tb := range msg.ThinkingBlocks {
+			contentLines = append(contentLines, styles.PanelHeader.Render(fmt.Sprintf(" Thinking Block %d (%d tokens)", i+1, tb.TokenCount)))
+			contentLines = append(contentLines, styles.Muted.Render(strings.Repeat("─", p.width-4)))
+			// Wrap thinking content
+			thinkingLines := wrapText(tb.Content, p.width-4)
+			for _, line := range thinkingLines {
+				contentLines = append(contentLines, " "+styles.Muted.Render(line))
 			}
 			contentLines = append(contentLines, "")
+		}
+
+		// Main content
+		if msg.Content != "" {
+			contentLines = append(contentLines, styles.PanelHeader.Render(" Content"))
+			contentLines = append(contentLines, styles.Muted.Render(strings.Repeat("─", p.width-4)))
+			// Wrap content
+			msgLines := wrapText(msg.Content, p.width-4)
+			for _, line := range msgLines {
+				contentLines = append(contentLines, " "+styles.Body.Render(line))
+			}
+			contentLines = append(contentLines, "")
+		}
+
+		// Tool uses
+		if len(msg.ToolUses) > 0 {
+			contentLines = append(contentLines, styles.PanelHeader.Render(" Tool Uses"))
+			contentLines = append(contentLines, styles.Muted.Render(strings.Repeat("─", p.width-4)))
+			for _, tu := range msg.ToolUses {
+				contentLines = append(contentLines, " "+styles.Code.Render(tu.Name))
+				if filePath := extractFilePath(tu.Input); filePath != "" {
+					contentLines = append(contentLines, "   Path: "+filePath)
+				}
+				// Show input preview (truncated)
+				if tu.Input != "" && len(tu.Input) < 200 {
+					contentLines = append(contentLines, "   Input: "+tu.Input)
+				}
+				contentLines = append(contentLines, "")
+			}
 		}
 	}
 
