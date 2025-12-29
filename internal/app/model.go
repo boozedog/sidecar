@@ -25,6 +25,7 @@ type Model struct {
 	showDiagnostics bool
 	showFooter      bool
 	showPalette     bool
+	showQuitConfirm bool
 	palette         palette.Model
 
 	// Header/footer

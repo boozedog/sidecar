@@ -105,13 +105,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleKeyMsg processes keyboard input.
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Close modals with escape
+	if msg.Type == tea.KeyEsc {
+		if m.showHelp {
+			m.showHelp = false
+			return m, nil
+		}
+		if m.showDiagnostics {
+			m.showDiagnostics = false
+			return m, nil
+		}
+		if m.showQuitConfirm {
+			m.showQuitConfirm = false
+			return m, nil
+		}
+	}
+
+	if m.showQuitConfirm {
+		if msg.String() == "y" || msg.Type == tea.KeyEnter {
+			m.registry.Stop()
+			return m, tea.Quit
+		}
+		if msg.String() == "n" {
+			m.showQuitConfirm = false
+			return m, nil
+		}
+		return m, nil
+	}
+
 	// Text input contexts: forward all keys to plugin except ctrl+c
 	// This ensures typing works correctly in commit messages, search boxes, etc.
 	if m.activeContext == "git-commit" {
-		// ctrl+c always quits
+		// ctrl+c shows quit confirmation
 		if msg.String() == "ctrl+c" {
-			m.registry.Stop()
-			return m, tea.Quit
+			if !m.showHelp && !m.showDiagnostics && !m.showPalette {
+				m.showQuitConfirm = true
+			}
+			return m, nil
 		}
 		// Forward everything else to plugin (esc, alt+enter handled by plugin)
 		if p := m.ActivePlugin(); p != nil {
@@ -130,8 +160,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c", "q":
 		if !m.showHelp && !m.showDiagnostics && !m.showPalette {
-			m.registry.Stop()
-			return m, tea.Quit
+			m.showQuitConfirm = true
+			return m, nil
 		}
 	}
 
@@ -148,20 +178,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// Close modals with escape
-	if msg.Type == tea.KeyEsc {
-		if m.showHelp {
-			m.showHelp = false
-			return m, nil
-		}
-		if m.showDiagnostics {
-			m.showDiagnostics = false
-			return m, nil
-		}
-	}
-
 	// If modal is open, don't process other keys
-	if m.showHelp || m.showDiagnostics {
+	if m.showHelp || m.showDiagnostics || m.showQuitConfirm {
 		return m, nil
 	}
 

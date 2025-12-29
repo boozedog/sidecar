@@ -144,10 +144,12 @@ func (p *Plugin) renderSessionRow(session adapter.Session, selected bool) string
 		cursor = styles.ListCursor.Render("> ")
 	}
 
-	// Active indicator
-	activeIndicator := " "
+	// Type indicator: active (●), sub-agent (↳), or space
+	typeIndicator := " "
 	if session.IsActive {
-		activeIndicator = styles.StatusInProgress.Render("●")
+		typeIndicator = styles.StatusInProgress.Render("●")
+	} else if session.IsSubAgent {
+		typeIndicator = styles.Muted.Render("↳")
 	}
 
 	// Timestamp - just time for today, date otherwise
@@ -193,7 +195,7 @@ func (p *Plugin) renderSessionRow(session adapter.Session, selected bool) string
 
 	return lineStyle.Render(fmt.Sprintf("%s%s %s  %s  %s",
 		cursor,
-		activeIndicator,
+		typeIndicator,
 		styles.Muted.Render(ts),
 		namePadded,
 		styles.Muted.Render(dur)))
@@ -795,8 +797,11 @@ func (p *Plugin) renderCompactSessionRow(session adapter.Session, selected bool,
 		sb.WriteString("  ")
 	}
 
+	// Type indicator: active (●), sub-agent (↳), or space
 	if session.IsActive {
 		sb.WriteString(styles.StatusInProgress.Render("●"))
+	} else if session.IsSubAgent {
+		sb.WriteString(styles.Muted.Render("↳"))
 	} else {
 		sb.WriteString(" ")
 	}
@@ -890,7 +895,12 @@ func (p *Plugin) renderMainPane(paneWidth, height int) string {
 
 	// Messages
 	if len(p.messages) == 0 {
-		sb.WriteString(styles.Muted.Render("Loading messages..."))
+		// Check if this is an empty session (metadata only)
+		if session != nil && session.MessageCount == 0 {
+			sb.WriteString(styles.Muted.Render("No messages (metadata only)"))
+		} else {
+			sb.WriteString(styles.Muted.Render("Loading messages..."))
+		}
 		return sb.String()
 	}
 

@@ -68,6 +68,9 @@ func (m Model) View() string {
 	if m.showDiagnostics {
 		return m.renderDiagnosticsOverlay(b.String())
 	}
+	if m.showQuitConfirm {
+		return m.renderQuitConfirmOverlay(b.String())
+	}
 
 	return b.String()
 }
@@ -83,6 +86,25 @@ func (m Model) renderPaletteOverlay(content string) string {
 		lipgloss.WithWhitespaceChars(" "),
 		lipgloss.WithWhitespaceForeground(lipgloss.Color("#000000")),
 	)
+}
+
+// renderQuitConfirmOverlay renders the quit confirmation modal.
+func (m Model) renderQuitConfirmOverlay(content string) string {
+	var b strings.Builder
+	b.WriteString(styles.ModalTitle.Render("Quit Sidecar?"))
+	b.WriteString("\n\n")
+	b.WriteString("Press ")
+	b.WriteString(styles.KeyHint.Render("y"))
+	b.WriteString(" or ")
+	b.WriteString(styles.KeyHint.Render("enter"))
+	b.WriteString(" to quit, ")
+	b.WriteString(styles.KeyHint.Render("n"))
+	b.WriteString(" or ")
+	b.WriteString(styles.KeyHint.Render("esc"))
+	b.WriteString(" to cancel")
+
+	modal := styles.ModalBox.Render(b.String())
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
 }
 
 // renderHeader renders the top bar with title, tabs, and clock.

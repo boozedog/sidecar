@@ -157,6 +157,10 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		case ViewMessageDetail:
 			return p.updateMessageDetail(msg)
 		case ViewMessages:
+			// In two-pane mode, route based on active pane
+			if p.twoPane && p.activePane == PaneSidebar {
+				return p.updateSessions(msg)
+			}
 			return p.updateMessages(msg)
 		case ViewAnalytics:
 			return p.updateAnalytics(msg)

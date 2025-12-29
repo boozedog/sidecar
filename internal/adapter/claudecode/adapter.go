@@ -3,6 +3,7 @@ package claudecode
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -94,16 +95,21 @@ func (a *Adapter) Sessions(projectRoot string) ([]adapter.Session, error) {
 			name = shortID(meta.SessionID)
 		}
 
+		// Detect sub-agent by filename prefix
+		isSubAgent := strings.HasPrefix(e.Name(), "agent-")
+
 		sessions = append(sessions, adapter.Session{
-			ID:          meta.SessionID,
-			Name:        name,
-			Slug:        meta.Slug,
-			CreatedAt:   meta.FirstMsg,
-			UpdatedAt:   meta.LastMsg,
-			Duration:    meta.LastMsg.Sub(meta.FirstMsg),
-			IsActive:    time.Since(meta.LastMsg) < 5*time.Minute,
-			TotalTokens: meta.TotalTokens,
-			EstCost:     meta.EstCost,
+			ID:           meta.SessionID,
+			Name:         name,
+			Slug:         meta.Slug,
+			CreatedAt:    meta.FirstMsg,
+			UpdatedAt:    meta.LastMsg,
+			Duration:     meta.LastMsg.Sub(meta.FirstMsg),
+			IsActive:     time.Since(meta.LastMsg) < 5*time.Minute,
+			TotalTokens:  meta.TotalTokens,
+			EstCost:      meta.EstCost,
+			IsSubAgent:   isSubAgent,
+			MessageCount: meta.MsgCount,
 		})
 	}
 
@@ -360,6 +366,7 @@ func (a *Adapter) parseContent(rawContent json.RawMessage) (string, []adapter.To
 	var texts []string
 	var toolUses []adapter.ToolUse
 	var thinkingBlocks []adapter.ThinkingBlock
+	toolResultCount := 0
 
 	for _, block := range blocks {
 		switch block.Type {
@@ -382,8 +389,16 @@ func (a *Adapter) parseContent(rawContent json.RawMessage) (string, []adapter.To
 				Name:  block.Name,
 				Input: inputStr,
 			})
+		case "tool_result":
+			toolResultCount++
 		}
 	}
 
-	return strings.Join(texts, "\n"), toolUses, thinkingBlocks
+	// If we have tool results but no text, show a placeholder
+	content := strings.Join(texts, "\n")
+	if content == "" && toolResultCount > 0 {
+		content = fmt.Sprintf("[%d tool result(s)]", toolResultCount)
+	}
+
+	return content, toolUses, thinkingBlocks
 }
