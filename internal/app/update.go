@@ -262,13 +262,13 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.showFooter = !m.showFooter
 		return m, nil
 	case "r":
-		// In td-monitor context, 'r' is for mark-review - forward to plugin
-		// In file-browser-tree context, 'r' is for rename - forward to plugin
-		// In other contexts, 'r' triggers global refresh
-		if m.activeContext != "td-monitor" && m.activeContext != "file-browser-tree" {
-			return m, Refresh()
+		// Forward 'r' to plugin in contexts where it's used for specific actions
+		// or where the user is typing text input
+		if !isGlobalRefreshContext(m.activeContext) {
+			// Fall through to forward to plugin
+			break
 		}
-		// Fall through to forward to plugin
+		return m, Refresh()
 	}
 
 	// Try keymap for context-specific bindings
@@ -314,6 +314,45 @@ func isRootContext(ctx string) bool {
 		return true
 	case "td-monitor":
 		return true
+	default:
+		return false
+	}
+}
+
+// isGlobalRefreshContext returns true if 'r' should trigger a global refresh.
+// Returns false for contexts where 'r' should be forwarded to the plugin
+// (text input modes or plugin-specific 'r' bindings).
+func isGlobalRefreshContext(ctx string) bool {
+	switch ctx {
+	// Global context - 'r' refreshes
+	case "global", "":
+		return true
+
+	// Git status contexts - 'r' refreshes (no text input, no 'r' binding)
+	case "git-status", "git-history", "git-commit-detail", "git-diff":
+		return true
+
+	// Conversations list - 'r' refreshes (no text input, no 'r' binding)
+	case "conversations", "conversation-detail", "message-detail":
+		return true
+
+	// File browser preview - 'r' refreshes (no text input)
+	case "file-browser-preview":
+		return true
+
+	// Contexts where 'r' should be forwarded to plugin:
+	// - td-monitor: 'r' is mark-review
+	// - file-browser-tree: 'r' is rename
+	// - file-browser-search: text input mode
+	// - file-browser-content-search: text input mode
+	// - file-browser-quick-open: text input mode
+	// - file-browser-file-op: text input mode
+	// - conversations-search: text input mode
+	// - conversations-filter: text input mode
+	// - git-commit: text input mode (commit message)
+	// - td-modal: modal view
+	// - palette: command palette
+	// - diagnostics: diagnostics view
 	default:
 		return false
 	}

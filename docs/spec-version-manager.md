@@ -105,7 +105,7 @@ Version
   Latest:  v0.2.0  ← Update available
 
   Update command:
-  go install -ldflags "-X main.Version=v0.2.0" github.com/sst/sidecar/cmd/sidecar@v0.2.0
+  go install -ldflags "-X main.Version=v0.2.0" github.com/marcus/sidecar/cmd/sidecar@v0.2.0
 ```
 
 - Full update instructions in existing modal (press `!`)
