@@ -149,6 +149,12 @@ func (p *Plugin) renderSearchBar() string {
 
 // renderFileOpBar renders the file operation input bar (move/rename).
 func (p *Plugin) renderFileOpBar() string {
+	// Handle confirmation mode for directory creation
+	if p.fileOpConfirmCreate {
+		confirmLine := fmt.Sprintf(" Create '%s'? [y]es / [n]o", p.fileOpConfirmPath)
+		return styles.ModalTitle.Render(confirmLine)
+	}
+
 	var prompt string
 	switch p.fileOpMode {
 	case FileOpRename:
@@ -159,8 +165,7 @@ func (p *Plugin) renderFileOpBar() string {
 		return ""
 	}
 
-	cursor := "█"
-	inputLine := fmt.Sprintf(" %s%s%s", prompt, p.fileOpInput, cursor)
+	inputLine := fmt.Sprintf(" %s%s", prompt, p.fileOpTextInput.View())
 
 	if p.fileOpError != "" {
 		errorLine := styles.StatusDeleted.Render(" " + p.fileOpError)

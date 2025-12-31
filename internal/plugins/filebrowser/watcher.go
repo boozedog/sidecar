@@ -1,7 +1,10 @@
 package filebrowser
 
 import (
+	"io/fs"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -30,14 +33,43 @@ func NewWatcher(rootDir string) (*Watcher, error) {
 		stop:      make(chan struct{}),
 	}
 
-	// Add root directory
-	if err := fsw.Add(rootDir); err != nil {
+	// Recursively add all directories (fsnotify doesn't watch subdirs automatically)
+	if err := w.addRecursive(rootDir); err != nil {
 		fsw.Close()
 		return nil, err
 	}
 
 	go w.run()
 	return w, nil
+}
+
+// addRecursive adds a directory and all its subdirectories to the watcher.
+func (w *Watcher) addRecursive(dir string) error {
+	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			// Return error for root dir, skip errors for subdirs
+			if path == dir {
+				return err
+			}
+			return nil // Skip unreadable subdirectories
+		}
+		if !d.IsDir() {
+			return nil
+		}
+		// Skip common large/irrelevant directories
+		name := d.Name()
+		if name == ".git" || name == "node_modules" || name == "vendor" ||
+			name == ".next" || name == "dist" || name == "build" ||
+			name == "__pycache__" || name == ".venv" || name == "venv" ||
+			name == ".idea" || name == ".vscode" {
+			return filepath.SkipDir
+		}
+		// Skip hidden directories (except root)
+		if path != dir && strings.HasPrefix(name, ".") {
+			return filepath.SkipDir
+		}
+		return w.fsWatcher.Add(path)
+	})
 }
 
 // run processes file system events.
@@ -61,10 +93,10 @@ func (w *Watcher) run() {
 				}
 			})
 
-			// Watch newly created directories
+			// Watch newly created directories (recursively in case of mkdir -p)
 			if event.Op&fsnotify.Create != 0 {
 				if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
-					_ = w.fsWatcher.Add(event.Name)
+					_ = w.addRecursive(event.Name)
 				}
 			}
 		case _, ok := <-w.fsWatcher.Errors:

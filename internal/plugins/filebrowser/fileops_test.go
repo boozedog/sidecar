@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/sst/sidecar/internal/plugin"
 )
 
@@ -166,7 +167,9 @@ func TestExecuteFileOp_RenameValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p.fileOpInput = tt.input
+			ti := textinput.New()
+			ti.SetValue(tt.input)
+			p.fileOpTextInput = ti
 			p.fileOpError = ""
 			p.fileOpMode = FileOpRename
 
@@ -231,7 +234,9 @@ func TestExecuteFileOp_MoveValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p.fileOpInput = tt.input
+			ti := textinput.New()
+			ti.SetValue(tt.input)
+			p.fileOpTextInput = ti
 			p.fileOpError = ""
 			p.fileOpMode = FileOpMove
 
@@ -366,13 +371,16 @@ func TestFileOpMessages(t *testing.T) {
 func TestExecuteFileOp_EmptyInput(t *testing.T) {
 	tmpDir := t.TempDir()
 
+	ti := textinput.New()
+	ti.SetValue("") // Empty input
+
 	p := &Plugin{
 		ctx: &plugin.Context{
 			WorkDir: tmpDir,
 		},
-		fileOpMode:   FileOpRename,
-		fileOpTarget: &FileNode{Path: "test.txt"},
-		fileOpInput:  "", // Empty input
+		fileOpMode:      FileOpRename,
+		fileOpTarget:    &FileNode{Path: "test.txt"},
+		fileOpTextInput: ti,
 	}
 
 	newP, _ := p.executeFileOp()
@@ -387,13 +395,16 @@ func TestExecuteFileOp_EmptyInput(t *testing.T) {
 func TestExecuteFileOp_NilTarget(t *testing.T) {
 	tmpDir := t.TempDir()
 
+	ti := textinput.New()
+	ti.SetValue("newname.txt")
+
 	p := &Plugin{
 		ctx: &plugin.Context{
 			WorkDir: tmpDir,
 		},
-		fileOpMode:   FileOpRename,
-		fileOpTarget: nil, // Nil target
-		fileOpInput:  "newname.txt",
+		fileOpMode:      FileOpRename,
+		fileOpTarget:    nil, // Nil target
+		fileOpTextInput: ti,
 	}
 
 	newP, _ := p.executeFileOp()
@@ -417,4 +428,55 @@ func findSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestValidateFilename(t *testing.T) {
+	tests := []struct {
+		name      string
+		filename  string
+		wantError bool
+		errorMsg  string
+	}{
+		// Valid filenames
+		{"simple name", "file.txt", false, ""},
+		{"with spaces", "my file.txt", false, ""},
+		{"hidden file", ".gitignore", false, ""},
+		{"with dashes", "my-file.txt", false, ""},
+		{"with underscores", "my_file.txt", false, ""},
+
+		// Empty/special
+		{"empty", "", true, "filename cannot be empty"},
+		{"dot", ".", true, "invalid filename"},
+		{"dotdot", "..", true, "invalid filename"},
+
+		// Invalid characters
+		{"with less than", "file<name", true, "filename contains invalid character: <"},
+		{"with greater than", "file>name", true, "filename contains invalid character: >"},
+		{"with colon", "file:name", true, "filename contains invalid character: :"},
+		{"with quote", "file\"name", true, "filename contains invalid character: \""},
+		{"with pipe", "file|name", true, "filename contains invalid character: |"},
+		{"with question", "file?name", true, "filename contains invalid character: ?"},
+		{"with asterisk", "file*name", true, "filename contains invalid character: *"},
+
+		// Control characters
+		{"with null", "file\x00name", true, "filename contains invalid characters"},
+		{"with control", "file\x01name", true, "filename contains invalid characters"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateFilename(tt.filename)
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("expected error, got nil")
+				} else if err.Error() != tt.errorMsg {
+					t.Errorf("expected error %q, got %q", tt.errorMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
 }

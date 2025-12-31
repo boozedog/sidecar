@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sst/sidecar/internal/plugin"
@@ -122,10 +123,12 @@ type Plugin struct {
 	quickOpenError   string   // Error message if scan failed/limited
 
 	// File operation state (move/rename)
-	fileOpMode   FileOpMode
-	fileOpTarget *FileNode // The file being operated on
-	fileOpInput  string    // Current input value
-	fileOpError  string    // Error message if operation failed
+	fileOpMode          FileOpMode
+	fileOpTarget        *FileNode       // The file being operated on
+	fileOpTextInput     textinput.Model // Text input for rename/move
+	fileOpError         string          // Error message if operation failed
+	fileOpConfirmCreate bool            // True when waiting for directory creation confirmation
+	fileOpConfirmPath   string          // The directory path to create
 
 	// File watcher
 	watcher *Watcher
@@ -264,10 +267,47 @@ func (p *Plugin) validateDestPath(dstPath string) error {
 	return nil
 }
 
+// validateFilename checks for invalid filename characters and patterns.
+func validateFilename(name string) error {
+	if name == "" {
+		return fmt.Errorf("filename cannot be empty")
+	}
+	if name == "." || name == ".." {
+		return fmt.Errorf("invalid filename")
+	}
+	// Check for null bytes and control characters
+	for _, r := range name {
+		if r == 0 || (r < 32 && r != '\t') {
+			return fmt.Errorf("filename contains invalid characters")
+		}
+	}
+	// Check for characters invalid on common filesystems
+	invalidChars := []rune{'<', '>', ':', '"', '|', '?', '*'}
+	for _, c := range invalidChars {
+		if strings.ContainsRune(name, c) {
+			return fmt.Errorf("filename contains invalid character: %c", c)
+		}
+	}
+	return nil
+}
+
 // executeFileOp performs the pending file operation.
 func (p *Plugin) executeFileOp() (plugin.Plugin, tea.Cmd) {
-	if p.fileOpTarget == nil || p.fileOpInput == "" {
+	input := p.fileOpTextInput.Value()
+	if p.fileOpTarget == nil || input == "" {
 		p.fileOpMode = FileOpNone
+		return p, nil
+	}
+
+	// Validate filename (for rename: the input, for move: basename of path)
+	var nameToValidate string
+	if p.fileOpMode == FileOpRename {
+		nameToValidate = input
+	} else {
+		nameToValidate = filepath.Base(input)
+	}
+	if err := validateFilename(nameToValidate); err != nil {
+		p.fileOpError = err.Error()
 		return p, nil
 	}
 
@@ -278,24 +318,35 @@ func (p *Plugin) executeFileOp() (plugin.Plugin, tea.Cmd) {
 	case FileOpRename:
 		// Rename: new name in same directory
 		// Disallow path separators in rename (would be a move)
-		if strings.Contains(p.fileOpInput, string(filepath.Separator)) || strings.Contains(p.fileOpInput, "/") {
+		if strings.Contains(input, string(filepath.Separator)) || strings.Contains(input, "/") {
 			p.fileOpError = "use 'm' to move to a different directory"
 			return p, nil
 		}
-		dstPath = filepath.Join(filepath.Dir(srcPath), p.fileOpInput)
+		dstPath = filepath.Join(filepath.Dir(srcPath), input)
 	case FileOpMove:
 		// Move: relative path from workdir only (no absolute paths)
-		if filepath.IsAbs(p.fileOpInput) {
+		if filepath.IsAbs(input) {
 			p.fileOpError = "absolute paths not allowed"
 			return p, nil
 		}
-		dstPath = filepath.Join(p.ctx.WorkDir, p.fileOpInput)
+		dstPath = filepath.Join(p.ctx.WorkDir, input)
 	}
 
 	// Validate destination is within project directory
 	if err := p.validateDestPath(dstPath); err != nil {
 		p.fileOpError = err.Error()
 		return p, nil
+	}
+
+	// For moves, check if parent directory exists
+	if p.fileOpMode == FileOpMove {
+		parentDir := filepath.Dir(dstPath)
+		if _, err := os.Stat(parentDir); os.IsNotExist(err) {
+			// Enter confirmation mode to ask user if they want to create the directory
+			p.fileOpConfirmCreate = true
+			p.fileOpConfirmPath = parentDir
+			return p, nil
+		}
 	}
 
 	return p, p.doFileOp(srcPath, dstPath)
@@ -382,7 +433,6 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		// Clear file operation state and refresh
 		p.fileOpMode = FileOpNone
 		p.fileOpTarget = nil
-		p.fileOpInput = ""
 		p.fileOpError = ""
 		return p, p.refresh()
 
@@ -553,7 +603,10 @@ func (p *Plugin) handleTreeKey(key string) (plugin.Plugin, tea.Cmd) {
 		if node != nil && node != p.tree.Root {
 			p.fileOpMode = FileOpRename
 			p.fileOpTarget = node
-			p.fileOpInput = node.Name // Pre-fill with current name
+			p.fileOpTextInput = textinput.New()
+			p.fileOpTextInput.SetValue(node.Name)
+			p.fileOpTextInput.Focus()
+			p.fileOpTextInput.CursorEnd()
 			p.fileOpError = ""
 		}
 
@@ -563,7 +616,10 @@ func (p *Plugin) handleTreeKey(key string) (plugin.Plugin, tea.Cmd) {
 		if node != nil && node != p.tree.Root {
 			p.fileOpMode = FileOpMove
 			p.fileOpTarget = node
-			p.fileOpInput = node.Path // Pre-fill with current path
+			p.fileOpTextInput = textinput.New()
+			p.fileOpTextInput.SetValue(node.Path)
+			p.fileOpTextInput.Focus()
+			p.fileOpTextInput.CursorEnd()
 			p.fileOpError = ""
 		}
 
@@ -680,33 +736,55 @@ func (p *Plugin) handlePreviewKey(key string) (plugin.Plugin, tea.Cmd) {
 func (p *Plugin) handleFileOpKey(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 	key := msg.String()
 
+	// Handle confirmation mode for directory creation
+	if p.fileOpConfirmCreate {
+		switch key {
+		case "y", "Y":
+			// Create directory and proceed with move
+			if err := os.MkdirAll(p.fileOpConfirmPath, 0755); err != nil {
+				p.fileOpError = fmt.Sprintf("failed to create directory: %v", err)
+				p.fileOpConfirmCreate = false
+				p.fileOpConfirmPath = ""
+				return p, nil
+			}
+			p.fileOpConfirmCreate = false
+			p.fileOpConfirmPath = ""
+			return p.executeFileOp() // Retry the operation
+		case "esc":
+			// Cancel entire operation
+			p.fileOpMode = FileOpNone
+			p.fileOpTarget = nil
+			p.fileOpError = ""
+			p.fileOpConfirmCreate = false
+			p.fileOpConfirmPath = ""
+			return p, nil
+		default:
+			// Any other key returns to edit mode
+			p.fileOpConfirmCreate = false
+			p.fileOpConfirmPath = ""
+			return p, nil
+		}
+	}
+
 	switch key {
 	case "esc":
 		// Cancel file operation
 		p.fileOpMode = FileOpNone
 		p.fileOpTarget = nil
-		p.fileOpInput = ""
 		p.fileOpError = ""
+		return p, nil
 
 	case "enter":
 		// Execute file operation
 		return p.executeFileOp()
 
-	case "backspace":
-		if len(p.fileOpInput) > 0 {
-			p.fileOpInput = p.fileOpInput[:len(p.fileOpInput)-1]
-			p.fileOpError = "" // Clear error on input change
-		}
-
 	default:
-		// Append printable characters
-		if len(key) == 1 && key[0] >= 32 && key[0] <= 126 {
-			p.fileOpInput += key
-			p.fileOpError = "" // Clear error on input change
-		}
+		// Delegate all other keys to textinput
+		var cmd tea.Cmd
+		p.fileOpTextInput, cmd = p.fileOpTextInput.Update(msg)
+		p.fileOpError = "" // Clear error on input change
+		return p, cmd
 	}
-
-	return p, nil
 }
 
 // handleContentSearchKey handles key input during content search mode.
