@@ -30,6 +30,7 @@ const (
 	ViewModeCommitDetail                 // Single commit files
 	ViewModeDiff                         // Full-screen diff view (from history)
 	ViewModeCommit                       // Commit message editor
+	ViewModePushMenu                     // Push options popup menu
 )
 
 // FocusPane represents which pane is active in the three-pane view.
@@ -90,9 +91,12 @@ type Plugin struct {
 	commitDetailScroll int
 
 	// Push status state
-	pushStatus     *PushStatus
-	pushInProgress bool
-	pushError      string
+	pushStatus         *PushStatus
+	pushInProgress     bool
+	pushError          string
+	pushSuccess        bool      // Show success indicator after push
+	pushSuccessTime    time.Time // When to auto-clear success
+	pushMenuReturnMode ViewMode  // Mode to return to when push menu closes
 
 	// External tool integration
 	externalTool *ExternalTool
@@ -106,9 +110,10 @@ type Plugin struct {
 	lastRefresh time.Time // Debounce rapid refreshes
 
 	// Commit state
-	commitMessage    textarea.Model
-	commitError      string
-	commitInProgress bool
+	commitMessage      textarea.Model
+	commitError        string
+	commitInProgress   bool
+	commitButtonFocus  bool // true when button is focused instead of textarea
 }
 
 // New creates a new git status plugin.
@@ -181,6 +186,8 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			return p.updateDiff(msg)
 		case ViewModeCommit:
 			return p.updateCommit(msg)
+		case ViewModePushMenu:
+			return p.updatePushMenu(msg)
 		}
 
 	case app.RefreshMsg:
@@ -283,14 +290,20 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 	case PushSuccessMsg:
 		p.pushInProgress = false
 		p.pushError = ""
+		p.pushSuccess = true
+		p.pushSuccessTime = time.Now()
 		// Refresh to show updated push status
-		return p, tea.Batch(p.refresh(), p.loadRecentCommits())
+		return p, tea.Batch(p.refresh(), p.loadRecentCommits(), p.clearPushSuccessAfterDelay())
 
 	case PushErrorMsg:
 		p.pushInProgress = false
 		p.pushError = msg.Err.Error()
 		// Reload recent commits to update push status in case of partial push
 		return p, p.loadRecentCommits()
+
+	case PushSuccessClearMsg:
+		p.pushSuccess = false
+		return p, nil
 
 	case tea.WindowSizeMsg:
 		p.width = msg.Width
@@ -501,11 +514,10 @@ func (p *Plugin) updateStatus(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 		}
 
 	case "P":
-		// Push to remote (following lazygit convention)
+		// Open push menu (following lazygit convention)
 		if p.canPush() && !p.pushInProgress {
-			p.pushInProgress = true
-			p.pushError = ""
-			return p, p.doPush(false)
+			p.pushMenuReturnMode = p.viewMode
+			p.viewMode = ViewModePushMenu
 		}
 	}
 
@@ -822,11 +834,10 @@ func (p *Plugin) updateHistory(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 		}
 
 	case "P":
-		// Push to remote from history view
+		// Open push menu from history view
 		if p.canPush() && !p.pushInProgress {
-			p.pushInProgress = true
-			p.pushError = ""
-			return p, p.doPush(false)
+			p.pushMenuReturnMode = p.viewMode
+			p.viewMode = ViewModePushMenu
 		}
 	}
 
@@ -984,6 +995,8 @@ func (p *Plugin) View(width, height int) string {
 		content = p.renderDiffModal()
 	case ViewModeCommit:
 		content = p.renderCommit()
+	case ViewModePushMenu:
+		content = p.renderPushMenu()
 	default:
 		// Use three-pane layout for status view
 		content = p.renderThreePaneView()
@@ -1034,6 +1047,11 @@ func (p *Plugin) Commands() []plugin.Command {
 		// git-commit context
 		{ID: "execute-commit", Name: "Commit", Description: "Create commit with message", Category: plugin.CategoryGit, Context: "git-commit", Priority: 1},
 		{ID: "cancel", Name: "Cancel", Description: "Cancel commit", Category: plugin.CategoryActions, Context: "git-commit", Priority: 1},
+		// git-push-menu context
+		{ID: "push", Name: "Push", Description: "Push to remote", Category: plugin.CategoryGit, Context: "git-push-menu", Priority: 1},
+		{ID: "force-push", Name: "Force", Description: "Force push", Category: plugin.CategoryGit, Context: "git-push-menu", Priority: 1},
+		{ID: "push-upstream", Name: "Upstream", Description: "Push & set upstream", Category: plugin.CategoryGit, Context: "git-push-menu", Priority: 1},
+		{ID: "cancel", Name: "Cancel", Description: "Cancel", Category: plugin.CategoryNavigation, Context: "git-push-menu", Priority: 2},
 	}
 }
 
@@ -1048,6 +1066,8 @@ func (p *Plugin) FocusContext() string {
 		return "git-diff"
 	case ViewModeCommit:
 		return "git-commit"
+	case ViewModePushMenu:
+		return "git-push-menu"
 	default:
 		if p.activePane == PaneDiff {
 			// Commit preview pane has different context than file diff pane
@@ -1244,6 +1264,9 @@ type PushStatusLoadedMsg struct {
 	Status *PushStatus
 }
 
+// PushSuccessClearMsg is sent to clear the push success indicator.
+type PushSuccessClearMsg struct{}
+
 // loadHistory loads commit history with push status.
 func (p *Plugin) loadHistory() tea.Cmd {
 	workDir := p.ctx.WorkDir
@@ -1404,6 +1427,7 @@ func (p *Plugin) initCommitTextarea() {
 	p.commitMessage.SetWidth(60)
 	p.commitMessage.SetHeight(5)
 	p.commitError = ""
+	p.commitButtonFocus = false
 }
 
 // updateCommit handles key events in the commit view.
@@ -1415,21 +1439,78 @@ func (p *Plugin) updateCommit(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 		p.commitError = ""
 		return p, nil
 
-	case "alt+enter", "alt+s":
+	case "ctrl+s":
 		// Execute commit if message not empty
-		message := strings.TrimSpace(p.commitMessage.Value())
-		if message == "" {
-			p.commitError = "Commit message cannot be empty"
-			return p, nil
+		return p, p.tryCommit()
+
+	case "tab", "shift+tab":
+		// Toggle focus between textarea and button
+		p.commitButtonFocus = !p.commitButtonFocus
+		if p.commitButtonFocus {
+			p.commitMessage.Blur()
+		} else {
+			p.commitMessage.Focus()
 		}
-		p.commitInProgress = true
-		return p, p.doCommit(message)
+		return p, nil
+
+	case "enter":
+		// If button is focused, execute commit
+		if p.commitButtonFocus {
+			return p, p.tryCommit()
+		}
+		// Otherwise let textarea handle it (newline)
 	}
 
-	// Pass other keys to textarea
-	var cmd tea.Cmd
-	p.commitMessage, cmd = p.commitMessage.Update(msg)
-	return p, cmd
+	// Pass other keys to textarea (only if textarea is focused)
+	if !p.commitButtonFocus {
+		var cmd tea.Cmd
+		p.commitMessage, cmd = p.commitMessage.Update(msg)
+		return p, cmd
+	}
+
+	return p, nil
+}
+
+// tryCommit attempts to execute the commit if message is valid.
+func (p *Plugin) tryCommit() tea.Cmd {
+	message := strings.TrimSpace(p.commitMessage.Value())
+	if message == "" {
+		p.commitError = "Commit message cannot be empty"
+		return nil
+	}
+	p.commitInProgress = true
+	return p.doCommit(message)
+}
+
+// updatePushMenu handles key events in the push menu.
+func (p *Plugin) updatePushMenu(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q":
+		p.viewMode = p.pushMenuReturnMode
+		return p, nil
+	case "p":
+		// Regular push
+		p.viewMode = p.pushMenuReturnMode
+		p.pushInProgress = true
+		p.pushError = ""
+		p.pushSuccess = false
+		return p, p.doPush(false)
+	case "f":
+		// Force push
+		p.viewMode = p.pushMenuReturnMode
+		p.pushInProgress = true
+		p.pushError = ""
+		p.pushSuccess = false
+		return p, p.doPushForce()
+	case "u":
+		// Push and set upstream
+		p.viewMode = p.pushMenuReturnMode
+		p.pushInProgress = true
+		p.pushError = ""
+		p.pushSuccess = false
+		return p, p.doPushSetUpstream()
+	}
+	return p, nil
 }
 
 // doCommit executes the git commit asynchronously.
@@ -1456,6 +1537,37 @@ func (p *Plugin) doPush(force bool) tea.Cmd {
 		}
 		return PushSuccessMsg{Output: output}
 	}
+}
+
+// doPushForce executes a force push with lease.
+func (p *Plugin) doPushForce() tea.Cmd {
+	workDir := p.ctx.WorkDir
+	return func() tea.Msg {
+		output, err := ExecutePushForce(workDir)
+		if err != nil {
+			return PushErrorMsg{Err: err}
+		}
+		return PushSuccessMsg{Output: output}
+	}
+}
+
+// doPushSetUpstream executes a push with upstream tracking.
+func (p *Plugin) doPushSetUpstream() tea.Cmd {
+	workDir := p.ctx.WorkDir
+	return func() tea.Msg {
+		output, err := ExecutePushSetUpstream(workDir)
+		if err != nil {
+			return PushErrorMsg{Err: err}
+		}
+		return PushSuccessMsg{Output: output}
+	}
+}
+
+// clearPushSuccessAfterDelay returns a command that clears the push success indicator after 3 seconds.
+func (p *Plugin) clearPushSuccessAfterDelay() tea.Cmd {
+	return tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+		return PushSuccessClearMsg{}
+	})
 }
 
 // canPush returns true if there are commits that can be pushed.

@@ -71,6 +71,17 @@ func (p *Plugin) renderCommit() string {
 
 	// Textarea
 	sb.WriteString(p.commitMessage.View())
+	sb.WriteString("\n\n")
+
+	// Commit button
+	buttonStyle := styles.Button
+	if p.commitButtonFocus {
+		buttonStyle = styles.ButtonFocused
+	}
+	sb.WriteString("  ")
+	sb.WriteString(buttonStyle.Render(" Commit "))
+	sb.WriteString("  ")
+	sb.WriteString(styles.Muted.Render("Tab to select, Enter to confirm"))
 	sb.WriteString("\n")
 
 	// Error message if any
@@ -93,7 +104,7 @@ func (p *Plugin) renderCommit() string {
 
 	// Footer with keybindings
 	escKey := styles.KeyHint.Render(" Esc ")
-	commitKey := styles.KeyHint.Render(" Alt+Enter / Alt+S ")
+	commitKey := styles.KeyHint.Render(" ^S ")
 	sb.WriteString(fmt.Sprintf(" %s Cancel   %s Commit", escKey, commitKey))
 
 	return sb.String()

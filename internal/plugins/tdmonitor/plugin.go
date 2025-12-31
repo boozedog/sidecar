@@ -52,7 +52,8 @@ func (p *Plugin) Init(ctx *plugin.Context) error {
 	p.ctx = ctx
 
 	// Try to create embedded monitor - silent degradation if database not found
-	model, err := monitor.NewEmbedded(ctx.WorkDir, pollInterval)
+	// Version is empty for embedded use (not displayed in this context)
+	model, err := monitor.NewEmbedded(ctx.WorkDir, pollInterval, "")
 	if err != nil {
 		// Database not initialized - plugin loads but is non-functional
 		p.ctx.Logger.Debug("td monitor: database not found", "error", err)

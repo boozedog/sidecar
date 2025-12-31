@@ -145,6 +145,9 @@ func (p *Plugin) renderSidebar(visibleHeight int) string {
 	if p.pushInProgress {
 		sb.WriteString(styles.StatusInProgress.Render("Pushing..."))
 		sb.WriteString("\n")
+	} else if p.pushSuccess {
+		sb.WriteString(styles.StatusStaged.Render("✓ Pushed"))
+		sb.WriteString("\n")
 	} else if p.pushError != "" {
 		// Truncate error if too long (account for "✗ " prefix)
 		errMsg := p.pushError

@@ -259,6 +259,20 @@ var (
 			MarginBottom(1)
 )
 
+// Button styles
+var (
+	Button = lipgloss.NewStyle().
+		Foreground(TextSecondary).
+		Background(BgTertiary).
+		Padding(0, 2)
+
+	ButtonFocused = lipgloss.NewStyle().
+			Foreground(TextPrimary).
+			Background(Primary).
+			Padding(0, 2).
+			Bold(true)
+)
+
 // Theme represents a color theme configuration
 type Theme struct {
 	Name      string

@@ -196,6 +196,52 @@ func (ps *PushStatus) CanPush() bool {
 	return ps.Ahead > 0 || (!ps.HasUpstream && !ps.DetachedHead)
 }
 
+// ExecutePushForce performs a force push with lease.
+// Returns the output from git and any error encountered.
+func ExecutePushForce(workDir string) (string, error) {
+	remote := GetRemoteName(workDir)
+	if remote == "" {
+		return "", &PushError{Output: "No remote configured", Err: errors.New("no remote configured")}
+	}
+
+	cmd := exec.Command("git", "push", "--force-with-lease", remote, "HEAD")
+	cmd.Dir = workDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(output), &PushError{Output: string(output), Err: err}
+	}
+	return string(output), nil
+}
+
+// ExecutePushSetUpstream performs a push with upstream tracking.
+// Returns the output from git and any error encountered.
+func ExecutePushSetUpstream(workDir string) (string, error) {
+	remote := GetRemoteName(workDir)
+	if remote == "" {
+		return "", &PushError{Output: "No remote configured", Err: errors.New("no remote configured")}
+	}
+
+	// Get current branch
+	branchCmd := exec.Command("git", "branch", "--show-current")
+	branchCmd.Dir = workDir
+	branchOut, err := branchCmd.Output()
+	if err != nil {
+		return "", &PushError{Output: "Could not get current branch", Err: err}
+	}
+	branch := strings.TrimSpace(string(branchOut))
+	if branch == "" {
+		return "", &PushError{Output: "Detached HEAD - cannot push", Err: errors.New("detached head")}
+	}
+
+	cmd := exec.Command("git", "push", "-u", remote, branch)
+	cmd.Dir = workDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(output), &PushError{Output: string(output), Err: err}
+	}
+	return string(output), nil
+}
+
 // ParsePushOutput extracts useful information from git push output.
 // Returns a human-readable summary.
 func ParsePushOutput(output string) string {
