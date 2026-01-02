@@ -76,3 +76,42 @@ func TestIsRootContext(t *testing.T) {
 		})
 	}
 }
+
+func TestIsTextInputContext(t *testing.T) {
+	tests := []struct {
+		context string
+		want    bool
+	}{
+		// Text input contexts - block `, ~, 1-4 for typing
+		{"git-commit", true},
+		{"conversations-search", true},
+		{"conversations-filter", true},
+		{"file-browser-search", true},
+		{"file-browser-content-search", true},
+		{"file-browser-quick-open", true},
+		{"file-browser-file-op", true},
+		{"file-browser-project-search", true},
+		{"td-search", true},
+
+		// Non-text-input contexts - allow `, ~, 1-4 for navigation
+		{"global", false},
+		{"", false},
+		{"git-status", false},
+		{"git-diff", false},
+		{"conversations", false},
+		{"file-browser-tree", false},
+		{"file-browser-preview", false},
+		{"td-monitor", false},
+		{"td-modal", false},
+		{"palette", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.context, func(t *testing.T) {
+			got := isTextInputContext(tt.context)
+			if got != tt.want {
+				t.Errorf("isTextInputContext(%q) = %v, want %v", tt.context, got, tt.want)
+			}
+		})
+	}
+}

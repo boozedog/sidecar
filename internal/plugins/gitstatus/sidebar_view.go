@@ -108,11 +108,17 @@ func (p *Plugin) renderSidebar(visibleHeight int) string {
 	// Start at 3: 1 for pane border + 2 for header lines
 	currentY := 3
 
-	// Header with branch name
+	// Header with branch name (truncated to fit sidebar)
 	header := styles.Title.Render("Files")
 	if p.pushStatus != nil {
 		if p.pushStatus.CurrentBranch != "" {
-			header += " " + styles.Muted.Render(p.pushStatus.CurrentBranch)
+			branch := p.pushStatus.CurrentBranch
+			// "Files " = 6 chars, leave 4 for padding = max branch length is sidebarWidth - 10
+			maxLen := p.sidebarWidth - 10
+			if maxLen > 0 && len(branch) > maxLen {
+				branch = branch[:maxLen-1] + "…"
+			}
+			header += " " + styles.Muted.Render(branch)
 		} else if p.pushStatus.DetachedHead {
 			header += " " + styles.Muted.Render("(detached)")
 		}
