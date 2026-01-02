@@ -42,12 +42,27 @@ func DefaultBindings() []Binding {
 		{Key: "enter", Command: "view-commit", Context: "git-status-commits"},
 		{Key: "d", Command: "view-commit", Context: "git-status-commits"},
 		{Key: "h", Command: "show-history", Context: "git-status-commits"},
+		{Key: "y", Command: "yank-commit", Context: "git-status-commits"},
+		{Key: "Y", Command: "yank-id", Context: "git-status-commits"},
 
 		// Git commit preview context (commit preview in right pane)
 		{Key: "esc", Command: "back", Context: "git-commit-preview"},
 		{Key: "h", Command: "back", Context: "git-commit-preview"},
 		{Key: "enter", Command: "view-diff", Context: "git-commit-preview"},
 		{Key: "d", Command: "view-diff", Context: "git-commit-preview"},
+		{Key: "y", Command: "yank-commit", Context: "git-commit-preview"},
+		{Key: "Y", Command: "yank-id", Context: "git-commit-preview"},
+
+		// Git history context
+		{Key: "enter", Command: "view-commit", Context: "git-history"},
+		{Key: "esc", Command: "back", Context: "git-history"},
+		{Key: "y", Command: "yank-commit", Context: "git-history"},
+		{Key: "Y", Command: "yank-id", Context: "git-history"},
+
+		// Git commit detail context
+		{Key: "esc", Command: "back", Context: "git-commit-detail"},
+		{Key: "y", Command: "yank-commit", Context: "git-commit-detail"},
+		{Key: "Y", Command: "yank-id", Context: "git-commit-detail"},
 
 		// Git Diff context
 		{Key: "esc", Command: "close-diff", Context: "git-diff"},
