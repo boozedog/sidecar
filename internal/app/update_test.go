@@ -55,6 +55,7 @@ func TestIsRootContext(t *testing.T) {
 		{"", true},
 		{"conversations", true},
 		{"conversations-sidebar", true},
+		{"conversations-main", true},
 		{"git-status", true},
 		{"git-status-commits", true},
 		{"git-status-diff", true},
@@ -63,7 +64,6 @@ func TestIsRootContext(t *testing.T) {
 
 		// Non-root contexts (sub-views)
 		{"git-commit", false},
-		{"file-browser-preview", false},
 		{"conversation-detail", false},
 	}
 

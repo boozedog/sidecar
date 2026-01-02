@@ -122,7 +122,6 @@ func DefaultBindings() []Binding {
 
 		// Conversations main context (two-pane mode, right pane focused)
 		{Key: "esc", Command: "back", Context: "conversations-main"},
-		{Key: "q", Command: "back", Context: "conversations-main"},
 		{Key: "j", Command: "scroll", Context: "conversations-main"},
 		{Key: "k", Command: "scroll", Context: "conversations-main"},
 		{Key: "g", Command: "cursor-top", Context: "conversations-main"},

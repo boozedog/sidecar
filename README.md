@@ -82,7 +82,7 @@ Browse Claude Code session history with message content, token usage, and search
 
 ### TD Monitor
 
-Track tasks from the TD task management system. View current work, task list, and activity log.
+Integration with [TD](https://github.com/marcus/td), a task management system designed for AI agents working across context windows. TD helps agents track work, log progress, and maintain context across sessions—essential for AI-assisted development where context windows reset between conversations.
 
 ![TD Monitor](docs/screenshots/sidecar-td.png)
 
@@ -91,6 +91,8 @@ Track tasks from the TD task management system. View current work, task list, an
 - Scrollable task list with status indicators
 - Activity log with session context
 - Quick review submission with `r`
+
+See the [TD repository](https://github.com/marcus/td) for installation and CLI usage.
 
 ### File Browser
 
