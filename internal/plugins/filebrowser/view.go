@@ -2,11 +2,29 @@ package filebrowser
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/marcus/sidecar/internal/styles"
 )
+
+// ansiResetRe matches ANSI reset sequences (both \x1b[0m and \x1b[m)
+var ansiResetRe = regexp.MustCompile(`\x1b\[0?m`)
+
+// selectionBgANSI is the ANSI 24-bit background code for selection highlight (#374151)
+const selectionBgANSI = "\x1b[48;2;55;65;81m"
+
+// injectSelectionBackground injects selection background color into an ANSI-styled string.
+// It prepends the background at the start and re-injects after any reset sequences.
+func injectSelectionBackground(s string) string {
+	// Prepend background color
+	result := selectionBgANSI + s
+	// Re-inject background after any reset sequences
+	result = ansiResetRe.ReplaceAllString(result, "${0}"+selectionBgANSI)
+	// Append reset at end to not bleed into next line
+	return result + "\x1b[0m"
+}
 
 // FocusPane represents which pane is active.
 type FocusPane int
@@ -457,22 +475,25 @@ func (p *Plugin) renderPreviewPane(visibleHeight int) string {
 	for i := start; i < contentEnd; i++ {
 		// Check if this line is selected for text selection highlighting
 		if p.isLineSelected(i) {
-			// Use raw content for selection (no syntax highlighting to interfere)
-			rawLineNum := fmt.Sprintf("%4d ", i+1)
-			rawContent := ""
-			if i < len(p.previewLines) {
-				rawContent = p.previewLines[i]
+			// Line number with selection background
+			lineNumStr := fmt.Sprintf("%4d ", i+1)
+			sb.WriteString(injectSelectionBackground(lineNumStr))
+
+			// Get syntax-highlighted content and inject selection background
+			var lineContent string
+			if i < len(lines) {
+				lineContent = lines[i]
 			}
-			// Truncate if needed
-			if len(rawContent) > maxLineWidth {
-				rawContent = rawContent[:maxLineWidth]
+			// Truncate using lipgloss (handles ANSI codes properly)
+			lineContent = lipgloss.NewStyle().MaxWidth(maxLineWidth).Render(lineContent)
+			sb.WriteString(injectSelectionBackground(lineContent))
+
+			// Pad remaining width with selection background
+			contentWidth := lipgloss.Width(lineNumStr) + lipgloss.Width(lineContent)
+			if contentWidth < p.previewWidth-4 {
+				padding := strings.Repeat(" ", p.previewWidth-4-contentWidth)
+				sb.WriteString(injectSelectionBackground(padding))
 			}
-			fullLine := rawLineNum + rawContent
-			// Pad to full width for consistent highlight
-			if len(fullLine) < p.previewWidth-4 {
-				fullLine += strings.Repeat(" ", p.previewWidth-4-len(fullLine))
-			}
-			sb.WriteString(styles.TextSelection.Render(fullLine))
 		} else {
 			lineNum := styles.FileBrowserLineNumber.Render(fmt.Sprintf("%4d ", i+1))
 
