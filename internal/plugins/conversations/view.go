@@ -150,10 +150,10 @@ func getSessionGroup(t time.Time) string {
 
 // renderSessionRow renders a single session row with enhanced stats.
 func (p *Plugin) renderSessionRow(session adapter.Session, selected bool) string {
-	// Sub-conversation indent (1 char to offset the ↳ indicator)
+	// Sub-conversation indent (2 chars to offset the ↳ indicator)
 	indent := ""
 	if session.IsSubAgent {
-		indent = " "
+		indent = "  "
 	}
 
 	// Type indicator: active (●), sub-agent (↳), or space
@@ -190,7 +190,7 @@ func (p *Plugin) renderSessionRow(session adapter.Session, selected bool) string
 	// Base overhead: indicator(1) + space(1) + badge + space(1) + length(6) + spaces(2)
 	overhead := 11 + len(badgeText)
 	if session.IsSubAgent {
-		overhead += 1 // sub-agent indent
+		overhead += 2 // sub-agent indent
 	}
 	maxNameWidth := p.width - overhead
 	if len(name) > maxNameWidth && maxNameWidth > 3 {
@@ -263,12 +263,21 @@ func (p *Plugin) renderMessages() string {
 func (p *Plugin) renderSessionHeader(sb *strings.Builder, sessionName string, session *adapter.Session) int {
 	lines := 0
 
-	// Line 1: Session name and duration
+	// Line 1: Adapter name - Session name and duration
 	dur := ""
 	if session != nil && session.Duration > 0 {
 		dur = formatSessionDuration(session.Duration)
 	}
-	header := fmt.Sprintf(" Session: %s", sessionName)
+	adapterName := ""
+	if session != nil && session.AdapterName != "" {
+		adapterName = session.AdapterName
+	}
+	var header string
+	if adapterName != "" {
+		header = fmt.Sprintf(" %s - %s", adapterName, sessionName)
+	} else {
+		header = fmt.Sprintf(" %s", sessionName)
+	}
 	if dur != "" {
 		padding := p.width - len(header) - len(dur) - 4
 		if padding > 0 {
@@ -1099,9 +1108,8 @@ func (p *Plugin) renderGroupedCompactSessions(sb *strings.Builder, groups []Sess
 // renderCompactSessionRow renders a compact session row for the sidebar.
 func (p *Plugin) renderCompactSessionRow(session adapter.Session, selected bool, maxWidth int) string {
 	// Calculate prefix length for width calculations
-	// active(1) + subagent indent(1) + badge + space + length(4) + space
+	// active(1) + subagent indent(2) + badge + space + length(4) + space
 	badgeText := adapterBadgeText(session)
-	badge := styles.Muted.Render(badgeText)
 	length := "--"
 	if session.Duration > 0 {
 		length = formatSessionDuration(session.Duration)
@@ -1110,7 +1118,7 @@ func (p *Plugin) renderCompactSessionRow(session adapter.Session, selected bool,
 
 	prefixLen := 1 + len(badgeText) + 1 + len(lengthCol) + 1
 	if session.IsSubAgent {
-		prefixLen += 1 // extra indent for sub-agents
+		prefixLen += 2 // extra indent for sub-agents
 	}
 
 	// Session name/ID
@@ -1130,45 +1138,51 @@ func (p *Plugin) renderCompactSessionRow(session adapter.Session, selected bool,
 		name = name[:nameWidth-3] + "..."
 	}
 
-	// Build the row with styles
+	// Build the row content (without styling that interferes with selection background)
 	var sb strings.Builder
 
 	// Sub-agent indent (before indicator)
 	if session.IsSubAgent {
-		sb.WriteString(" ")
+		sb.WriteString("  ")
 	}
 
 	// Type indicator: active (●), sub-agent (↳), or space
 	if session.IsActive {
-		sb.WriteString(styles.StatusInProgress.Render("●"))
+		sb.WriteString("●")
 	} else if session.IsSubAgent {
-		sb.WriteString(styles.Muted.Render("↳"))
+		sb.WriteString("↳")
 	} else {
 		sb.WriteString(" ")
 	}
 
-	sb.WriteString(badge)
+	sb.WriteString(badgeText)
 	sb.WriteString(" ")
 	sb.WriteString(name)
 
-	row := sb.String()
-
-	// Right-align length (compute padding based on visible widths, not ANSI sequences).
+	// Right-align length (compute padding based on visible widths).
 	visibleLen := 0
 	if session.IsSubAgent {
-		visibleLen += 1
+		visibleLen += 2
 	}
 	visibleLen += 1 // indicator
 	visibleLen += len(badgeText) + 1 + len(name) // badge + space + name
 	if padding := maxWidth - visibleLen - len(lengthCol) - 1; padding > 0 {
-		row += strings.Repeat(" ", padding) + " " + styles.Muted.Render(lengthCol)
+		sb.WriteString(strings.Repeat(" ", padding))
+		sb.WriteString(" ")
+		sb.WriteString(lengthCol)
+	}
+
+	// Pad to full width for consistent selection highlighting
+	row := sb.String()
+	if len(row) < maxWidth {
+		row += strings.Repeat(" ", maxWidth-len(row))
 	}
 
 	// Apply selection background if selected
 	if selected {
 		return styles.ListItemSelected.Render(row)
 	}
-	return row
+	return styles.Muted.Render(row)
 }
 
 // renderMainPane renders the message list for the main pane.
@@ -1195,15 +1209,32 @@ func (p *Plugin) renderMainPane(paneWidth, height int) string {
 		}
 	}
 
-	// Header
+	// Header: AdapterName - SessionName (with different colors)
 	sessionName := shortID(p.selectedSession)
 	if session != nil && session.Name != "" {
 		sessionName = session.Name
 	}
-	if len(sessionName) > contentWidth-5 {
-		sessionName = sessionName[:contentWidth-8] + "..."
+	adapterName := ""
+	if session != nil && session.AdapterName != "" {
+		adapterName = session.AdapterName
 	}
 
+	// Calculate max length for session name
+	prefixLen := 0
+	if adapterName != "" {
+		prefixLen = len(adapterName) + 3 // " - "
+	}
+	maxSessionLen := contentWidth - prefixLen - 2
+	if maxSessionLen < 10 {
+		maxSessionLen = 10
+	}
+	if len(sessionName) > maxSessionLen {
+		sessionName = sessionName[:maxSessionLen-3] + "..."
+	}
+
+	if adapterName != "" {
+		sb.WriteString(styles.Muted.Render(adapterName + " - "))
+	}
 	sb.WriteString(styles.Title.Render(sessionName))
 	sb.WriteString("\n")
 

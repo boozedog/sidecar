@@ -31,6 +31,29 @@ After installation, run from any project directory:
 sidecar
 ```
 
+## Suggested Use
+
+Split your terminal horizontally: run your coding agent (Claude Code, Cursor, etc.) on the left and sidecar on the right.
+
+```
+┌─────────────────────────────┬─────────────────────┐
+│                             │                     │
+│   Claude Code / Cursor      │      Sidecar        │
+│                             │                     │
+│   $ claude                  │   [Git] [Files]     │
+│   > fix the auth bug...     │   [Tasks] [Convos]  │
+│                             │                     │
+└─────────────────────────────┴─────────────────────┘
+```
+
+As the agent works, you can:
+- Watch tasks move through the workflow in TD Monitor
+- See files change in real-time in the Git plugin
+- Browse and edit code yourself in the File Browser
+- View and resume conversations across all supported agent adapters
+
+This setup gives you visibility into what the agent is doing without interrupting your workflow.
+
 ## Usage
 
 ```bash
