@@ -997,6 +997,9 @@ func (p *Plugin) loadSessions() tea.Cmd {
 				if adapterSessions[i].AdapterName == "" {
 					adapterSessions[i].AdapterName = a.Name()
 				}
+				if adapterSessions[i].AdapterIcon == "" {
+					adapterSessions[i].AdapterIcon = a.Icon()
+				}
 			}
 			sessions = append(sessions, adapterSessions...)
 		}

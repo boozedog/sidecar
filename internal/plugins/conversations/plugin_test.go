@@ -561,6 +561,7 @@ type mockAdapter struct{}
 
 func (m *mockAdapter) ID() string                                             { return "mock" }
 func (m *mockAdapter) Name() string                                           { return "Mock" }
+func (m *mockAdapter) Icon() string                                           { return "◆" }
 func (m *mockAdapter) Detect(projectRoot string) (bool, error)                { return true, nil }
 func (m *mockAdapter) Capabilities() adapter.CapabilitySet                    { return nil }
 func (m *mockAdapter) Sessions(projectRoot string) ([]adapter.Session, error) { return nil, nil }

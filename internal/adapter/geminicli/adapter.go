@@ -38,6 +38,9 @@ func (a *Adapter) ID() string { return adapterID }
 // Name returns the human-readable adapter name.
 func (a *Adapter) Name() string { return adapterName }
 
+// Icon returns the adapter icon for badge display.
+func (a *Adapter) Icon() string { return "★" }
+
 // Detect checks if Gemini CLI sessions exist for the given project.
 func (a *Adapter) Detect(projectRoot string) (bool, error) {
 	chatsDir := a.chatsDir(projectRoot)

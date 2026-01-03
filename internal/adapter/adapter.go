@@ -6,6 +6,7 @@ import "time"
 type Adapter interface {
 	ID() string
 	Name() string
+	Icon() string
 	Detect(projectRoot string) (bool, error)
 	Capabilities() CapabilitySet
 	Sessions(projectRoot string) ([]Session, error)
@@ -34,6 +35,7 @@ type Session struct {
 	Slug         string // Short identifier for display (e.g., "ses_abc123")
 	AdapterID    string // Adapter identifier (e.g., "claude-code", "codex")
 	AdapterName  string // Human-readable adapter name
+	AdapterIcon  string // Single character icon for badge display
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	Duration     time.Duration
