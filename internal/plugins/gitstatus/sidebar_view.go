@@ -289,7 +289,9 @@ func (p *Plugin) renderSidebar(visibleHeight int) string {
 	// Stash section (if any stashes exist)
 	if p.stashList != nil && p.stashList.Count() > 0 {
 		sb.WriteString("\n")
-		currentY++
+		// Don't increment currentY here - renderRecentCommits doesn't add trailing
+		// newline on last item, so this "\n" just moves cursor to where currentY
+		// already points. Incrementing would cause off-by-one in stash hit regions.
 		sb.WriteString(p.renderStashSection(&currentY, stashReserve-1)) // -1 for separator
 	}
 
