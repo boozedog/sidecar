@@ -397,9 +397,7 @@ func (p *Plugin) handleDiffMouse(msg tea.MouseMsg) (*Plugin, tea.Cmd) {
 	case mouse.ActionScrollLeft, mouse.ActionScrollRight:
 		// Horizontal scroll for side-by-side view
 		p.diffHorizOff += action.Delta
-		if p.diffHorizOff < 0 {
-			p.diffHorizOff = 0
-		}
+		p.clampDiffHorizScroll()
 	}
 
 	return p, nil

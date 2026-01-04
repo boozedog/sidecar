@@ -1,6 +1,7 @@
 package gitstatus
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,12 +27,13 @@ const (
 type ViewMode int
 
 const (
-	ViewModeStatus         ViewMode = iota // Current file list (three-pane layout)
-	ViewModeDiff                           // Full-screen diff view
-	ViewModeCommit                         // Commit message editor
-	ViewModePushMenu                       // Push options popup menu
-	ViewModeConfirmDiscard                 // Confirm discard changes modal
-	ViewModeBranchPicker                   // Branch selection modal
+	ViewModeStatus          ViewMode = iota // Current file list (three-pane layout)
+	ViewModeDiff                            // Full-screen diff view
+	ViewModeCommit                          // Commit message editor
+	ViewModePushMenu                        // Push options popup menu
+	ViewModeConfirmDiscard                  // Confirm discard changes modal
+	ViewModeBranchPicker                    // Branch selection modal
+	ViewModeConfirmStashPop                 // Confirm stash pop modal
 )
 
 // FocusPane represents which pane is active in the three-pane view.
@@ -118,6 +120,9 @@ type Plugin struct {
 	// Discard confirm state
 	discardFile       *FileEntry // File being confirmed for discard
 	discardReturnMode ViewMode   // Mode to return to when modal closes
+
+	// Stash pop confirm state
+	stashPopItem *Stash // Stash being confirmed for pop
 
 	// Syntax highlighting
 	syntaxHighlighter     *SyntaxHighlighter // Cached highlighter for current file
@@ -227,6 +232,8 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			return p.updatePushMenu(msg)
 		case ViewModeConfirmDiscard:
 			return p.updateConfirmDiscard(msg)
+		case ViewModeConfirmStashPop:
+			return p.updateConfirmStashPop(msg)
 		case ViewModeBranchPicker:
 			return p.updateBranchPicker(msg)
 		}
@@ -423,6 +430,12 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 
 	case PullSuccessClearMsg:
 		p.pullSuccess = false
+		return p, nil
+
+	case StashPopConfirmMsg:
+		// Show stash pop confirmation modal
+		p.stashPopItem = msg.Stash
+		p.viewMode = ViewModeConfirmStashPop
 		return p, nil
 
 	case tea.WindowSizeMsg:
@@ -677,8 +690,8 @@ func (p *Plugin) updateStatus(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 		}
 
 	case "Z":
-		// Pop latest stash (git errors if no stashes)
-		return p, p.doStashPop()
+		// Pop latest stash - show confirm modal first
+		return p, p.confirmStashPop()
 
 	case "b":
 		// Open branch picker
@@ -733,6 +746,7 @@ func (p *Plugin) updateStatusDiffPane(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 	case "l", "right":
 		// Horizontal scroll right
 		p.diffPaneHorizScroll += 10
+		p.clampDiffPaneHorizScroll()
 
 	case "j", "down":
 		p.diffPaneScroll++
@@ -1049,6 +1063,7 @@ func (p *Plugin) updateDiff(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 	case ">", "L", "l", "right":
 		// Horizontal scroll right
 		p.diffHorizOff += 10
+		p.clampDiffHorizScroll()
 
 	case "ctrl+d":
 		// Page down (~10 lines)
@@ -1100,6 +1115,8 @@ func (p *Plugin) View(width, height int) string {
 		content = p.renderPushMenu()
 	case ViewModeConfirmDiscard:
 		content = p.renderConfirmDiscard()
+	case ViewModeConfirmStashPop:
+		content = p.renderConfirmStashPop()
 	case ViewModeBranchPicker:
 		content = p.renderBranchPicker()
 	default:
@@ -1450,6 +1467,11 @@ type PullErrorMsg struct {
 	Err error
 }
 
+// StashErrorMsg is sent when stash operations fail.
+type StashErrorMsg struct {
+	Err error
+}
+
 // FetchSuccessClearMsg is sent to clear the fetch success indicator.
 type FetchSuccessClearMsg struct{}
 
@@ -1793,6 +1815,44 @@ func (p *Plugin) clearPullSuccessAfterDelay() tea.Cmd {
 	})
 }
 
+// confirmStashPop fetches the latest stash and shows the confirm modal.
+func (p *Plugin) confirmStashPop() tea.Cmd {
+	workDir := p.ctx.WorkDir
+	return func() tea.Msg {
+		stashList, err := GetStashList(workDir)
+		if err != nil || len(stashList.Stashes) == 0 {
+			return StashErrorMsg{Err: fmt.Errorf("no stashes available")}
+		}
+		return StashPopConfirmMsg{Stash: stashList.Stashes[0]}
+	}
+}
+
+// StashPopConfirmMsg is sent when the stash pop confirm modal should be shown.
+type StashPopConfirmMsg struct {
+	Stash *Stash
+}
+
+// updateConfirmStashPop handles key events in the confirm stash pop modal.
+func (p *Plugin) updateConfirmStashPop(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "n", "N", "q":
+		// Cancel stash pop
+		p.viewMode = ViewModeStatus
+		p.stashPopItem = nil
+		return p, nil
+	case "y", "Y", "enter":
+		// Confirm stash pop
+		if p.stashPopItem != nil {
+			p.viewMode = ViewModeStatus
+			p.stashPopItem = nil
+			return p, p.doStashPop()
+		}
+		p.viewMode = ViewModeStatus
+		return p, nil
+	}
+	return p, nil
+}
+
 // updateConfirmDiscard handles key events in the confirm discard modal.
 func (p *Plugin) updateConfirmDiscard(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 	switch msg.String() {
@@ -1834,5 +1894,52 @@ func (p *Plugin) doDiscard(entry *FileEntry) tea.Cmd {
 			return ErrorMsg{Err: err}
 		}
 		return RefreshDoneMsg{}
+	}
+}
+
+// clampDiffHorizScroll clamps diffHorizOff to valid range based on content width.
+func (p *Plugin) clampDiffHorizScroll() {
+	if p.parsedDiff == nil {
+		return
+	}
+	// Calculate content width like the view does
+	panelWidth := (p.width - 3) / 2 // -3 for center separator
+	lineNoWidth := 5
+	contentWidth := panelWidth - lineNoWidth - 2
+
+	clipInfo := GetSideBySideClipInfo(p.parsedDiff, contentWidth, p.diffHorizOff)
+	maxScroll := clipInfo.MaxContentWidth - contentWidth
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if p.diffHorizOff > maxScroll {
+		p.diffHorizOff = maxScroll
+	}
+	if p.diffHorizOff < 0 {
+		p.diffHorizOff = 0
+	}
+}
+
+// clampDiffPaneHorizScroll clamps diffPaneHorizScroll to valid range.
+func (p *Plugin) clampDiffPaneHorizScroll() {
+	if p.diffPaneParsedDiff == nil {
+		return
+	}
+	// Calculate content width for inline diff pane
+	paneWidth := p.width - p.sidebarWidth - 2
+	panelWidth := (paneWidth - 3) / 2
+	lineNoWidth := 5
+	contentWidth := panelWidth - lineNoWidth - 2
+
+	clipInfo := GetSideBySideClipInfo(p.diffPaneParsedDiff, contentWidth, p.diffPaneHorizScroll)
+	maxScroll := clipInfo.MaxContentWidth - contentWidth
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if p.diffPaneHorizScroll > maxScroll {
+		p.diffPaneHorizScroll = maxScroll
+	}
+	if p.diffPaneHorizScroll < 0 {
+		p.diffPaneHorizScroll = 0
 	}
 }

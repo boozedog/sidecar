@@ -100,46 +100,6 @@ func (h *SyntaxHighlighter) tokenStyle(tokenType chroma.TokenType) lipgloss.Styl
 	return style
 }
 
-// HighlightedLine represents a line with syntax highlighting and diff type info.
-type HighlightedLine struct {
-	Segments []HighlightSegment
-	LineType LineType
-}
-
-// RenderHighlightedLine renders a highlighted line, blending syntax colors with diff styles.
-func RenderHighlightedLine(segments []HighlightSegment, lineType LineType) string {
-	if len(segments) == 0 {
-		return ""
-	}
-
-	var sb strings.Builder
-	for _, seg := range segments {
-		// Blend syntax highlighting with diff line type
-		style := blendWithDiffStyle(seg.Style, lineType)
-		sb.WriteString(style.Render(seg.Text))
-	}
-
-	return sb.String()
-}
-
-// blendWithDiffStyle blends a syntax highlight style with the diff line style.
-// For add/remove lines, we keep the syntax foreground color but may adjust
-// brightness to ensure readability on the conceptual "colored" background.
-func blendWithDiffStyle(syntaxStyle lipgloss.Style, lineType LineType) lipgloss.Style {
-	switch lineType {
-	case LineAdd:
-		// For added lines, ensure text is readable
-		// Keep syntax color but make it slightly brighter if needed
-		return syntaxStyle
-	case LineRemove:
-		// For removed lines, keep syntax color
-		return syntaxStyle
-	default:
-		// Context lines - slightly dim the syntax colors
-		return syntaxStyle
-	}
-}
-
 // HighlightLine highlights a single line of code, returning styled segments.
 func (h *SyntaxHighlighter) HighlightLine(content string) []HighlightSegment {
 	return h.Highlight(content)

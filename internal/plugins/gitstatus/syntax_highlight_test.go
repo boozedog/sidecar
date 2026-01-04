@@ -87,60 +87,6 @@ func TestSyntaxHighlighter_NilHighlighter(t *testing.T) {
 	}
 }
 
-func TestRenderHighlightedLine_Add(t *testing.T) {
-	h := NewSyntaxHighlighter("test.go")
-	if h == nil {
-		t.Skip("no highlighter available")
-	}
-
-	segments := h.Highlight("return true")
-	result := RenderHighlightedLine(segments, LineAdd)
-	if result == "" {
-		t.Error("expected non-empty result")
-	}
-}
-
-func TestRenderHighlightedLine_Remove(t *testing.T) {
-	h := NewSyntaxHighlighter("test.go")
-	if h == nil {
-		t.Skip("no highlighter available")
-	}
-
-	segments := h.Highlight("return false")
-	result := RenderHighlightedLine(segments, LineRemove)
-	if result == "" {
-		t.Error("expected non-empty result")
-	}
-}
-
-func TestRenderHighlightedLine_Context(t *testing.T) {
-	h := NewSyntaxHighlighter("test.go")
-	if h == nil {
-		t.Skip("no highlighter available")
-	}
-
-	segments := h.Highlight("var x = 1")
-	result := RenderHighlightedLine(segments, LineContext)
-	if result == "" {
-		t.Error("expected non-empty result")
-	}
-}
-
-func TestBlendWithDiffStyle(t *testing.T) {
-	// Test that the function doesn't panic
-	h := NewSyntaxHighlighter("test.go")
-	if h == nil {
-		t.Skip("no highlighter available")
-	}
-
-	segments := h.Highlight("package main")
-	for _, seg := range segments {
-		_ = blendWithDiffStyle(seg.Style, LineAdd)
-		_ = blendWithDiffStyle(seg.Style, LineRemove)
-		_ = blendWithDiffStyle(seg.Style, LineContext)
-	}
-}
-
 func TestRenderLineDiff_WithHighlighter(t *testing.T) {
 	diff := &ParsedDiff{
 		OldFile: "test.go",
