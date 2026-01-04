@@ -47,8 +47,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case tea.MouseMsg:
-		// Ignore mouse events when modals are open
-		if m.showHelp || m.showDiagnostics || m.showQuitConfirm || m.showPalette {
+		// Forward mouse events to palette when it's open
+		if m.showPalette {
+			var cmd tea.Cmd
+			m.palette, cmd = m.palette.Update(msg)
+			return m, cmd
+		}
+
+		// Ignore mouse events for other modals
+		if m.showHelp || m.showDiagnostics || m.showQuitConfirm {
 			return m, nil
 		}
 

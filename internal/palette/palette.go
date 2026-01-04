@@ -4,6 +4,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/marcus/sidecar/internal/keymap"
+	"github.com/marcus/sidecar/internal/mouse"
 	"github.com/marcus/sidecar/internal/plugin"
 )
 
@@ -17,6 +18,9 @@ type CommandSelectedMsg struct {
 type Model struct {
 	// Input state
 	textInput textinput.Model
+
+	// Mouse support
+	mouseHandler *mouse.Handler
 
 	// Entries
 	allEntries []PaletteEntry
@@ -48,8 +52,9 @@ func New() Model {
 	ti.Width = 40
 
 	return Model{
-		textInput:  ti,
-		maxVisible: 15,
+		textInput:    ti,
+		mouseHandler: mouse.NewHandler(),
+		maxVisible:   15,
 	}
 }
 
@@ -149,6 +154,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case tea.MouseMsg:
+		return m.handleMouse(msg)
+
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyEsc:

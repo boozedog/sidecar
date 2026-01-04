@@ -250,6 +250,19 @@ var (
 				Foreground(TextPrimary).
 				Background(BgTertiary)
 
+	// Palette entry styles (reusable for modals)
+	PaletteEntry = lipgloss.NewStyle().
+			Foreground(TextPrimary)
+
+	PaletteEntrySelected = lipgloss.NewStyle().
+				Foreground(TextPrimary).
+				Background(BgTertiary)
+
+	PaletteKey = lipgloss.NewStyle().
+			Foreground(TextMuted).
+			Background(BgTertiary).
+			Padding(0, 1)
+
 	// Text selection for preview pane drag selection
 	TextSelection = lipgloss.NewStyle().
 			Background(BgTertiary).
