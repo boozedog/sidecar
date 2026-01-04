@@ -134,43 +134,6 @@ func TestGetCurrentCommit(t *testing.T) {
 		expected string // expected short hash, empty if nil
 	}{
 		{
-			name: "history view with commits",
-			setup: func(p *Plugin) {
-				p.viewMode = ViewModeHistory
-				p.commits = []*Commit{
-					{ShortHash: "aaa1111"},
-					{ShortHash: "bbb2222"},
-					{ShortHash: "ccc3333"},
-				}
-				p.historyCursor = 1
-			},
-			expected: "bbb2222",
-		},
-		{
-			name: "history view empty",
-			setup: func(p *Plugin) {
-				p.viewMode = ViewModeHistory
-				p.commits = nil
-			},
-			expected: "",
-		},
-		{
-			name: "commit detail view",
-			setup: func(p *Plugin) {
-				p.viewMode = ViewModeCommitDetail
-				p.selectedCommit = &Commit{ShortHash: "ddd4444"}
-			},
-			expected: "ddd4444",
-		},
-		{
-			name: "commit detail view nil",
-			setup: func(p *Plugin) {
-				p.viewMode = ViewModeCommitDetail
-				p.selectedCommit = nil
-			},
-			expected: "",
-		},
-		{
 			name: "status view with preview commit",
 			setup: func(p *Plugin) {
 				p.viewMode = ViewModeStatus

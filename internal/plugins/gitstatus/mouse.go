@@ -14,8 +14,8 @@ const (
 	regionFile             = "file"
 	regionCommit           = "commit"
 	regionCommitFile       = "commit-file"        // Files in commit preview pane
-	regionDiffModal        = "diff-modal"         // Full-screen diff view
-	regionCommitDetailFile = "commit-detail-file" // Files in commit detail view
+	regionDiffModal = "diff-modal" // Full-screen diff view
+	regionStash     = "stash"     // Stash items in sidebar
 )
 
 // handleMouse processes mouse events in the status view.
@@ -100,6 +100,15 @@ func (p *Plugin) handleMouseClick(action mouse.MouseAction) (*Plugin, tea.Cmd) {
 			}
 		}
 		return p, nil
+
+	case regionStash:
+		// Click on stash - select it
+		if idx, ok := action.Region.Data.(int); ok {
+			if p.stashList != nil && idx < p.stashList.Count() {
+				p.stashCursor = idx
+			}
+		}
+		return p, nil
 	}
 
 	return p, nil
@@ -175,6 +184,15 @@ func (p *Plugin) handleMouseDoubleClick(action mouse.MouseAction) (*Plugin, tea.
 			}
 		}
 		return p, nil
+
+	case regionStash:
+		// Double-click on stash - pop it
+		if idx, ok := action.Region.Data.(int); ok {
+			if p.stashList != nil && idx < p.stashList.Count() {
+				return p, p.doStashPopIndex(idx)
+			}
+		}
+		return p, nil
 	}
 
 	return p, nil
@@ -191,7 +209,7 @@ func (p *Plugin) handleMouseScroll(action mouse.MouseAction) (*Plugin, tea.Cmd) 
 	}
 
 	switch action.Region.ID {
-	case regionSidebar, regionFile, regionCommit:
+	case regionSidebar, regionFile, regionCommit, regionStash:
 		return p.scrollSidebar(action.Delta)
 
 	case regionDiffPane, regionCommitFile:
@@ -329,57 +347,6 @@ func (p *Plugin) handleDiffMouse(msg tea.MouseMsg) (*Plugin, tea.Cmd) {
 		}
 		if p.diffScroll > maxScroll {
 			p.diffScroll = maxScroll
-		}
-	}
-
-	return p, nil
-}
-
-// handleCommitDetailMouse processes mouse events in the commit detail view.
-func (p *Plugin) handleCommitDetailMouse(msg tea.MouseMsg) (*Plugin, tea.Cmd) {
-	action := p.mouseHandler.HandleMouse(msg)
-
-	switch action.Type {
-	case mouse.ActionClick:
-		if action.Region != nil && action.Region.ID == regionCommitDetailFile {
-			if idx, ok := action.Region.Data.(int); ok {
-				if p.selectedCommit != nil && idx < len(p.selectedCommit.Files) {
-					p.commitDetailCursor = idx
-					p.ensureCommitDetailCursorVisible()
-				}
-			}
-		}
-
-	case mouse.ActionDoubleClick:
-		if action.Region != nil && action.Region.ID == regionCommitDetailFile {
-			if idx, ok := action.Region.Data.(int); ok {
-				if p.selectedCommit != nil && idx < len(p.selectedCommit.Files) {
-					file := p.selectedCommit.Files[idx]
-					p.diffReturnMode = p.viewMode
-					p.viewMode = ViewModeDiff
-					p.diffFile = file.Path
-					p.diffCommit = p.selectedCommit.Hash
-					p.diffScroll = 0
-					return p, p.loadCommitFileDiff(p.selectedCommit.Hash, file.Path)
-				}
-			}
-		}
-
-	case mouse.ActionScrollUp, mouse.ActionScrollDown:
-		if p.selectedCommit == nil {
-			return p, nil
-		}
-		// Move cursor by scroll amount
-		newCursor := p.commitDetailCursor + action.Delta
-		if newCursor < 0 {
-			newCursor = 0
-		}
-		if newCursor >= len(p.selectedCommit.Files) {
-			newCursor = len(p.selectedCommit.Files) - 1
-		}
-		if newCursor != p.commitDetailCursor {
-			p.commitDetailCursor = newCursor
-			p.ensureCommitDetailCursorVisible()
 		}
 	}
 

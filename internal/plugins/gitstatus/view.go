@@ -266,6 +266,115 @@ func (p *Plugin) wrapDiffContent(content string, paneHeight int) string {
 		Render(content)
 }
 
+// renderDiffTwoPane renders the diff view with sidebar visible.
+// This matches the three-pane layout from status view but for full-screen diff.
+func (p *Plugin) renderDiffTwoPane() string {
+	p.calculatePaneWidths()
+
+	// Calculate pane height: total - pane border (2 lines)
+	paneHeight := p.height - 2
+	if paneHeight < 4 {
+		paneHeight = 4
+	}
+
+	// Inner content height = pane height - header lines (2)
+	innerHeight := paneHeight - 2
+	if innerHeight < 1 {
+		innerHeight = 1
+	}
+
+	// Clear and rebuild hit regions for mouse support
+	p.mouseHandler.Clear()
+
+	// Register hit regions
+	p.mouseHandler.HitMap.AddRect(regionSidebar, 0, 0, p.sidebarWidth, p.height, nil)
+	diffX := p.sidebarWidth + dividerWidth
+	p.mouseHandler.HitMap.AddRect(regionDiffPane, diffX, 0, p.diffPaneWidth, p.height, nil)
+
+	// Sidebar is inactive (showing files), diff pane is active
+	sidebarBorder := styles.PanelInactive
+	diffBorder := styles.PanelActive
+
+	sidebarContent := p.renderSidebar(innerHeight)
+	diffContent := p.renderFullDiffContent(innerHeight)
+
+	leftPane := sidebarBorder.
+		Width(p.sidebarWidth).
+		Height(paneHeight).
+		Render(sidebarContent)
+
+	divider := p.renderDivider(paneHeight)
+
+	rightPane := diffBorder.
+		Width(p.diffPaneWidth).
+		Height(paneHeight).
+		Render(diffContent)
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftPane, divider, rightPane)
+}
+
+// renderFullDiffContent renders the diff content for the two-pane diff view.
+func (p *Plugin) renderFullDiffContent(visibleHeight int) string {
+	var sb strings.Builder
+
+	// Header with view mode indicator
+	viewModeStr := "unified"
+	if p.diffViewMode == DiffViewSideBySide {
+		viewModeStr = "side-by-side"
+	}
+	header := "Diff"
+	if p.diffFile != "" {
+		header = truncateDiffPath(p.diffFile, p.diffPaneWidth-14)
+	}
+	header = fmt.Sprintf("%s [%s]", header, viewModeStr)
+	sb.WriteString(styles.Title.Render(header))
+	sb.WriteString("\n\n")
+
+	if p.diffContent == "" && p.diffRaw == "" {
+		sb.WriteString(styles.Muted.Render("Loading diff..."))
+		return sb.String()
+	}
+
+	// Content height accounting for header
+	contentHeight := visibleHeight - 2
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
+
+	// Width: pane content width - padding
+	diffWidth := p.diffPaneWidth - 4
+	if diffWidth < 40 {
+		diffWidth = 40
+	}
+
+	// Render diff based on view mode
+	var diffContent string
+	if p.diffViewMode == DiffViewSideBySide {
+		parsed := p.parsedDiff
+		if parsed == nil {
+			parsed, _ = ParseUnifiedDiff(p.diffRaw)
+		}
+		if parsed != nil {
+			diffContent = RenderSideBySide(parsed, diffWidth, p.diffScroll, contentHeight, p.diffHorizOff)
+		}
+	} else {
+		if p.parsedDiff != nil {
+			diffContent = RenderLineDiff(p.parsedDiff, diffWidth, p.diffScroll, contentHeight, p.diffHorizOff)
+		}
+	}
+
+	// Truncate lines to prevent wrapping
+	lines := strings.Split(diffContent, "\n")
+	for i, line := range lines {
+		if lipgloss.Width(line) > diffWidth {
+			lines[i] = truncateStyledLine(line, diffWidth-3) + "..."
+		}
+	}
+	sb.WriteString(strings.Join(lines, "\n"))
+
+	return sb.String()
+}
+
 // renderDiffLine renders a single diff line with appropriate styling.
 func (p *Plugin) renderDiffLine(line string) string {
 	if len(line) == 0 {

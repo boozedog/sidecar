@@ -520,6 +520,9 @@ func (p *Plugin) renderStashSection(currentY *int, maxVisible int) string {
 	for i := 0; i < visible; i++ {
 		stash := p.stashList.Stashes[i]
 
+		// Register hit region for mouse support
+		p.mouseHandler.HitMap.AddRect(regionStash, 1, *currentY, p.sidebarWidth-2, 1, i)
+
 		// Format: stash@{n}: message
 		ref := styles.Code.Render(stash.Ref)
 		msg := stash.Message
@@ -529,7 +532,12 @@ func (p *Plugin) renderStashSection(currentY *int, maxVisible int) string {
 		}
 
 		line := fmt.Sprintf("%s %s", ref, msg)
-		sb.WriteString(styles.ListItemNormal.Render(line))
+		// Highlight selected stash
+		if i == p.stashCursor {
+			sb.WriteString(styles.ListItemSelected.Render(line))
+		} else {
+			sb.WriteString(styles.ListItemNormal.Render(line))
+		}
 		*currentY++
 		if i < visible-1 {
 			sb.WriteString("\n")

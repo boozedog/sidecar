@@ -16,7 +16,6 @@ go install -ldflags "-X main.Version=v0.1.0" ./cmd/sidecar
 
 # Tag a release
 git tag v0.1.0 -m "Release message"
-TEMPORARY CHANGE FOR THE LULZ
 ```
 
 Version is set via ldflags at build time. Without it, sidecar shows git revision info.

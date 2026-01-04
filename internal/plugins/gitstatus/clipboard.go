@@ -51,12 +51,6 @@ func (p *Plugin) getCurrentCommit() *Commit {
 				return p.recentCommits[commitIdx]
 			}
 		}
-	case ViewModeHistory:
-		if p.commits != nil && p.historyCursor < len(p.commits) {
-			return p.commits[p.historyCursor]
-		}
-	case ViewModeCommitDetail:
-		return p.selectedCommit
 	}
 	return nil
 }

@@ -12,15 +12,7 @@ import (
 // renderPushMenu renders the push options popup menu.
 func (p *Plugin) renderPushMenu() string {
 	// Render the background (current view dimmed)
-	var background string
-	switch p.pushMenuReturnMode {
-	case ViewModeHistory:
-		background = p.renderHistory()
-	case ViewModeCommitDetail:
-		background = p.renderCommitDetail()
-	default:
-		background = p.renderThreePaneView()
-	}
+	background := p.renderThreePaneView()
 
 	// Build menu content
 	var sb strings.Builder

@@ -27,9 +27,7 @@ type ViewMode int
 
 const (
 	ViewModeStatus         ViewMode = iota // Current file list (three-pane layout)
-	ViewModeHistory                        // Commit browser
-	ViewModeCommitDetail                   // Single commit files
-	ViewModeDiff                           // Full-screen diff view (from history)
+	ViewModeDiff                           // Full-screen diff view
 	ViewModeCommit                         // Commit message editor
 	ViewModePushMenu                       // Push options popup menu
 	ViewModeConfirmDiscard                 // Confirm discard changes modal
@@ -88,13 +86,6 @@ type Plugin struct {
 	parsedDiff     *ParsedDiff  // Parsed diff for enhanced rendering
 	diffReturnMode ViewMode     // View mode to return to on esc
 
-	// History state
-	commits            []*Commit
-	selectedCommit     *Commit
-	historyCursor      int
-	historyScroll      int
-	commitDetailCursor int
-	commitDetailScroll int
 
 	// Push status state
 	pushStatus         *PushStatus
@@ -129,7 +120,9 @@ type Plugin struct {
 	discardReturnMode ViewMode   // Mode to return to when modal closes
 
 	// Stash state
-	stashList *StashList // Cached stash list
+	stashList      *StashList // Cached stash list
+	stashCursor    int        // Selected stash index for mouse interaction
+	stashScrollOff int        // Scroll offset for stash list
 
 	// Branch picker state
 	branches         []*Branch // List of branches
@@ -214,10 +207,6 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		switch p.viewMode {
 		case ViewModeStatus:
 			return p.updateStatus(msg)
-		case ViewModeHistory:
-			return p.updateHistory(msg)
-		case ViewModeCommitDetail:
-			return p.updateCommitDetail(msg)
 		case ViewModeDiff:
 			return p.updateDiff(msg)
 		case ViewModeCommit:
@@ -237,8 +226,6 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			return p.handleMouse(msg)
 		case ViewModeDiff:
 			return p.handleDiffMouse(msg)
-		case ViewModeCommitDetail:
-			return p.handleCommitDetailMouse(msg)
 		}
 
 	case app.RefreshMsg:
@@ -282,15 +269,6 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		// Always parse diff for built-in rendering (even if delta is available)
 		// This allows toggling between delta and built-in rendering at runtime
 		p.parsedDiff, _ = ParseUnifiedDiff(msg.Raw)
-		return p, nil
-
-	case HistoryLoadedMsg:
-		p.commits = msg.Commits
-		p.pushStatus = msg.PushStatus
-		return p, nil
-
-	case CommitDetailLoadedMsg:
-		p.selectedCommit = msg.Commit
 		return p, nil
 
 	case CommitSuccessMsg:
@@ -611,13 +589,6 @@ func (p *Plugin) updateStatus(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 			}
 			return p, p.openFile(entry.Path)
 		}
-
-	case "h":
-		// Switch to history view
-		p.viewMode = ViewModeHistory
-		p.historyCursor = 0
-		p.historyScroll = 0
-		return p, p.loadHistory()
 
 	case "r":
 		p.pushError = "" // Clear any stale push error
@@ -996,115 +967,6 @@ func countParsedDiffLines(diff *ParsedDiff) int {
 	return count
 }
 
-// updateHistory handles key events in the history view.
-func (p *Plugin) updateHistory(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
-	switch msg.String() {
-	case "esc", "q", "h":
-		p.viewMode = ViewModeStatus
-		p.commits = nil
-
-	case "j", "down":
-		if p.commits != nil && p.historyCursor < len(p.commits)-1 {
-			p.historyCursor++
-			p.ensureHistoryCursorVisible()
-		}
-
-	case "k", "up":
-		if p.historyCursor > 0 {
-			p.historyCursor--
-			p.ensureHistoryCursorVisible()
-		}
-
-	case "g":
-		p.historyCursor = 0
-		p.historyScroll = 0
-
-	case "G":
-		if p.commits != nil && len(p.commits) > 0 {
-			p.historyCursor = len(p.commits) - 1
-			p.ensureHistoryCursorVisible()
-		}
-
-	case "enter", "d":
-		if p.commits != nil && p.historyCursor < len(p.commits) {
-			commit := p.commits[p.historyCursor]
-			p.viewMode = ViewModeCommitDetail
-			p.commitDetailCursor = 0
-			p.commitDetailScroll = 0
-			return p, p.loadCommitDetail(commit.Hash)
-		}
-
-	case "P":
-		// Open push menu from history view
-		if p.canPush() && !p.pushInProgress {
-			p.pushMenuReturnMode = p.viewMode
-			p.viewMode = ViewModePushMenu
-		}
-
-	case "y":
-		// Yank commit as markdown
-		return p, p.copyCommitToClipboard()
-
-	case "Y":
-		// Yank commit ID
-		return p, p.copyCommitIDToClipboard()
-	}
-
-	return p, nil
-}
-
-// updateCommitDetail handles key events in the commit detail view.
-func (p *Plugin) updateCommitDetail(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
-	switch msg.String() {
-	case "esc", "q":
-		p.viewMode = ViewModeHistory
-		p.selectedCommit = nil
-
-	case "j", "down":
-		if p.selectedCommit != nil && p.commitDetailCursor < len(p.selectedCommit.Files)-1 {
-			p.commitDetailCursor++
-			p.ensureCommitDetailCursorVisible()
-		}
-
-	case "k", "up":
-		if p.commitDetailCursor > 0 {
-			p.commitDetailCursor--
-			p.ensureCommitDetailCursorVisible()
-		}
-
-	case "g":
-		p.commitDetailCursor = 0
-		p.commitDetailScroll = 0
-
-	case "G":
-		if p.selectedCommit != nil && len(p.selectedCommit.Files) > 0 {
-			p.commitDetailCursor = len(p.selectedCommit.Files) - 1
-			p.ensureCommitDetailCursorVisible()
-		}
-
-	case "enter", "d":
-		if p.selectedCommit != nil && p.commitDetailCursor < len(p.selectedCommit.Files) {
-			file := p.selectedCommit.Files[p.commitDetailCursor]
-			p.diffReturnMode = p.viewMode
-			p.viewMode = ViewModeDiff
-			p.diffFile = file.Path
-			p.diffCommit = p.selectedCommit.Hash
-			p.diffScroll = 0
-			return p, p.loadCommitFileDiff(p.selectedCommit.Hash, file.Path)
-		}
-
-	case "y":
-		// Yank commit as markdown
-		return p, p.copyCommitToClipboard()
-
-	case "Y":
-		// Yank commit ID
-		return p, p.copyCommitIDToClipboard()
-	}
-
-	return p, nil
-}
-
 // updateDiff handles key events in the diff view.
 func (p *Plugin) updateDiff(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 	switch msg.String() {
@@ -1152,6 +1014,32 @@ func (p *Plugin) updateDiff(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 		}
 		p.diffHorizOff = 0
 
+	case "tab":
+		// Toggle sidebar visibility (match status view behavior)
+		p.sidebarVisible = !p.sidebarVisible
+
+	case "h", "left":
+		// If sidebar visible and horizontal scroll is 0, focus sidebar
+		if p.sidebarVisible && p.diffHorizOff == 0 {
+			// Return to status view with sidebar focused
+			p.diffContent = ""
+			p.diffRaw = ""
+			p.parsedDiff = nil
+			p.diffHorizOff = 0
+			p.diffCommit = ""
+			p.diffFile = ""
+			p.viewMode = p.diffReturnMode
+			p.activePane = PaneSidebar
+			return p, nil
+		}
+		// Otherwise horizontal scroll left
+		if p.diffHorizOff > 0 {
+			p.diffHorizOff -= 10
+			if p.diffHorizOff < 0 {
+				p.diffHorizOff = 0
+			}
+		}
+
 	case "<", "H":
 		// Horizontal scroll left in side-by-side mode
 		if p.diffViewMode == DiffViewSideBySide && p.diffHorizOff > 0 {
@@ -1161,11 +1049,9 @@ func (p *Plugin) updateDiff(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 			}
 		}
 
-	case ">", "L":
-		// Horizontal scroll right in side-by-side mode
-		if p.diffViewMode == DiffViewSideBySide {
-			p.diffHorizOff += 10
-		}
+	case ">", "L", "l", "right":
+		// Horizontal scroll right
+		p.diffHorizOff += 10
 
 	case "ctrl+d":
 		// Page down (~10 lines)
@@ -1204,12 +1090,13 @@ func (p *Plugin) View(width, height int) string {
 
 	var content string
 	switch p.viewMode {
-	case ViewModeHistory:
-		content = p.renderHistory()
-	case ViewModeCommitDetail:
-		content = p.renderCommitDetail()
 	case ViewModeDiff:
-		content = p.renderDiffModal()
+		// Use two-pane layout when sidebar is visible, otherwise full-width diff
+		if p.sidebarVisible {
+			content = p.renderDiffTwoPane()
+		} else {
+			content = p.renderDiffModal()
+		}
 	case ViewModeCommit:
 		content = p.renderCommitModal()
 	case ViewModePushMenu:
@@ -1244,7 +1131,6 @@ func (p *Plugin) Commands() []plugin.Command {
 		{ID: "show-diff", Name: "Diff", Description: "View file changes", Category: plugin.CategoryView, Context: "git-status", Priority: 2},
 		{ID: "stage-all", Name: "Stage all", Description: "Stage all modified files", Category: plugin.CategoryGit, Context: "git-status", Priority: 2},
 		{ID: "push", Name: "Push", Description: "Push commits to remote", Category: plugin.CategoryGit, Context: "git-status", Priority: 2},
-		{ID: "show-history", Name: "History", Description: "View commit history", Category: plugin.CategoryView, Context: "git-status", Priority: 3},
 		{ID: "open-file", Name: "Open", Description: "Open file in editor", Category: plugin.CategoryActions, Context: "git-status", Priority: 3},
 		{ID: "discard-changes", Name: "Discard", Description: "Discard changes to file", Category: plugin.CategoryGit, Context: "git-status", Priority: 3},
 		{ID: "stash", Name: "Stash", Description: "Stash changes", Category: plugin.CategoryGit, Context: "git-status", Priority: 3},
@@ -1255,21 +1141,9 @@ func (p *Plugin) Commands() []plugin.Command {
 		{ID: "open-in-file-browser", Name: "Browse", Description: "Open file in file browser", Category: plugin.CategoryNavigation, Context: "git-status", Priority: 4},
 		// git-status-commits context (recent commits in sidebar)
 		{ID: "view-commit", Name: "View", Description: "View commit details", Category: plugin.CategoryView, Context: "git-status-commits", Priority: 1},
-		{ID: "show-history", Name: "History", Description: "View commit history", Category: plugin.CategoryView, Context: "git-status-commits", Priority: 2},
 		{ID: "push", Name: "Push", Description: "Push commits to remote", Category: plugin.CategoryGit, Context: "git-status-commits", Priority: 2},
 		{ID: "yank-commit", Name: "Yank", Description: "Copy commit as markdown", Category: plugin.CategoryActions, Context: "git-status-commits", Priority: 3},
 		{ID: "yank-id", Name: "YankID", Description: "Copy commit ID", Category: plugin.CategoryActions, Context: "git-status-commits", Priority: 3},
-		// git-history context
-		{ID: "view-commit", Name: "View", Description: "View commit details", Category: plugin.CategoryView, Context: "git-history", Priority: 1},
-		{ID: "back", Name: "Back", Description: "Return to file list", Category: plugin.CategoryNavigation, Context: "git-history", Priority: 1},
-		{ID: "push", Name: "Push", Description: "Push commits to remote", Category: plugin.CategoryGit, Context: "git-history", Priority: 2},
-		{ID: "yank-commit", Name: "Yank", Description: "Copy commit as markdown", Category: plugin.CategoryActions, Context: "git-history", Priority: 3},
-		{ID: "yank-id", Name: "YankID", Description: "Copy commit ID", Category: plugin.CategoryActions, Context: "git-history", Priority: 3},
-		// git-commit-detail context
-		{ID: "view-diff", Name: "Diff", Description: "View file diff", Category: plugin.CategoryView, Context: "git-commit-detail", Priority: 1},
-		{ID: "back", Name: "Back", Description: "Return to history", Category: plugin.CategoryNavigation, Context: "git-commit-detail", Priority: 1},
-		{ID: "yank-commit", Name: "Yank", Description: "Copy commit as markdown", Category: plugin.CategoryActions, Context: "git-commit-detail", Priority: 3},
-		{ID: "yank-id", Name: "YankID", Description: "Copy commit ID", Category: plugin.CategoryActions, Context: "git-commit-detail", Priority: 3},
 		// git-commit-preview context (commit preview in right pane)
 		{ID: "view-diff", Name: "Diff", Description: "View file diff", Category: plugin.CategoryView, Context: "git-commit-preview", Priority: 1},
 		{ID: "back", Name: "Back", Description: "Return to sidebar", Category: plugin.CategoryNavigation, Context: "git-commit-preview", Priority: 1},
@@ -1281,7 +1155,9 @@ func (p *Plugin) Commands() []plugin.Command {
 		// git-diff context
 		{ID: "close-diff", Name: "Close", Description: "Close diff view", Category: plugin.CategoryView, Context: "git-diff", Priority: 1},
 		{ID: "scroll", Name: "Scroll", Description: "Scroll diff content", Category: plugin.CategoryNavigation, Context: "git-diff", Priority: 2},
-		{ID: "open-in-file-browser", Name: "Browse", Description: "Open file in file browser", Category: plugin.CategoryNavigation, Context: "git-diff", Priority: 3},
+		{ID: "toggle-sidebar", Name: "Panel", Description: "Toggle sidebar visibility", Category: plugin.CategoryView, Context: "git-diff", Priority: 2},
+		{ID: "toggle-diff-view", Name: "View", Description: "Toggle unified/split diff view", Category: plugin.CategoryView, Context: "git-diff", Priority: 3},
+		{ID: "open-in-file-browser", Name: "Browse", Description: "Open file in file browser", Category: plugin.CategoryNavigation, Context: "git-diff", Priority: 4},
 		// git-commit context
 		{ID: "execute-commit", Name: "Commit", Description: "Create commit with message", Category: plugin.CategoryGit, Context: "git-commit", Priority: 1},
 		{ID: "cancel", Name: "Cancel", Description: "Cancel commit", Category: plugin.CategoryActions, Context: "git-commit", Priority: 1},
@@ -1296,10 +1172,6 @@ func (p *Plugin) Commands() []plugin.Command {
 // FocusContext returns the current focus context.
 func (p *Plugin) FocusContext() string {
 	switch p.viewMode {
-	case ViewModeHistory:
-		return "git-history"
-	case ViewModeCommitDetail:
-		return "git-commit-detail"
 	case ViewModeDiff:
 		return "git-diff"
 	case ViewModeCommit:
@@ -1496,13 +1368,6 @@ type OpenFileMsg struct {
 	Editor string
 	Path   string
 }
-type HistoryLoadedMsg struct {
-	Commits    []*Commit
-	PushStatus *PushStatus
-}
-type CommitDetailLoadedMsg struct {
-	Commit *Commit
-}
 type CommitSuccessMsg struct {
 	Hash    string
 	Subject string
@@ -1603,18 +1468,6 @@ type FetchSuccessClearMsg struct{}
 
 // PullSuccessClearMsg is sent to clear the pull success indicator.
 type PullSuccessClearMsg struct{}
-
-// loadHistory loads commit history with push status.
-func (p *Plugin) loadHistory() tea.Cmd {
-	workDir := p.ctx.WorkDir
-	return func() tea.Msg {
-		commits, pushStatus, err := GetCommitHistoryWithPushStatus(workDir, 50)
-		if err != nil {
-			return ErrorMsg{Err: err}
-		}
-		return HistoryLoadedMsg{Commits: commits, PushStatus: pushStatus}
-	}
-}
 
 // loadInlineDiff loads a diff for inline preview in the three-pane view.
 func (p *Plugin) loadInlineDiff(path string, staged bool, status FileStatus) tea.Cmd {
@@ -1717,17 +1570,6 @@ func (p *Plugin) loadFullFolderDiff(entry *FileEntry) tea.Cmd {
 	}
 }
 
-// loadCommitDetail loads full commit information.
-func (p *Plugin) loadCommitDetail(hash string) tea.Cmd {
-	return func() tea.Msg {
-		commit, err := GetCommitDetail(p.ctx.WorkDir, hash)
-		if err != nil {
-			return ErrorMsg{Err: err}
-		}
-		return CommitDetailLoadedMsg{Commit: commit}
-	}
-}
-
 // loadCommitFileDiff loads diff for a file in a commit.
 func (p *Plugin) loadCommitFileDiff(hash, path string) tea.Cmd {
 	return func() tea.Msg {
@@ -1744,34 +1586,6 @@ func (p *Plugin) loadCommitFileDiff(hash, path string) tea.Cmd {
 		}
 
 		return DiffLoadedMsg{Content: content, Raw: rawDiff}
-	}
-}
-
-// ensureHistoryCursorVisible adjusts scroll to keep history cursor visible.
-func (p *Plugin) ensureHistoryCursorVisible() {
-	visibleRows := p.height - 3
-	if visibleRows < 1 {
-		visibleRows = 1
-	}
-
-	if p.historyCursor < p.historyScroll {
-		p.historyScroll = p.historyCursor
-	} else if p.historyCursor >= p.historyScroll+visibleRows {
-		p.historyScroll = p.historyCursor - visibleRows + 1
-	}
-}
-
-// ensureCommitDetailCursorVisible adjusts scroll to keep commit detail cursor visible.
-func (p *Plugin) ensureCommitDetailCursorVisible() {
-	visibleRows := p.height - 12 // Account for commit metadata
-	if visibleRows < 1 {
-		visibleRows = 1
-	}
-
-	if p.commitDetailCursor < p.commitDetailScroll {
-		p.commitDetailScroll = p.commitDetailCursor
-	} else if p.commitDetailCursor >= p.commitDetailScroll+visibleRows {
-		p.commitDetailScroll = p.commitDetailCursor - visibleRows + 1
 	}
 }
 
@@ -1964,6 +1778,22 @@ func (p *Plugin) doStashPop() tea.Cmd {
 	workDir := p.ctx.WorkDir
 	return func() tea.Msg {
 		err := StashPop(workDir)
+		if err != nil {
+			return StashErrorMsg{Err: err}
+		}
+		return StashSuccessMsg{Operation: "pop"}
+	}
+}
+
+// doStashPopIndex pops a specific stash by index.
+func (p *Plugin) doStashPopIndex(idx int) tea.Cmd {
+	if p.stashList == nil || idx >= p.stashList.Count() {
+		return nil
+	}
+	ref := p.stashList.Stashes[idx].Ref
+	workDir := p.ctx.WorkDir
+	return func() tea.Msg {
+		err := StashPopRef(workDir, ref)
 		if err != nil {
 			return StashErrorMsg{Err: err}
 		}

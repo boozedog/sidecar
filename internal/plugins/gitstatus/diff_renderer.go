@@ -308,10 +308,11 @@ func renderDiffContentWithOffset(line DiffLine, maxWidth, horizontalOffset int) 
 	// Apply horizontal offset first
 	content := line.Content
 	if horizontalOffset > 0 {
-		if horizontalOffset >= len(content) {
+		runes := []rune(content)
+		if horizontalOffset >= len(runes) {
 			content = ""
 		} else {
-			content = content[horizontalOffset:]
+			content = string(runes[horizontalOffset:])
 		}
 		// Create a modified line with offset content
 		line = DiffLine{
@@ -353,47 +354,52 @@ func renderDiffContent(line DiffLine, maxWidth int) string {
 		}
 		content := sb.String()
 		// Truncate if needed (accounting for ANSI codes is complex, so just truncate raw)
-		if len(line.Content) > maxWidth && maxWidth > 3 {
+		runes := []rune(line.Content)
+		if len(runes) > maxWidth && maxWidth > 3 {
 			// Re-render truncated
-			truncated := line.Content[:maxWidth-3] + "..."
+			truncated := string(runes[:maxWidth-3]) + "..."
 			return style.Render(truncated)
 		}
 		return content
 	}
 
 	content := line.Content
-	if len(content) > maxWidth && maxWidth > 3 {
-		content = content[:maxWidth-3] + "..."
+	runes := []rune(content)
+	if len(runes) > maxWidth && maxWidth > 3 {
+		content = string(runes[:maxWidth-3]) + "..."
 	}
 	return style.Render(content)
 }
 
-// truncateLine truncates a line to fit within maxWidth.
+// truncateLine truncates a line to fit within maxWidth using visual width.
 func truncateLine(s string, maxWidth int) string {
-	if len(s) <= maxWidth {
+	runes := []rune(s)
+	if len(runes) <= maxWidth {
 		return s
 	}
 	if maxWidth <= 3 {
-		return s[:maxWidth]
+		return string(runes[:maxWidth])
 	}
-	return s[:maxWidth-3] + "..."
+	return string(runes[:maxWidth-3]) + "..."
 }
 
-// padRight pads a string with spaces to reach the desired width.
+// padRight pads a string with spaces to reach the desired visual width.
 func padRight(s string, width int) string {
-	if len(s) >= width {
+	runeLen := len([]rune(s))
+	if runeLen >= width {
 		return s
 	}
-	return s + strings.Repeat(" ", width-len(s))
+	return s + strings.Repeat(" ", width-runeLen)
 }
 
-// applyHorizontalOffset removes the first n characters from a string.
+// applyHorizontalOffset removes the first n runes from a string.
 func applyHorizontalOffset(s string, offset int) string {
-	if offset <= 0 || len(s) <= offset {
-		if len(s) <= offset {
-			return ""
-		}
+	if offset <= 0 {
 		return s
 	}
-	return s[offset:]
+	runes := []rune(s)
+	if offset >= len(runes) {
+		return ""
+	}
+	return string(runes[offset:])
 }

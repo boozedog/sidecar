@@ -59,21 +59,12 @@ func DefaultBindings() []Binding {
 		{Key: "y", Command: "yank-commit", Context: "git-commit-preview"},
 		{Key: "Y", Command: "yank-id", Context: "git-commit-preview"},
 
-		// Git history context
-		{Key: "enter", Command: "view-commit", Context: "git-history"},
-		{Key: "esc", Command: "back", Context: "git-history"},
-		{Key: "y", Command: "yank-commit", Context: "git-history"},
-		{Key: "Y", Command: "yank-id", Context: "git-history"},
-
-		// Git commit detail context
-		{Key: "esc", Command: "back", Context: "git-commit-detail"},
-		{Key: "y", Command: "yank-commit", Context: "git-commit-detail"},
-		{Key: "Y", Command: "yank-id", Context: "git-commit-detail"},
-
 		// Git Diff context
 		{Key: "esc", Command: "close-diff", Context: "git-diff"},
 		{Key: "j", Command: "scroll", Context: "git-diff"},
 		{Key: "k", Command: "scroll", Context: "git-diff"},
+		{Key: "tab", Command: "toggle-sidebar", Context: "git-diff"},
+		{Key: "v", Command: "toggle-diff-view", Context: "git-diff"},
 		{Key: "O", Command: "open-in-file-browser", Context: "git-diff"},
 
 		// Git Status Diff Pane context (inline diff in three-pane view)
