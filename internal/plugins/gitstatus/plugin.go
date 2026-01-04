@@ -148,6 +148,7 @@ func New() *Plugin {
 		sidebarVisible: true,
 		activePane:     PaneSidebar,
 		mouseHandler:   mouse.NewHandler(),
+		stashCursor:    -1, // No stash selected by default
 	}
 }
 
@@ -718,19 +719,8 @@ func (p *Plugin) updateStatusDiffPane(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 		// ESC always returns to sidebar
 		p.activePane = PaneSidebar
 
-	case "h":
-		// h scrolls left if scrolled, otherwise returns to sidebar
-		if p.diffPaneHorizScroll > 0 {
-			p.diffPaneHorizScroll -= 10
-			if p.diffPaneHorizScroll < 0 {
-				p.diffPaneHorizScroll = 0
-			}
-		} else {
-			p.activePane = PaneSidebar
-		}
-
-	case "left":
-		// Horizontal scroll left
+	case "h", "left":
+		// Horizontal scroll left (use ESC or Tab to switch panes)
 		if p.diffPaneHorizScroll > 0 {
 			p.diffPaneHorizScroll -= 10
 			if p.diffPaneHorizScroll < 0 {
@@ -1037,20 +1027,7 @@ func (p *Plugin) updateDiff(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 		p.sidebarVisible = !p.sidebarVisible
 
 	case "h", "left":
-		// If sidebar visible and horizontal scroll is 0, focus sidebar
-		if p.sidebarVisible && p.diffHorizOff == 0 {
-			// Return to status view with sidebar focused
-			p.diffContent = ""
-			p.diffRaw = ""
-			p.parsedDiff = nil
-			p.diffHorizOff = 0
-			p.diffCommit = ""
-			p.diffFile = ""
-			p.viewMode = p.diffReturnMode
-			p.activePane = PaneSidebar
-			return p, nil
-		}
-		// Otherwise horizontal scroll left
+		// Horizontal scroll left (use ESC or Tab to exit diff view)
 		if p.diffHorizOff > 0 {
 			p.diffHorizOff -= 10
 			if p.diffHorizOff < 0 {

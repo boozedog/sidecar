@@ -435,20 +435,28 @@ func renderSideBySideContent(content string, lineType LineType, maxWidth int, hi
 
 // renderSyntaxHighlighted renders content with syntax highlighting blended with diff style.
 func renderSyntaxHighlighted(content string, lineType LineType, highlighter *SyntaxHighlighter) string {
-	if highlighter == nil {
-		var style lipgloss.Style
+	// Helper to get base diff style
+	getBaseStyle := func() lipgloss.Style {
 		switch lineType {
 		case LineAdd:
-			style = styles.DiffAdd
+			return styles.DiffAdd
 		case LineRemove:
-			style = styles.DiffRemove
+			return styles.DiffRemove
 		default:
-			style = styles.DiffContext
+			return styles.DiffContext
 		}
-		return style.Render(content)
+	}
+
+	if highlighter == nil {
+		return getBaseStyle().Render(content)
 	}
 
 	segments := highlighter.HighlightLine(content)
+	if len(segments) == 0 {
+		// Fallback to base diff style when no syntax segments
+		return getBaseStyle().Render(content)
+	}
+
 	var sb strings.Builder
 	for _, seg := range segments {
 		style := blendSyntaxWithDiff(seg.Style, lineType)
@@ -458,31 +466,21 @@ func renderSyntaxHighlighted(content string, lineType LineType, highlighter *Syn
 }
 
 // blendSyntaxWithDiff blends syntax highlighting style with diff line style.
-// For add/remove lines, we use the syntax foreground color but may adjust styling.
+// Add/remove lines always use diff colors (green/red) for clear visual diff indication.
+// Context lines use syntax highlighting when available.
 func blendSyntaxWithDiff(syntaxStyle lipgloss.Style, lineType LineType) lipgloss.Style {
-	// Get any foreground color from syntax style
-	fg := syntaxStyle.GetForeground()
-
-	// Check if foreground is unset (NoColor{})
-	_, hasColor := fg.(lipgloss.NoColor)
-	noForeground := hasColor
-
 	switch lineType {
 	case LineAdd:
-		// For added lines: use syntax color if set, otherwise use DiffAdd color
-		if noForeground {
-			return styles.DiffAdd
-		}
-		return syntaxStyle
+		// Always use green for added lines
+		return styles.DiffAdd
 	case LineRemove:
-		// For removed lines: use syntax color if set, otherwise use DiffRemove color
-		if noForeground {
-			return styles.DiffRemove
-		}
-		return syntaxStyle
+		// Always use red for removed lines
+		return styles.DiffRemove
 	default:
-		// Context lines: use syntax color if set, otherwise use DiffContext color
-		if noForeground {
+		// Context lines: use syntax color if available, otherwise muted
+		fg := syntaxStyle.GetForeground()
+		_, isNoColor := fg.(lipgloss.NoColor)
+		if isNoColor {
 			return styles.DiffContext
 		}
 		return syntaxStyle

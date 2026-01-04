@@ -398,7 +398,7 @@ func isRootContext(ctx string) bool {
 	// Plugin root contexts where 'q' is not used for navigation
 	case "conversations", "conversations-sidebar", "conversations-main":
 		return true
-	case "git-status", "git-status-commits", "git-status-diff":
+	case "git-status", "git-status-commits", "git-status-diff", "git-commit-preview":
 		return true
 	case "file-browser-tree", "file-browser-preview":
 		return true

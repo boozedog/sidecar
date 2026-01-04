@@ -365,6 +365,39 @@ func (p *Plugin) handleDiffMouse(msg tea.MouseMsg) (*Plugin, tea.Cmd) {
 	action := p.mouseHandler.HandleMouse(msg)
 
 	switch action.Type {
+	case mouse.ActionClick:
+		// Handle clicks on sidebar regions - close diff and navigate
+		if action.Region != nil {
+			switch action.Region.ID {
+			case regionCommit:
+				// Click on commit in sidebar - close diff and select commit
+				if idx, ok := action.Region.Data.(int); ok {
+					fileCount := len(p.tree.AllEntries())
+					p.cursor = fileCount + idx
+					p.ensureCursorVisible()
+					p.ensureCommitVisible(idx)
+					// Close the diff view
+					p.diffContent = ""
+					p.diffRaw = ""
+					p.parsedDiff = nil
+					p.viewMode = ViewModeStatus
+					return p, p.autoLoadCommitPreview()
+				}
+			case regionFile:
+				// Click on file in sidebar - close diff and select file
+				if idx, ok := action.Region.Data.(int); ok {
+					p.cursor = idx
+					p.ensureCursorVisible()
+					// Close the diff view
+					p.diffContent = ""
+					p.diffRaw = ""
+					p.parsedDiff = nil
+					p.viewMode = ViewModeStatus
+					return p, p.autoLoadDiff()
+				}
+			}
+		}
+
 	case mouse.ActionScrollUp, mouse.ActionScrollDown:
 		p.diffScroll += action.Delta
 		if p.diffScroll < 0 {
