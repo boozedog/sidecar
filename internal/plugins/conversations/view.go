@@ -970,8 +970,11 @@ func (p *Plugin) renderTwoPane() string {
 	dividerHitWidth := 3
 	p.mouseHandler.HitMap.AddRect(regionPaneDivider, dividerX, 0, dividerHitWidth, p.height, nil)
 
-	// Session item regions - HIGHEST PRIORITY (registered last)
+	// Session item regions - HIGH PRIORITY
 	p.registerSessionHitRegions(sidebarWidth, innerHeight)
+
+	// Turn item regions - HIGHEST PRIORITY (registered last)
+	p.registerTurnHitRegions(mainX+1, mainWidth-2, innerHeight)
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftPane, divider, rightPane)
 }
@@ -1036,6 +1039,49 @@ func (p *Plugin) registerSessionHitRegions(sidebarWidth, contentHeight int) {
 		p.mouseHandler.HitMap.AddRect(regionSessionItem, hitX, itemY, hitWidth, 1, i)
 		lineCount++
 	}
+}
+
+// registerTurnHitRegions registers mouse hit regions for visible turn items in the main pane.
+func (p *Plugin) registerTurnHitRegions(mainX, contentWidth, contentHeight int) {
+	if p.detailMode || len(p.turns) == 0 {
+		return
+	}
+
+	// Y offset: panel border (1) + header lines (4: title, stats, resume cmd, separator)
+	headerY := 5
+	currentY := headerY
+
+	// Track Y position for each visible turn
+	for i := p.turnScrollOff; i < len(p.turns); i++ {
+		turn := p.turns[i]
+		turnHeight := p.calculateTurnHeight(turn, contentWidth)
+
+		if currentY+turnHeight > contentHeight+headerY {
+			break
+		}
+
+		// Register hit region spanning all lines of this turn
+		p.mouseHandler.HitMap.AddRect(regionTurnItem, mainX, currentY, contentWidth, turnHeight, i)
+		currentY += turnHeight
+	}
+}
+
+// calculateTurnHeight returns the number of lines a turn will occupy when rendered.
+func (p *Plugin) calculateTurnHeight(turn Turn, maxWidth int) int {
+	height := 1 // header line always present
+	if turn.ThinkingTokens > 0 {
+		height++
+	}
+	content := turn.Preview(maxWidth - 7)
+	content = strings.ReplaceAll(content, "\n", " ")
+	content = strings.TrimSpace(content)
+	if content != "" {
+		height++
+	}
+	if turn.ToolCount > 0 {
+		height++
+	}
+	return height
 }
 
 // renderDivider renders the visible divider between panes.
@@ -1595,23 +1641,10 @@ func (p *Plugin) renderDetailPaneContent(contentWidth, height int) string {
 // renderCompactTurn renders a turn (grouped messages) in compact format for two-pane view.
 func (p *Plugin) renderCompactTurn(turn Turn, turnIndex int, maxWidth int) []string {
 	var lines []string
+	selected := turnIndex == p.turnCursor
 
-	// Header line: [timestamp] role (N msgs)  tokens
+	// Header line: [timestamp] role (N msgs) tokens
 	ts := turn.FirstTimestamp()
-	var roleStyle lipgloss.Style
-	if turn.Role == "user" {
-		roleStyle = styles.StatusInProgress
-	} else {
-		roleStyle = styles.StatusStaged
-	}
-
-	// Cursor indicator
-	var styledCursor string
-	if turnIndex == p.turnCursor {
-		styledCursor = styles.ListCursor.Render("> ")
-	} else {
-		styledCursor = "  "
-	}
 
 	// Build stats string
 	msgCount := len(turn.Messages)
@@ -1627,37 +1660,63 @@ func (p *Plugin) renderCompactTurn(turn Turn, turnIndex int, maxWidth int) []str
 		statsStr = " (" + strings.Join(stats, ", ") + ")"
 	}
 
-	// Build styled header
-	styledHeader := styledCursor + fmt.Sprintf("[%s] %s%s",
-		styles.Muted.Render(ts),
-		roleStyle.Render(turn.Role),
-		styles.Muted.Render(statsStr))
-	lines = append(lines, styledHeader)
+	// Build header line
+	if selected {
+		// For selected: plain text with background highlight
+		headerContent := fmt.Sprintf("[%s] %s%s", ts, turn.Role, statsStr)
+		lines = append(lines, p.styleTurnLine(headerContent, true, maxWidth))
+	} else {
+		// For unselected: colored role badge with muted styling
+		var roleStyle lipgloss.Style
+		if turn.Role == "user" {
+			roleStyle = styles.StatusInProgress
+		} else {
+			roleStyle = styles.StatusStaged
+		}
+		styledHeader := fmt.Sprintf("[%s] %s%s",
+			styles.Muted.Render(ts),
+			roleStyle.Render(turn.Role),
+			styles.Muted.Render(statsStr))
+		lines = append(lines, styledHeader)
+	}
 
 	// Thinking indicator (aggregate) - indented under header
 	if turn.ThinkingTokens > 0 {
-		thinkingLine := fmt.Sprintf("     ├─ [thinking] %s tokens", formatK(turn.ThinkingTokens))
+		thinkingLine := fmt.Sprintf("   ├─ [thinking] %s tokens", formatK(turn.ThinkingTokens))
 		if len(thinkingLine) > maxWidth {
 			thinkingLine = thinkingLine[:maxWidth-3] + "..."
 		}
-		lines = append(lines, styles.Muted.Render(thinkingLine))
+		lines = append(lines, p.styleTurnLine(thinkingLine, selected, maxWidth))
 	}
 
 	// Content preview from first meaningful message - indented under header
-	content := turn.Preview(maxWidth - 7)
+	content := turn.Preview(maxWidth - 5)
 	content = strings.ReplaceAll(content, "\n", " ")
 	content = strings.TrimSpace(content)
 	if content != "" {
-		lines = append(lines, "     "+styles.Body.Render(content))
+		contentLine := "   " + content
+		lines = append(lines, p.styleTurnLine(contentLine, selected, maxWidth))
 	}
 
 	// Tool uses (aggregate) - indented under header
 	if turn.ToolCount > 0 {
-		toolLine := fmt.Sprintf("     └─ %d tools", turn.ToolCount)
-		lines = append(lines, styles.Code.Render(toolLine))
+		toolLine := fmt.Sprintf("   └─ %d tools", turn.ToolCount)
+		lines = append(lines, p.styleTurnLine(toolLine, selected, maxWidth))
 	}
 
 	return lines
+}
+
+// styleTurnLine applies selection highlighting or default muted styling to a turn line.
+func (p *Plugin) styleTurnLine(content string, selected bool, maxWidth int) string {
+	if selected {
+		// Pad to full width for proper background highlighting
+		if len(content) < maxWidth {
+			content += strings.Repeat(" ", maxWidth-len(content))
+		}
+		return styles.ListItemSelected.Render(content)
+	}
+	return styles.Muted.Render(content)
 }
 
 // renderCompactMessage renders a message in compact format for two-pane view.

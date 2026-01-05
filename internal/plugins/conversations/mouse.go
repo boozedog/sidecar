@@ -54,6 +54,17 @@ func (p *Plugin) handleMouseClick(action mouse.MouseAction) (*Plugin, tea.Cmd) {
 		p.activePane = PaneSidebar
 		return p, nil
 
+	case regionTurnItem:
+		// Click on a turn item - select it
+		if idx, ok := action.Region.Data.(int); ok {
+			if idx >= 0 && idx < len(p.turns) {
+				p.turnCursor = idx
+				p.activePane = PaneMessages
+				p.ensureTurnCursorVisible()
+			}
+		}
+		return p, nil
+
 	case regionMainPane:
 		p.activePane = PaneMessages
 		return p, nil
@@ -103,12 +114,24 @@ func (p *Plugin) handleMouseDoubleClick(action mouse.MouseAction) (*Plugin, tea.
 		}
 		return p, nil
 
+	case regionTurnItem:
+		// Double-click on turn item: select it and open detail view
+		if idx, ok := action.Region.Data.(int); ok {
+			if idx >= 0 && idx < len(p.turns) {
+				p.turnCursor = idx
+				p.detailTurn = &p.turns[idx]
+				p.detailScroll = 0
+				p.detailMode = true
+			}
+		}
+		return p, nil
+
 	case regionMainPane:
-		// Double-click in main pane: open turn detail view
+		// Double-click in main pane (fallback): open turn detail view for current cursor
 		if p.turnCursor < len(p.turns) {
 			p.detailTurn = &p.turns[p.turnCursor]
 			p.detailScroll = 0
-			p.view = ViewMessageDetail
+			p.detailMode = true
 		}
 		return p, nil
 	}

@@ -236,9 +236,9 @@ func (m IntroModel) RepoNameView() string {
 	}
 
 	// Interpolate color from background to target based on opacity
-	// Background: #1F2937 (header bg), Target: #D1D5DB (brighter for better contrast)
+	// Background: #1F2937 (header bg), Target: #9CA3AF (TextSecondary, matches tab text)
 	bgColor := hexToRGB("#1F2937")
-	targetColor := hexToRGB("#D1D5DB")
+	targetColor := hexToRGB("#9CA3AF")
 
 	currentColor := RGB{
 		R: bgColor.R + (targetColor.R-bgColor.R)*m.RepoOpacity,

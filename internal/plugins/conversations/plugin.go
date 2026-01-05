@@ -36,6 +36,7 @@ const (
 	regionMainPane    = "main-pane"
 	regionPaneDivider = "pane-divider"
 	regionSessionItem = "session-item" // Individual session row (Data: session index)
+	regionTurnItem    = "turn-item"    // Individual turn row (Data: turn index)
 )
 
 // View represents the current view mode.
