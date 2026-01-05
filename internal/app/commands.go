@@ -94,3 +94,27 @@ func FocusPlugin(pluginID string) tea.Cmd {
 		return FocusPluginByIDMsg{PluginID: pluginID}
 	}
 }
+
+// UpdateSuccessMsg signals that an update completed successfully.
+type UpdateSuccessMsg struct {
+	SidecarUpdated    bool
+	TdUpdated         bool
+	NewSidecarVersion string
+	NewTdVersion      string
+}
+
+// UpdateErrorMsg signals that an update failed.
+type UpdateErrorMsg struct {
+	Step string // "sidecar", "td", or "check"
+	Err  error
+}
+
+// UpdateSpinnerTickMsg triggers spinner animation during update.
+type UpdateSpinnerTickMsg struct{}
+
+// updateSpinnerTick returns a command that ticks the spinner every 100ms.
+func updateSpinnerTick() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+		return UpdateSpinnerTickMsg{}
+	})
+}

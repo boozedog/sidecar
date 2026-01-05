@@ -1,10 +1,13 @@
 package app
 
 import (
+	"fmt"
+	"os/exec"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/marcus/sidecar/internal/keymap"
+	"github.com/marcus/sidecar/internal/mouse"
 	"github.com/marcus/sidecar/internal/palette"
 	"github.com/marcus/sidecar/internal/plugin"
 	"github.com/marcus/sidecar/internal/version"
@@ -52,6 +55,14 @@ type Model struct {
 	currentVersion  string
 	updateAvailable *version.UpdateAvailableMsg
 	tdVersionInfo   *version.TdVersionMsg
+
+	// Update feature state
+	updateButtonFocus  bool
+	updateInProgress   bool
+	updateError        string
+	needsRestart       bool
+	updateButtonBounds mouse.Rect
+	updateSpinnerFrame int
 
 	// Intro animation
 	intro IntroModel
@@ -172,4 +183,133 @@ func (m *Model) ClearToast() {
 		m.statusMsg = ""
 		m.statusIsError = false
 	}
+}
+
+// hasUpdatesAvailable returns true if either sidecar or td has an update available.
+func (m *Model) hasUpdatesAvailable() bool {
+	if m.updateAvailable != nil {
+		return true
+	}
+	if m.tdVersionInfo != nil && m.tdVersionInfo.HasUpdate && m.tdVersionInfo.Installed {
+		return true
+	}
+	return false
+}
+
+// doUpdate executes go install commands for available updates.
+func (m *Model) doUpdate() tea.Cmd {
+	sidecarUpdate := m.updateAvailable
+	tdUpdate := m.tdVersionInfo
+
+	return func() tea.Msg {
+		// Check Go is available
+		if _, err := exec.LookPath("go"); err != nil {
+			return UpdateErrorMsg{Step: "check", Err: fmt.Errorf("go not found in PATH")}
+		}
+
+		var sidecarUpdated, tdUpdated bool
+		var newSidecarVersion, newTdVersion string
+
+		// Update sidecar
+		if sidecarUpdate != nil {
+			args := []string{
+				"install",
+				"-ldflags", fmt.Sprintf("-X main.Version=%s", sidecarUpdate.LatestVersion),
+				fmt.Sprintf("github.com/marcus/sidecar/cmd/sidecar@%s", sidecarUpdate.LatestVersion),
+			}
+			cmd := exec.Command("go", args...)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				return UpdateErrorMsg{Step: "sidecar", Err: fmt.Errorf("%v: %s", err, output)}
+			}
+			sidecarUpdated = true
+			newSidecarVersion = sidecarUpdate.LatestVersion
+		}
+
+		// Update td
+		if tdUpdate != nil && tdUpdate.HasUpdate && tdUpdate.Installed {
+			cmd := exec.Command("go", "install",
+				fmt.Sprintf("github.com/marcus/td@%s", tdUpdate.LatestVersion))
+			if output, err := cmd.CombinedOutput(); err != nil {
+				return UpdateErrorMsg{Step: "td", Err: fmt.Errorf("%v: %s", err, output)}
+			}
+			tdUpdated = true
+			newTdVersion = tdUpdate.LatestVersion
+		}
+
+		return UpdateSuccessMsg{
+			SidecarUpdated:    sidecarUpdated,
+			TdUpdated:         tdUpdated,
+			NewSidecarVersion: newSidecarVersion,
+			NewTdVersion:      newTdVersion,
+		}
+	}
+}
+
+// updateDiagnosticsButtonBounds calculates the button bounds for mouse clicks.
+// Call this when diagnostics modal is shown or window is resized.
+func (m *Model) updateDiagnosticsButtonBounds() {
+	if !m.hasUpdatesAvailable() || m.updateInProgress || m.needsRestart {
+		m.updateButtonBounds = mouse.Rect{} // No clickable button
+		return
+	}
+
+	// The modal content has a known structure:
+	// - Logo: 7 lines
+	// - Blank: 1
+	// - Plugins section: 1 (title) + N (one per plugin with potential diagnostics)
+	// - Blank: 1
+	// - System section: 1 (title) + 2 (workdir, refresh)
+	// - Blank: 1
+	// - Version section: 1 (title) + 2-3 (sidecar, td)
+	// - Blank: 1
+	// - Button line (this is what we need)
+
+	// Count lines dynamically
+	lineCount := 7 + 1 // logo + blank
+	lineCount++        // plugins title
+	for _, p := range m.registry.Plugins() {
+		lineCount++
+		if dp, ok := p.(plugin.DiagnosticProvider); ok {
+			lineCount += len(dp.Diagnostics())
+		}
+	}
+	lineCount++ // blank after plugins
+	lineCount += 3 // system section (title + 2 lines)
+	lineCount++ // blank
+	lineCount++ // version title
+	lineCount++ // sidecar version line
+	if m.tdVersionInfo != nil {
+		lineCount++ // td version line
+	}
+	lineCount++ // blank before button
+	// Now we're at the button line
+
+	buttonLineInModal := lineCount
+
+	// ModalBox has 1 cell padding all around, plus 1 cell border
+	modalPadding := 1
+	modalBorder := 1
+	buttonIndent := 2 // "  " before button
+
+	// Estimate modal dimensions (will be close enough for click detection)
+	// Logo width is approximately 45 chars
+	modalWidth := 50 + (modalPadding * 2) + (modalBorder * 2)
+	modalHeight := lineCount + 4 + (modalPadding * 2) + (modalBorder * 2) // +4 for lines after button
+
+	// Calculate modal position (centered)
+	modalX := (m.width - modalWidth) / 2
+	modalY := (m.height - modalHeight) / 2
+	if modalX < 0 {
+		modalX = 0
+	}
+	if modalY < 0 {
+		modalY = 0
+	}
+
+	// Calculate button position
+	buttonX := modalX + modalBorder + modalPadding + buttonIndent
+	buttonY := modalY + modalBorder + modalPadding + buttonLineInModal
+	buttonWidth := 8 // " Update "
+
+	m.updateButtonBounds = mouse.Rect{X: buttonX, Y: buttonY, W: buttonWidth, H: 1}
 }

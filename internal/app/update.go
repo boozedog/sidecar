@@ -24,6 +24,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.ready = true
+		// Update button bounds if diagnostics is shown
+		if m.showDiagnostics {
+			m.updateDiagnosticsButtonBounds()
+		}
 		// Forward adjusted WindowSizeMsg to all plugins
 		// Plugins receive the content area size (minus header and footer)
 		// Must match the height passed to Plugin.View() in view.go
@@ -54,8 +58,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
+		// Handle diagnostics modal mouse events
+		if m.showDiagnostics {
+			if m.hasUpdatesAvailable() && !m.updateInProgress && !m.needsRestart {
+				// Check if click is on update button
+				if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+					if m.updateButtonBounds.Contains(msg.X, msg.Y) {
+						m.updateInProgress = true
+						m.updateError = ""
+						m.updateSpinnerFrame = 0
+						return m, tea.Batch(m.doUpdate(), updateSpinnerTick())
+					}
+				}
+			}
+			return m, nil
+		}
+
 		// Ignore mouse events for other modals
-		if m.showHelp || m.showDiagnostics || m.showQuitConfirm {
+		if m.showHelp || m.showQuitConfirm {
 			return m, nil
 		}
 
@@ -109,6 +129,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ClearToast()
 		return m, tickCmd()
 
+	case UpdateSpinnerTickMsg:
+		if m.updateInProgress {
+			m.updateSpinnerFrame = (m.updateSpinnerFrame + 1) % 10
+			return m, updateSpinnerTick()
+		}
+		return m, nil
+
 	case ToastMsg:
 		m.ShowToast(msg.Message, msg.Duration)
 		m.statusIsError = msg.IsError
@@ -133,6 +160,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ErrorMsg:
 		m.lastError = msg.Err
 		m.ShowToast("Error: "+msg.Err.Error(), 5*time.Second)
+		return m, nil
+
+	case UpdateSuccessMsg:
+		m.updateInProgress = false
+		m.needsRestart = true
+		if msg.SidecarUpdated {
+			m.updateAvailable = nil
+		}
+		if msg.TdUpdated && m.tdVersionInfo != nil {
+			m.tdVersionInfo.HasUpdate = false
+		}
+		m.ShowToast("Update complete! Restart sidecar to use new version", 10*time.Second)
+		return m, nil
+
+	case UpdateErrorMsg:
+		m.updateInProgress = false
+		m.updateError = fmt.Sprintf("Failed to update %s: %s", msg.Step, msg.Err)
+		m.ShowToast("Update failed: "+msg.Err.Error(), 5*time.Second)
+		m.statusIsError = true
 		return m, nil
 
 	case FocusPluginByIDMsg:
@@ -286,8 +332,33 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	// Handle diagnostics modal keys
+	if m.showDiagnostics {
+		switch msg.String() {
+		case "u":
+			if m.hasUpdatesAvailable() && !m.updateInProgress && !m.needsRestart {
+				m.updateInProgress = true
+				m.updateError = ""
+				m.updateSpinnerFrame = 0
+				return m, tea.Batch(m.doUpdate(), updateSpinnerTick())
+			}
+		case "tab":
+			if m.hasUpdatesAvailable() && !m.updateInProgress && !m.needsRestart {
+				m.updateButtonFocus = !m.updateButtonFocus
+			}
+		case "enter":
+			if m.updateButtonFocus && !m.updateInProgress {
+				m.updateInProgress = true
+				m.updateError = ""
+				m.updateSpinnerFrame = 0
+				return m, tea.Batch(m.doUpdate(), updateSpinnerTick())
+			}
+		}
+		return m, nil
+	}
+
 	// If modal is open, don't process other keys
-	if m.showHelp || m.showDiagnostics || m.showQuitConfirm {
+	if m.showHelp || m.showQuitConfirm {
 		return m, nil
 	}
 
@@ -336,7 +407,9 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.showDiagnostics = !m.showDiagnostics
 		if m.showDiagnostics {
 			m.activeContext = "diagnostics"
+			m.updateDiagnosticsButtonBounds()
 		} else {
+			m.updateButtonFocus = false
 			m.updateContext()
 		}
 		return m, nil

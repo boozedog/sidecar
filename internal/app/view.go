@@ -598,10 +598,44 @@ func (m Model) buildDiagnosticsContent() string {
 		}
 	}
 
-	// Show unified update command if any updates available
+	// Show update controls if any updates available
 	if m.updateAvailable != nil || (m.tdVersionInfo != nil && m.tdVersionInfo.HasUpdate) {
-		b.WriteString("\n  Update:\n")
-		b.WriteString(fmt.Sprintf("  %s\n", styles.Muted.Render("curl -fsSL https://raw.githubusercontent.com/marcus/sidecar/main/scripts/setup.sh | bash")))
+		b.WriteString("\n")
+
+		if m.updateInProgress {
+			spinnerFrames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+			spinner := spinnerFrames[m.updateSpinnerFrame%len(spinnerFrames)]
+			b.WriteString("  ")
+			b.WriteString(styles.StatusInProgress.Render(spinner + " "))
+			b.WriteString("Installing update...")
+			b.WriteString("\n")
+		} else if m.needsRestart {
+			b.WriteString("  ")
+			b.WriteString(styles.StatusCompleted.Render("✓ "))
+			b.WriteString("Update complete. ")
+			b.WriteString(styles.StatusModified.Render("Restart sidecar to use new version"))
+			b.WriteString("\n")
+		} else {
+			// Show Update button (click or press u)
+			buttonStyle := styles.Button
+			if m.updateButtonFocus {
+				buttonStyle = styles.ButtonFocused
+			}
+			label := m.buildUpdateLabel()
+			b.WriteString("  ")
+			b.WriteString(buttonStyle.Render(" Update "))
+			b.WriteString("  ")
+			b.WriteString(styles.Muted.Render(label))
+			b.WriteString("  ")
+			b.WriteString(styles.KeyHint.Render("u"))
+			b.WriteString("\n")
+		}
+
+		if m.updateError != "" {
+			b.WriteString("  ")
+			b.WriteString(styles.StatusBlocked.Render("✗ " + m.updateError))
+			b.WriteString("\n")
+		}
 	}
 	b.WriteString("\n")
 
@@ -616,4 +650,16 @@ func (m Model) buildDiagnosticsContent() string {
 	b.WriteString(styles.Subtle.Render("Press ! or esc to close"))
 
 	return b.String()
+}
+
+// buildUpdateLabel returns a description of what will be updated.
+func (m Model) buildUpdateLabel() string {
+	var parts []string
+	if m.updateAvailable != nil {
+		parts = append(parts, "sidecar "+m.updateAvailable.LatestVersion)
+	}
+	if m.tdVersionInfo != nil && m.tdVersionInfo.HasUpdate && m.tdVersionInfo.Installed {
+		parts = append(parts, "td "+m.tdVersionInfo.LatestVersion)
+	}
+	return strings.Join(parts, " + ")
 }
