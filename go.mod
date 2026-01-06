@@ -12,7 +12,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/charmbracelet/x/ansi v0.11.3
 	github.com/fsnotify/fsnotify v1.9.0
-	github.com/marcus/td v0.4.22
+	github.com/marcus/td v0.4.23
 	github.com/mattn/go-sqlite3 v1.14.32
 	modernc.org/sqlite v1.41.0
 )
