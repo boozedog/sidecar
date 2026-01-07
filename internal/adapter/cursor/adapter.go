@@ -303,9 +303,13 @@ func (a *Adapter) parseMessages(dbPath string) ([]adapter.Message, error) {
 		var id string
 		var data []byte
 		if err := rows.Scan(&id, &data); err != nil {
+			// Skip corrupt blobs but continue processing others
 			continue
 		}
 		blobs[id] = data
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating blobs: %w", err)
 	}
 
 	// Traverse from root blob to collect messages

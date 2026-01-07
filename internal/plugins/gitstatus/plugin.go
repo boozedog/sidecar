@@ -1042,8 +1042,8 @@ func (p *Plugin) updateDiff(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 		// Toggle sidebar visibility (match status view behavior)
 		p.sidebarVisible = !p.sidebarVisible
 
-	case "h", "left":
-		// Horizontal scroll left (use ESC or Tab to exit diff view)
+	case "h", "left", "<", "H":
+		// Horizontal scroll left
 		if p.diffHorizOff > 0 {
 			p.diffHorizOff -= 10
 			if p.diffHorizOff < 0 {
@@ -1051,16 +1051,7 @@ func (p *Plugin) updateDiff(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 			}
 		}
 
-	case "<", "H":
-		// Horizontal scroll left in side-by-side mode
-		if p.diffViewMode == DiffViewSideBySide && p.diffHorizOff > 0 {
-			p.diffHorizOff -= 10
-			if p.diffHorizOff < 0 {
-				p.diffHorizOff = 0
-			}
-		}
-
-	case ">", "L", "l", "right":
+	case "l", "right", ">", "L":
 		// Horizontal scroll right
 		p.diffHorizOff += 10
 		p.clampDiffHorizScroll()

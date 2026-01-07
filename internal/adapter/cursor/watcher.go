@@ -43,7 +43,6 @@ func NewWatcher(workspaceDir string) (<-chan adapter.Event, error) {
 
 		// Debounce timer
 		var debounceTimer *time.Timer
-		var lastEvent fsnotify.Event
 		debounceDelay := 100 * time.Millisecond
 
 		for {
@@ -56,23 +55,24 @@ func NewWatcher(workspaceDir string) (<-chan adapter.Event, error) {
 				// Watch for store.db changes or new session directories
 				if strings.HasSuffix(event.Name, "store.db") ||
 					strings.HasSuffix(event.Name, "store.db-wal") {
-					lastEvent = event
+					// Capture event for closure to avoid race condition
+					capturedEvent := event
 
 					// Debounce rapid events
 					if debounceTimer != nil {
 						debounceTimer.Stop()
 					}
 					debounceTimer = time.AfterFunc(debounceDelay, func() {
-						// Extract session ID from path (parent directory name)
-						sessionID := filepath.Base(filepath.Dir(lastEvent.Name))
+						// Extract session ID from path (use capturedEvent to avoid race)
+						sessionID := filepath.Base(filepath.Dir(capturedEvent.Name))
 
 						var eventType adapter.EventType
 						switch {
-						case lastEvent.Op&fsnotify.Create != 0:
+						case capturedEvent.Op&fsnotify.Create != 0:
 							eventType = adapter.EventSessionCreated
-						case lastEvent.Op&fsnotify.Write != 0:
+						case capturedEvent.Op&fsnotify.Write != 0:
 							eventType = adapter.EventMessageAdded
-						case lastEvent.Op&fsnotify.Remove != 0:
+						case capturedEvent.Op&fsnotify.Remove != 0:
 							return
 						default:
 							eventType = adapter.EventSessionUpdated
