@@ -550,6 +550,8 @@ func (p *Plugin) Commands() []plugin.Command {
 		// File operation commands (move/rename/create/delete)
 		{ID: "confirm", Name: "Confirm", Description: "Confirm operation", Category: plugin.CategoryActions, Context: "file-browser-file-op", Priority: 1},
 		{ID: "cancel", Name: "Cancel", Description: "Cancel operation", Category: plugin.CategoryActions, Context: "file-browser-file-op", Priority: 1},
+		// Info modal commands
+		{ID: "close", Name: "Close", Description: "Close info modal", Category: plugin.CategoryActions, Context: "file-browser-info", Priority: 1},
 	}
 }
 

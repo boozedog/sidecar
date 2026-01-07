@@ -830,7 +830,11 @@ func (p *Plugin) walkTreeForSearch(node *FileNode, fn func(*FileNode)) {
 		return
 	}
 	for _, child := range node.Children {
-		// Skip ignored files and directories (like .git, node_modules, etc.)
+		// Skip .git explicitly (even if not in .gitignore)
+		if child.Name == ".git" {
+			continue
+		}
+		// Skip ignored files and directories (like node_modules, etc.)
 		if child.IsIgnored {
 			continue
 		}

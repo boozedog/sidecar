@@ -127,7 +127,7 @@ func adapterBadgeText(session adapter.Session) string {
 	// Fallback for sessions without icon
 	abbr := adapterAbbrev(session)
 	if abbr == "" {
-		return ""
+		return "?" // Unknown adapter fallback
 	}
 	return "●" + abbr
 }
