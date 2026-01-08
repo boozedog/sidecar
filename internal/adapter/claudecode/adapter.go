@@ -82,7 +82,7 @@ func (a *Adapter) Sessions(projectRoot string) ([]adapter.Session, error) {
 		return nil, err
 	}
 
-	var sessions []adapter.Session
+	sessions := make([]adapter.Session, 0, len(entries))
 	// Reset cache on full session enumeration
 	a.sessionIndex = make(map[string]string)
 	for _, e := range entries {
@@ -147,36 +147,17 @@ func (a *Adapter) Messages(sessionID string) ([]adapter.Message, error) {
 		return nil, nil
 	}
 
-	// First pass: collect tool results from user messages
-	toolResults := make(map[string]toolResultInfo)
 	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 1024*1024), 10*1024*1024)
-
-	for scanner.Scan() {
-		var raw RawMessage
-		if err := json.Unmarshal(scanner.Bytes(), &raw); err != nil {
-			continue
-		}
-		if raw.Type != "user" || raw.Message == nil {
-			continue
-		}
-		a.collectToolResults(raw.Message.Content, toolResults)
-	}
-	file.Close()
-
-	// Second pass: build messages with linked tool results
-	file, err = os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
 	var messages []adapter.Message
-	scanner = bufio.NewScanner(file)
+	// Track tool use locations for deferred result linking: toolUseID -> (message index, tool use index, content block index)
+	toolUseRefs := make(map[string]toolUseRef)
+
+	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 1024*1024), 10*1024*1024)
 
 	for scanner.Scan() {
@@ -200,8 +181,8 @@ func (a *Adapter) Messages(sessionID string) ([]adapter.Message, error) {
 			Model:     raw.Message.Model,
 		}
 
-		// Parse content with tool results linking
-		content, toolUses, thinkingBlocks, contentBlocks := a.parseContentWithResults(raw.Message.Content, toolResults)
+		// Parse content (no tool results linking yet)
+		content, toolUses, thinkingBlocks, contentBlocks := a.parseContentWithResults(raw.Message.Content, nil)
 		msg.Content = content
 		msg.ToolUses = toolUses
 		msg.ThinkingBlocks = thinkingBlocks
@@ -217,10 +198,85 @@ func (a *Adapter) Messages(sessionID string) ([]adapter.Message, error) {
 			}
 		}
 
+		msgIdx := len(messages)
 		messages = append(messages, msg)
+
+		// For assistant messages, track tool use references for later linking
+		if raw.Type == "assistant" {
+			for toolIdx, tu := range messages[msgIdx].ToolUses {
+				if tu.ID != "" {
+					toolUseRefs[tu.ID] = toolUseRef{msgIdx: msgIdx, toolIdx: toolIdx, contentIdx: -1}
+				}
+			}
+			// Also track in content blocks
+			for contentIdx, cb := range messages[msgIdx].ContentBlocks {
+				if cb.Type == "tool_use" && cb.ToolUseID != "" {
+					if ref, ok := toolUseRefs[cb.ToolUseID]; ok {
+						ref.contentIdx = contentIdx
+						toolUseRefs[cb.ToolUseID] = ref
+					}
+				}
+			}
+		}
+
+		// For user messages, link tool results to previously seen tool uses
+		if raw.Type == "user" {
+			a.linkToolResults(raw.Message.Content, messages, toolUseRefs)
+		}
 	}
 
 	return messages, scanner.Err()
+}
+
+// linkToolResults extracts tool_result blocks and links them to previously seen tool_use blocks.
+func (a *Adapter) linkToolResults(rawContent json.RawMessage, messages []adapter.Message, refs map[string]toolUseRef) {
+	if len(rawContent) == 0 {
+		return
+	}
+
+	var blocks []ContentBlock
+	if err := json.Unmarshal(rawContent, &blocks); err != nil {
+		return
+	}
+
+	for _, block := range blocks {
+		if block.Type != "tool_result" || block.ToolUseID == "" {
+			continue
+		}
+
+		ref, ok := refs[block.ToolUseID]
+		if !ok {
+			continue
+		}
+
+		// Extract result content
+		content := ""
+		if s, ok := block.Content.(string); ok {
+			content = s
+		} else if block.Content != nil {
+			if b, err := json.Marshal(block.Content); err == nil {
+				content = string(b)
+			}
+		}
+
+		// Update the tool use in the message
+		if ref.toolIdx >= 0 && ref.toolIdx < len(messages[ref.msgIdx].ToolUses) {
+			messages[ref.msgIdx].ToolUses[ref.toolIdx].Output = content
+		}
+
+		// Update the content block if tracked
+		if ref.contentIdx >= 0 && ref.contentIdx < len(messages[ref.msgIdx].ContentBlocks) {
+			messages[ref.msgIdx].ContentBlocks[ref.contentIdx].ToolOutput = content
+			messages[ref.msgIdx].ContentBlocks[ref.contentIdx].IsError = block.IsError
+		}
+	}
+}
+
+// toolUseRef tracks location of a tool use for deferred result linking.
+type toolUseRef struct {
+	msgIdx     int
+	toolIdx    int
+	contentIdx int
 }
 
 // toolResultInfo holds parsed tool result data.
@@ -476,10 +532,10 @@ func (a *Adapter) parseContentWithResults(rawContent json.RawMessage, toolResult
 		return "", nil, nil, nil
 	}
 
-	var texts []string
-	var toolUses []adapter.ToolUse
-	var thinkingBlocks []adapter.ThinkingBlock
-	var contentBlocks []adapter.ContentBlock
+	texts := make([]string, 0, len(blocks))
+	toolUses := make([]adapter.ToolUse, 0, len(blocks))
+	thinkingBlocks := make([]adapter.ThinkingBlock, 0, len(blocks))
+	contentBlocks := make([]adapter.ContentBlock, 0, len(blocks))
 	toolResultCount := 0
 
 	for _, block := range blocks {

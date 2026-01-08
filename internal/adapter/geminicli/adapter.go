@@ -21,14 +21,16 @@ const (
 
 // Adapter implements the adapter.Adapter interface for Gemini CLI sessions.
 type Adapter struct {
-	tmpDir string
+	tmpDir       string
+	sessionIndex map[string]string // sessionID -> file path cache
 }
 
 // New creates a new Gemini CLI adapter.
 func New() *Adapter {
 	home, _ := os.UserHomeDir()
 	return &Adapter{
-		tmpDir: filepath.Join(home, ".gemini", "tmp"),
+		tmpDir:       filepath.Join(home, ".gemini", "tmp"),
+		sessionIndex: make(map[string]string),
 	}
 }
 
@@ -81,7 +83,9 @@ func (a *Adapter) Sessions(projectRoot string) ([]adapter.Session, error) {
 		return nil, err
 	}
 
-	var sessions []adapter.Session
+	sessions := make([]adapter.Session, 0, len(entries))
+	// Reset cache on full session enumeration
+	a.sessionIndex = make(map[string]string)
 	for _, e := range entries {
 		if !strings.HasPrefix(e.Name(), "session-") || !strings.HasSuffix(e.Name(), ".json") {
 			continue
@@ -92,6 +96,9 @@ func (a *Adapter) Sessions(projectRoot string) ([]adapter.Session, error) {
 		if err != nil {
 			continue
 		}
+
+		// Cache session path for fast lookup
+		a.sessionIndex[meta.SessionID] = path
 
 		// Use first user message as name, fallback to short ID
 		name := ""
@@ -251,6 +258,12 @@ func (a *Adapter) chatsDir(projectRoot string) string {
 
 // sessionFilePath finds the session file for a given session ID.
 func (a *Adapter) sessionFilePath(sessionID string) string {
+	// Check cache first
+	if path, ok := a.sessionIndex[sessionID]; ok {
+		return path
+	}
+
+	// Fallback: scan all project directories
 	entries, err := os.ReadDir(a.tmpDir)
 	if err != nil {
 		return ""
@@ -275,6 +288,11 @@ func (a *Adapter) sessionFilePath(sessionID string) string {
 				continue
 			}
 			if session.SessionID == sessionID {
+				// Cache for future lookups
+				if a.sessionIndex == nil {
+					a.sessionIndex = make(map[string]string)
+				}
+				a.sessionIndex[sessionID] = path
 				return path
 			}
 		}

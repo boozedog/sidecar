@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -26,6 +27,8 @@ const (
 type Adapter struct {
 	dbPath       string
 	sessionIndex map[string]struct{} // tracks known conversation IDs
+	db           *sql.DB             // persistent connection
+	dbMu         sync.Mutex          // protects db access
 }
 
 // New creates a new Warp adapter.
@@ -69,11 +72,10 @@ func (a *Adapter) Detect(projectRoot string) (bool, error) {
 		return false, err
 	}
 
-	db, err := a.openDB()
+	db, err := a.getDB()
 	if err != nil {
 		return false, nil // DB exists but can't open - not an error, just not detected
 	}
-	defer db.Close()
 
 	// Check for ai_queries matching this project
 	query := `
@@ -98,11 +100,10 @@ func (a *Adapter) Detect(projectRoot string) (bool, error) {
 
 // Sessions returns all sessions for the given project, sorted by update time.
 func (a *Adapter) Sessions(projectRoot string) ([]adapter.Session, error) {
-	db, err := a.openDB()
+	db, err := a.getDB()
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
 	projectAbs := resolveProjectPath(projectRoot)
 	pattern := projectAbs + "%"
@@ -214,11 +215,10 @@ func (a *Adapter) Sessions(projectRoot string) ([]adapter.Session, error) {
 
 // Messages returns all messages for the given session.
 func (a *Adapter) Messages(sessionID string) ([]adapter.Message, error) {
-	db, err := a.openDB()
+	db, err := a.getDB()
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
 	var messages []adapter.Message
 
@@ -359,11 +359,10 @@ func (a *Adapter) Messages(sessionID string) ([]adapter.Message, error) {
 
 // Usage returns aggregate usage stats for the given session.
 func (a *Adapter) Usage(sessionID string) (*adapter.UsageStats, error) {
-	db, err := a.openDB()
+	db, err := a.getDB()
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
 	// Get conversation_data from agent_conversations
 	query := `SELECT conversation_data FROM agent_conversations WHERE conversation_id = ?`
@@ -414,11 +413,47 @@ func (a *Adapter) Watch(projectRoot string) (<-chan adapter.Event, error) {
 	return NewWatcher(a.dbPath)
 }
 
-// openDB opens the Warp SQLite database in read-only mode.
-func (a *Adapter) openDB() (*sql.DB, error) {
-	// Use read-only mode and WAL mode for safe concurrent access
+// getDB returns a persistent database connection, creating one if needed.
+func (a *Adapter) getDB() (*sql.DB, error) {
+	a.dbMu.Lock()
+	defer a.dbMu.Unlock()
+
+	if a.db != nil {
+		// Verify connection is still alive
+		if err := a.db.Ping(); err == nil {
+			return a.db, nil
+		}
+		// Connection dead, close and recreate
+		a.db.Close()
+		a.db = nil
+	}
+
+	// Open new connection with read-only mode and WAL mode
 	connStr := a.dbPath + "?mode=ro&_journal_mode=WAL"
-	return sql.Open("sqlite3", connStr)
+	db, err := sql.Open("sqlite3", connStr)
+	if err != nil {
+		return nil, err
+	}
+
+	// Configure connection pool for single connection
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
+	a.db = db
+	return a.db, nil
+}
+
+// Close closes the persistent database connection.
+func (a *Adapter) Close() error {
+	a.dbMu.Lock()
+	defer a.dbMu.Unlock()
+
+	if a.db != nil {
+		err := a.db.Close()
+		a.db = nil
+		return err
+	}
+	return nil
 }
 
 // resolveProjectPath returns the absolute, symlink-resolved path.

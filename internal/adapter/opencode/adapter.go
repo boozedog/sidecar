@@ -100,7 +100,7 @@ func (a *Adapter) Sessions(projectRoot string) ([]adapter.Session, error) {
 		return nil, err
 	}
 
-	var sessions []adapter.Session
+	sessions := make([]adapter.Session, 0, len(entries))
 	a.sessionIndex = make(map[string]string)
 
 	for _, e := range entries {

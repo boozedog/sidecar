@@ -77,7 +77,7 @@ func (a *Adapter) Sessions(projectRoot string) ([]adapter.Session, error) {
 		return nil, err
 	}
 
-	sessions := []adapter.Session{}
+	sessions := make([]adapter.Session, 0, len(files))
 	a.sessionIndex = make(map[string]string)
 	for _, path := range files {
 		meta, err := a.parseSessionMetadata(path)
