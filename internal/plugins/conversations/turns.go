@@ -7,6 +7,9 @@ import (
 	"github.com/marcus/sidecar/internal/adapter"
 )
 
+// xmlTagRegex is pre-compiled for performance in hot path (called per turn on render)
+var xmlTagRegex = regexp.MustCompile(`<[^>]+>`)
+
 // Turn represents a sequence of consecutive messages from the same role.
 // In Claude Code, a single "turn" may contain multiple JSONL messages:
 // - User turn: system reminders, command output, actual user text
@@ -65,9 +68,8 @@ func stripXMLTags(s string) string {
 	if start >= 0 && end > start {
 		return strings.TrimSpace(s[start+len("<user_query>") : end])
 	}
-	// Remove all XML tags
-	re := regexp.MustCompile(`<[^>]+>`)
-	return strings.TrimSpace(re.ReplaceAllString(s, ""))
+	// Remove all XML tags (using pre-compiled regex for performance)
+	return strings.TrimSpace(xmlTagRegex.ReplaceAllString(s, ""))
 }
 
 // GroupMessagesIntoTurns groups consecutive messages by role into turns.

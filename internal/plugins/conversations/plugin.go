@@ -293,11 +293,16 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		return p, p.listenForWatchEvents()
 
 	case WatchEventMsg:
-		// Session data changed, refresh and continue listening
-		return p, tea.Batch(
+		// Session data changed, refresh sessions and continue listening
+		cmds := []tea.Cmd{
 			p.loadSessions(),
 			p.listenForWatchEvents(),
-		)
+		}
+		// Only reload messages if the modified session is currently selected
+		if msg.SessionID != "" && msg.SessionID == p.selectedSession {
+			cmds = append(cmds, p.loadMessages(p.selectedSession))
+		}
+		return p, tea.Batch(cmds...)
 
 	case tea.WindowSizeMsg:
 		p.width = msg.Width
@@ -1096,12 +1101,12 @@ func (p *Plugin) listenForWatchEvents() tea.Cmd {
 		return nil
 	}
 	return func() tea.Msg {
-		_, ok := <-p.watchChan
+		evt, ok := <-p.watchChan
 		if !ok {
 			// Channel closed
 			return nil
 		}
-		return WatchEventMsg{}
+		return WatchEventMsg{SessionID: evt.SessionID}
 	}
 }
 
@@ -1407,7 +1412,9 @@ type MessagesLoadedMsg struct {
 	Messages []adapter.Message
 }
 
-type WatchEventMsg struct{}
+type WatchEventMsg struct {
+	SessionID string // ID of the session that changed (empty for periodic refresh)
+}
 type WatchStartedMsg struct {
 	Channel <-chan adapter.Event
 }

@@ -168,6 +168,74 @@ import (
 - Usage() matches message totals
 - Watch() emits create/write events (if supported)
 
+## Performance Best Practices
+
+The `Sessions()` method is called frequently (on every watch event). Poorly optimized adapters can cause CPU spikes during active AI sessions.
+
+### Cache within Sessions()
+
+Avoid parsing the same data multiple times within a single `Sessions()` call:
+
+```go
+// BAD: Parses messages twice per session
+func (a *Adapter) Sessions(projectRoot string) ([]adapter.Session, error) {
+    for _, entry := range entries {
+        msgCount := a.countMessages(path)      // parses all messages
+        firstMsg := a.getFirstUserMessage(path) // parses again!
+    }
+}
+
+// GOOD: Parse once, extract multiple values
+func (a *Adapter) Sessions(projectRoot string) ([]adapter.Session, error) {
+    for _, entry := range entries {
+        messages, _ := a.parseMessages(path)
+        msgCount := len(messages)
+        firstMsg := extractFirstUserMessage(messages)
+    }
+}
+```
+
+### Pre-compile Regexes
+
+Regex compilation is expensive. For any regex used in rendering or message parsing, compile once at package level:
+
+```go
+// BAD: Compiles on every call
+func stripTags(s string) string {
+    re := regexp.MustCompile(`<[^>]+>`)
+    return re.ReplaceAllString(s, "")
+}
+
+// GOOD: Compile once at package level
+var tagRegex = regexp.MustCompile(`<[^>]+>`)
+
+func stripTags(s string) string {
+    return tagRegex.ReplaceAllString(s, "")
+}
+```
+
+### Watch Event Efficiency
+
+When implementing `Watch()`:
+1. Include `SessionID` in emitted events so consumers can do targeted refreshes
+2. Use adequate debounce (100-200ms) to coalesce rapid writes
+3. Consider file modification time checks to avoid spurious events
+
+```go
+// Emit events with SessionID for targeted refresh
+events <- adapter.Event{
+    Type:      adapter.EventMessageAdded,
+    SessionID: sessionID,  // enables smart refresh
+}
+```
+
+### Avoid Blocking I/O in Hot Paths
+
+The `Messages()` method may be called frequently when a session is selected:
+- Consider caching parsed messages with TTL or invalidation on watch events
+- Use read-only SQLite mode (`?mode=ro`) to avoid lock contention
+- Avoid repeated directory scans; cache session-to-path mappings
+
 ## Minimal Skeleton
 
 ```go

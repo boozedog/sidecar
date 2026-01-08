@@ -122,11 +122,16 @@ func (a *Adapter) Sessions(projectRoot string) ([]adapter.Session, error) {
 			updatedAt = info.ModTime()
 		}
 
-		// Count messages by traversing blobs
-		msgCount := a.countMessages(dbPath)
-
-		// Get first user message for title
-		firstUserMsg := a.getFirstUserMessage(dbPath)
+		// Parse messages once and extract count + first user message
+		messages, _ := a.parseMessages(dbPath)
+		msgCount := len(messages)
+		firstUserMsg := ""
+		for _, msg := range messages {
+			if msg.Role == "user" && msg.Content != "" {
+				firstUserMsg = msg.Content
+				break
+			}
+		}
 
 		// Use first user message as name if meta.Name is empty or "New Agent"
 		name := meta.Name
@@ -239,25 +244,6 @@ func (a *Adapter) readSessionMeta(dbPath string) (*SessionMeta, error) {
 	return &meta, nil
 }
 
-// countMessages counts user/assistant messages in a session by traversing blobs.
-func (a *Adapter) countMessages(dbPath string) int {
-	messages, _ := a.parseMessages(dbPath)
-	return len(messages)
-}
-
-// getFirstUserMessage returns the content of the first user message in the session.
-func (a *Adapter) getFirstUserMessage(dbPath string) string {
-	messages, err := a.parseMessages(dbPath)
-	if err != nil {
-		return ""
-	}
-	for _, msg := range messages {
-		if msg.Role == "user" && msg.Content != "" {
-			return msg.Content
-		}
-	}
-	return ""
-}
 
 // findSessionDB finds the store.db path for a given session ID.
 func (a *Adapter) findSessionDB(sessionID string) string {
