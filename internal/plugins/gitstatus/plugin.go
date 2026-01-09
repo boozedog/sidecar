@@ -335,11 +335,37 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		return p, nil
 
 	case RecentCommitsLoadedMsg:
-		p.recentCommits = msg.Commits
+		if msg.Commits == nil {
+			if msg.PushStatus != nil {
+				p.pushStatus = msg.PushStatus
+				PopulatePushStatus(p.recentCommits, p.pushStatus)
+			}
+			return p, nil
+		}
+
+		prevCommitHash := ""
+		if !p.historyFilterActive && p.cursorOnCommit() {
+			commits := p.activeCommits()
+			commitIdx := p.selectedCommitIndex()
+			if commitIdx >= 0 && commitIdx < len(commits) {
+				prevCommitHash = commits[commitIdx].Hash
+			}
+		}
+
+		p.recentCommits = mergeRecentCommits(p.recentCommits, msg.Commits)
 		p.pushStatus = msg.PushStatus
+		PopulatePushStatus(p.recentCommits, p.pushStatus)
 		// Recompute graph for new commits
-		if p.showCommitGraph && len(msg.Commits) > 0 {
-			p.commitGraphLines = ComputeGraphForCommits(msg.Commits)
+		if p.showCommitGraph && len(p.recentCommits) > 0 {
+			p.commitGraphLines = ComputeGraphForCommits(p.recentCommits)
+		}
+		if prevCommitHash != "" {
+			if idx := indexOfCommitHash(p.recentCommits, prevCommitHash); idx >= 0 {
+				p.cursor = len(p.tree.AllEntries()) + idx
+			}
+		}
+		if !p.historyFilterActive {
+			p.clampCommitScroll()
 		}
 		// Clamp cursor to valid range if commits changed
 		maxCursor := p.totalSelectableItems() - 1
@@ -575,9 +601,10 @@ func (p *Plugin) updateStatus(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 			if p.cursorOnCommit() {
 				commitIdx := p.selectedCommitIndex()
 				p.ensureCommitVisible(commitIdx)
-				// Trigger load-more when within 3 commits of end
+				// Trigger load-more when within 3 commits of end (only for unfiltered view)
 				var loadMoreCmd tea.Cmd
-				if commitIdx >= len(p.recentCommits)-3 && !p.loadingMoreCommits {
+				commits := p.activeCommits()
+				if !p.historyFilterActive && commitIdx >= len(commits)-3 && !p.loadingMoreCommits {
 					loadMoreCmd = p.loadMoreCommits()
 				}
 				return p, tea.Batch(p.autoLoadCommitPreview(), loadMoreCmd)
@@ -1495,10 +1522,155 @@ func (p *Plugin) ensureCursorVisible() {
 
 // visibleCommitCount returns how many commits can display in the sidebar.
 func (p *Plugin) visibleCommitCount() int {
-	// Estimate available height for commits section
-	// Sidebar height - files area - section headers - borders
-	filesHeight := len(p.tree.AllEntries()) + 6 // entries + headers + spacing
-	available := p.height - filesHeight - 4     // borders, commit header
+	// paneHeight = p.height - 2 (borders)
+	// innerHeight = paneHeight - 2 (header)
+	paneHeight := p.height - 2
+	if paneHeight < 4 {
+		paneHeight = 4
+	}
+	innerHeight := paneHeight - 2
+	if innerHeight < 1 {
+		innerHeight = 1
+	}
+
+	return p.commitSectionCapacity(innerHeight)
+}
+
+func mergeRecentCommits(existing, latest []*Commit) []*Commit {
+	if len(latest) == 0 {
+		return existing
+	}
+	if len(existing) <= len(latest) {
+		return latest
+	}
+
+	seen := make(map[string]struct{}, len(latest))
+	merged := make([]*Commit, 0, len(existing)+len(latest))
+	for _, c := range latest {
+		if c == nil {
+			continue
+		}
+		seen[c.Hash] = struct{}{}
+		merged = append(merged, c)
+	}
+	for _, c := range existing {
+		if c == nil {
+			continue
+		}
+		if _, ok := seen[c.Hash]; ok {
+			continue
+		}
+		merged = append(merged, c)
+	}
+	return merged
+}
+
+func indexOfCommitHash(commits []*Commit, hash string) int {
+	for i, c := range commits {
+		if c != nil && c.Hash == hash {
+			return i
+		}
+	}
+	return -1
+}
+
+func (p *Plugin) clampCommitScroll() {
+	visibleCommits := p.visibleCommitCount()
+	if visibleCommits < 1 {
+		visibleCommits = 1
+	}
+	maxOff := len(p.recentCommits) - visibleCommits
+	if maxOff < 0 {
+		maxOff = 0
+	}
+	if p.commitScrollOff < 0 {
+		p.commitScrollOff = 0
+	}
+	if p.commitScrollOff > maxOff {
+		p.commitScrollOff = maxOff
+	}
+}
+
+// commitSectionCapacity returns how many commits can display in the sidebar
+// given the current layout and inner height.
+func (p *Plugin) commitSectionCapacity(visibleHeight int) int {
+	// visibleHeight already excludes the "Files" header lines.
+	linesUsed := 0
+
+	entries := p.tree.AllEntries()
+	if len(entries) == 0 {
+		// "Working tree clean"
+		linesUsed++
+	} else {
+		// Reserve space for commits when files are present (match renderSidebar)
+		commitsReserve := 5
+		if len(p.recentCommits) > 3 {
+			commitsReserve = 6
+		}
+		filesHeight := visibleHeight - commitsReserve - 2 // -2 for section headers
+		if filesHeight < 3 {
+			filesHeight = 3
+		}
+
+		lineNum := 0
+		if len(p.tree.Staged) > 0 && lineNum < filesHeight {
+			lineNum++ // section header
+			for range p.tree.Staged {
+				if lineNum >= filesHeight {
+					break
+				}
+				lineNum++
+			}
+		}
+		if len(p.tree.Modified) > 0 && lineNum < filesHeight {
+			if len(p.tree.Staged) > 0 {
+				if lineNum < filesHeight {
+					lineNum++ // blank line between sections
+				}
+			}
+			if lineNum < filesHeight {
+				lineNum++ // section header
+			}
+			for range p.tree.Modified {
+				if lineNum >= filesHeight {
+					break
+				}
+				lineNum++
+			}
+		}
+		if len(p.tree.Untracked) > 0 && lineNum < filesHeight {
+			if len(p.tree.Staged) > 0 || len(p.tree.Modified) > 0 {
+				if lineNum < filesHeight {
+					lineNum++ // blank line between sections
+				}
+			}
+			if lineNum < filesHeight {
+				lineNum++ // section header
+			}
+			for range p.tree.Untracked {
+				if lineNum >= filesHeight {
+					break
+				}
+				lineNum++
+			}
+		}
+		linesUsed += lineNum
+	}
+
+	// Separator (blank line + separator line)
+	linesUsed += 2
+
+	// Remote operation status line if present
+	if p.pushInProgress || p.fetchInProgress || p.pullInProgress ||
+		p.pushSuccess || p.fetchSuccess || p.pullSuccess ||
+		p.pushError != "" || p.fetchError != "" || p.pullError != "" {
+		linesUsed++
+	}
+
+	// Commit header
+	linesUsed += 1
+
+	available := visibleHeight - linesUsed
 	if available < 2 {
 		available = 2
 	}
@@ -1506,27 +1678,42 @@ func (p *Plugin) visibleCommitCount() int {
 }
 
 // ensureCommitVisible adjusts commitScrollOff to keep selected commit visible.
-// commitIdx is the absolute index into recentCommits.
+// commitIdx is the absolute index into activeCommits.
 func (p *Plugin) ensureCommitVisible(commitIdx int) {
-	visibleCommits := p.visibleCommitCount()
-
-	if commitIdx < p.commitScrollOff {
-		p.commitScrollOff = commitIdx
+	commits := p.activeCommits()
+	if len(commits) == 0 {
+		p.commitScrollOff = 0
+		return
 	}
-	if commitIdx >= p.commitScrollOff+visibleCommits {
+
+	// Use a conservative estimate for visible commits
+	visibleCommits := p.visibleCommitCount()
+	if visibleCommits < 1 {
+		visibleCommits = 1
+	}
+
+	// Only adjust scroll if absolutely necessary
+	if commitIdx < p.commitScrollOff {
+		// Commit is above visible area - scroll up to show it at top
+		p.commitScrollOff = commitIdx
+	} else if commitIdx >= p.commitScrollOff+visibleCommits {
+		// Commit is below visible area - scroll down minimally
 		p.commitScrollOff = commitIdx - visibleCommits + 1
 	}
+	// If commit is within visible range, don't adjust scroll at all
 
-	// Clamp to valid range
-	maxOff := len(p.recentCommits) - visibleCommits
+	// Clamp scroll offset to valid range
+	if p.commitScrollOff < 0 {
+		p.commitScrollOff = 0
+	}
+	// Ensure we don't scroll past where we'd have empty rows
+	// This is the key: maxOff ensures the visible area is always filled
+	maxOff := len(commits) - visibleCommits
 	if maxOff < 0 {
 		maxOff = 0
 	}
 	if p.commitScrollOff > maxOff {
 		p.commitScrollOff = maxOff
-	}
-	if p.commitScrollOff < 0 {
-		p.commitScrollOff = 0
 	}
 }
 

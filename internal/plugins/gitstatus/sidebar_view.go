@@ -155,6 +155,7 @@ func (p *Plugin) renderSidebar(visibleHeight int) string {
 	entries := p.tree.AllEntries()
 	if len(entries) == 0 {
 		sb.WriteString(styles.Muted.Render("Working tree clean"))
+		currentY++
 	} else {
 		// Calculate space for files vs commits
 		// Reserve ~30% for commits section (min 4 lines for header + 2-3 commits)
@@ -260,11 +261,7 @@ func (p *Plugin) renderSidebar(visibleHeight int) string {
 	}
 
 	// Recent commits section
-	// Calculate available height for commits (remaining space minus header line)
-	commitsAvailable := visibleHeight - currentY + 3 - 1 // +3 to account for initial offset, -1 for header
-	if commitsAvailable < 2 {
-		commitsAvailable = 2
-	}
+	commitsAvailable := p.commitSectionCapacity(visibleHeight)
 	sb.WriteString(p.renderRecentCommits(&currentY, commitsAvailable))
 
 	return sb.String()
@@ -447,16 +444,18 @@ func (p *Plugin) renderRecentCommits(currentY *int, maxVisible int) string {
 
 	// Calculate visible range based on scroll offset
 	startIdx := p.commitScrollOff
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	if startIdx >= len(commits) {
+		startIdx = len(commits) - 1
+		if startIdx < 0 {
+			startIdx = 0
+		}
+	}
 	endIdx := startIdx + maxVisible
 	if endIdx > len(commits) {
 		endIdx = len(commits)
-	}
-	if startIdx >= len(commits) {
-		startIdx = 0
-		endIdx = maxVisible
-		if endIdx > len(commits) {
-			endIdx = len(commits)
-		}
 	}
 
 	for i := startIdx; i < endIdx; i++ {
@@ -480,21 +479,11 @@ func (p *Plugin) renderRecentCommits(currentY *int, maxVisible int) string {
 			indicator = "  " // Two spaces to align with indicator
 		}
 
-		// Format stats: "+N -M" (only show if stats loaded, i.e., selected at some point)
-		var statsStr string
-		var statsWidth int
-		if commit.Stats.Additions > 0 || commit.Stats.Deletions > 0 {
-			statsStr = fmt.Sprintf("+%d -%d", commit.Stats.Additions, commit.Stats.Deletions)
-			statsWidth = len(statsStr) + 1 // +1 for space
-		}
-
-		// Format: "[graph] ↑ abc1234 commit message... +N -M"
+		// Format: "[graph] ↑ abc1234 commit message..."
 		hash := styles.Code.Render(commit.Hash[:7])
-		msgWidth := maxWidth - 12 - statsWidth - graphVisualWidth // indicator + hash + space + stats + graph
+		msgWidth := maxWidth - 12 - graphVisualWidth // indicator + hash + space + graph
 		if msgWidth < 10 {
 			msgWidth = 10
-			statsStr = "" // Not enough room for stats
-			statsWidth = 0
 		}
 		msg := commit.Subject
 		if len(msg) > msgWidth && msgWidth > 3 {
@@ -515,25 +504,14 @@ func (p *Plugin) renderRecentCommits(currentY *int, maxVisible int) string {
 				graphPlain = p.renderGraphLinePlain(p.commitGraphLines[i], graphWidth)
 			}
 			plainLine := fmt.Sprintf("%s%s%s %s", graphPlain, plainIndicator, commit.Hash[:7], msg)
-			// Pad and add stats at end
-			if statsStr != "" {
-				padding := maxWidth - len(plainLine) - len(statsStr)
-				if padding > 0 {
-					plainLine += strings.Repeat(" ", padding) + statsStr
-				}
-			} else if len(plainLine) < maxWidth {
-				plainLine += strings.Repeat(" ", maxWidth-len(plainLine))
+			// Pad to full width
+			lineWidth := lipgloss.Width(plainLine)
+			if lineWidth < maxWidth {
+				plainLine += strings.Repeat(" ", maxWidth-lineWidth)
 			}
 			sb.WriteString(styles.ListItemSelected.Render(plainLine))
 		} else {
 			line := fmt.Sprintf("%s%s%s %s", graphStr, indicator, hash, msg)
-			if statsStr != "" {
-				// Add stats in muted style
-				padding := maxWidth - len(stripAnsi(line)) - len(statsStr)
-				if padding > 0 {
-					line += strings.Repeat(" ", padding) + styles.Muted.Render(statsStr)
-				}
-			}
 			sb.WriteString(styles.ListItemNormal.Render(line))
 		}
 		*currentY++
@@ -875,28 +853,6 @@ func (p *Plugin) renderCommitPreviewFile(file CommitFile, selected bool, maxWidt
 	}
 
 	return styles.ListItemNormal.Render(fmt.Sprintf("%s %s", status, path))
-}
-
-// stripAnsi removes ANSI escape codes from a string for length calculation.
-func stripAnsi(s string) string {
-	var result strings.Builder
-	i := 0
-	for i < len(s) {
-		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
-			// Skip until we hit a letter (end of ANSI sequence)
-			j := i + 2
-			for j < len(s) && !((s[j] >= 'A' && s[j] <= 'Z') || (s[j] >= 'a' && s[j] <= 'z')) {
-				j++
-			}
-			if j < len(s) {
-				i = j + 1
-				continue
-			}
-		}
-		result.WriteByte(s[i])
-		i++
-	}
-	return result.String()
 }
 
 // truncateStr truncates a string to maxLen characters with ellipsis.
