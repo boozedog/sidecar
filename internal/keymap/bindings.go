@@ -55,6 +55,7 @@ func DefaultBindings() []Binding {
 		{Key: "F", Command: "clear-filter", Context: "git-status-commits"},
 		{Key: "n", Command: "next-match", Context: "git-status-commits"},
 		{Key: "N", Command: "prev-match", Context: "git-status-commits"},
+		{Key: "v", Command: "toggle-graph", Context: "git-status-commits"},
 
 		// Git commit preview context (commit preview in right pane)
 		{Key: "esc", Command: "back", Context: "git-commit-preview"},

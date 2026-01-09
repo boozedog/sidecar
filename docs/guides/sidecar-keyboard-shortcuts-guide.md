@@ -250,6 +250,22 @@ Each plugin returns a context string that determines which bindings are active.
 | `git-history` | History view | Commit history |
 | `git-commit-detail` | Commit detail | Single commit view |
 
+#### Git Status Commit List Shortcuts
+| Key | Command | Description |
+|-----|---------|-------------|
+| `enter` | view-commit | Open commit details |
+| `d` | view-commit | Open commit details |
+| `h` | show-history | Open history view |
+| `y` | yank-commit | Copy commit as markdown |
+| `Y` | yank-id | Copy commit hash |
+| `/` | search-history | Search commit messages |
+| `f` | filter-author | Filter by author |
+| `p` | filter-path | Filter by path |
+| `F` | clear-filter | Clear history filters |
+| `n` | next-match | Next search match |
+| `N` | prev-match | Previous search match |
+| `v` | toggle-graph | Toggle commit graph (tree view) |
+
 ### File Browser Plugin
 | Context | View | Description |
 |---------|------|-------------|
