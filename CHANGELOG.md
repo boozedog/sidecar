@@ -1,6 +1,20 @@
 # Changelog
 
 All notable changes to sidecar are documented here.
+## [v0.13.0] - 2026-01-10
+
+### Features
+- **Git Graph View**: Visualize commit history as ASCII graph with `g` key toggle
+- **Improved Git List View**: Better commit display with cleaner formatting
+
+### Improvements
+- Git sidebar UI refinements and polish
+- Updated modal creator guide documentation
+
+### Bug Fixes
+- Fixed conversations plugin rendering issues
+- Various conversations plugin stability fixes
+
 ## [v0.12.1] - 2026-01-08
 
 ### Bug Fixes
