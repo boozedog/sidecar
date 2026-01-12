@@ -492,8 +492,25 @@ func extractToolCommand(toolName, input string, maxLen int) string {
 
 // renderTwoPane renders the two-pane layout with sessions on the left and messages on the right.
 func (p *Plugin) renderTwoPane() string {
-	// Clear hit regions for fresh registration
-	p.mouseHandler.HitMap.Clear()
+	// Check if hit regions need rebuilding (td-ea784b03)
+	// Mark dirty if dimensions or scroll positions changed
+	if p.width != p.prevWidth || p.height != p.prevHeight {
+		p.hitRegionsDirty = true
+		p.prevWidth = p.width
+		p.prevHeight = p.height
+	}
+	if p.scrollOff != p.prevScrollOff {
+		p.hitRegionsDirty = true
+		p.prevScrollOff = p.scrollOff
+	}
+	if p.messageScroll != p.prevMsgScroll {
+		p.hitRegionsDirty = true
+		p.prevMsgScroll = p.messageScroll
+	}
+	if p.turnScrollOff != p.prevTurnScroll {
+		p.hitRegionsDirty = true
+		p.prevTurnScroll = p.turnScrollOff
+	}
 
 	// Calculate pane widths - account for borders (2 per pane = 4 total) plus gap and divider
 	available := p.width - 5 - dividerWidth
@@ -555,22 +572,30 @@ func (p *Plugin) renderTwoPane() string {
 		Height(paneHeight).
 		Render(mainContent)
 
-	// Register hit regions (order matters: last = highest priority)
-	// Sidebar region - lowest priority fallback
-	p.mouseHandler.HitMap.AddRect(regionSidebar, 0, 0, sidebarWidth, p.height, nil)
-	// Main pane region (after divider) - medium priority
+	// Only rebuild hit regions when dirty (td-ea784b03)
 	mainX := sidebarWidth + dividerWidth
-	p.mouseHandler.HitMap.AddRect(regionMainPane, mainX, 0, mainWidth, p.height, nil)
-	// Divider region - HIGH PRIORITY (registered after panes so it wins in overlap)
-	dividerX := sidebarWidth
-	dividerHitWidth := 3
-	p.mouseHandler.HitMap.AddRect(regionPaneDivider, dividerX, 0, dividerHitWidth, p.height, nil)
+	if p.hitRegionsDirty {
+		// Clear and re-register hit regions
+		p.mouseHandler.HitMap.Clear()
 
-	// Session item regions - HIGH PRIORITY
-	p.registerSessionHitRegions(sidebarWidth, innerHeight)
+		// Register hit regions (order matters: last = highest priority)
+		// Sidebar region - lowest priority fallback
+		p.mouseHandler.HitMap.AddRect(regionSidebar, 0, 0, sidebarWidth, p.height, nil)
+		// Main pane region (after divider) - medium priority
+		p.mouseHandler.HitMap.AddRect(regionMainPane, mainX, 0, mainWidth, p.height, nil)
+		// Divider region - HIGH PRIORITY (registered after panes so it wins in overlap)
+		dividerX := sidebarWidth
+		dividerHitWidth := 3
+		p.mouseHandler.HitMap.AddRect(regionPaneDivider, dividerX, 0, dividerHitWidth, p.height, nil)
 
-	// Turn item regions - HIGHEST PRIORITY (registered last)
-	p.registerTurnHitRegions(mainX+1, mainWidth-2, innerHeight)
+		// Session item regions - HIGH PRIORITY
+		p.registerSessionHitRegions(sidebarWidth, innerHeight)
+
+		// Turn item regions - HIGHEST PRIORITY (registered last)
+		p.registerTurnHitRegions(mainX+1, mainWidth-2, innerHeight)
+
+		p.hitRegionsDirty = false
+	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftPane, divider, rightPane)
 }
@@ -1067,6 +1092,30 @@ func (p *Plugin) renderMainPane(paneWidth, height int) string {
 		}
 	}
 
+	// Pagination indicator (td-313ea851)
+	if p.totalMessages > maxMessagesInMemory {
+		startIdx := p.totalMessages - p.messageOffset - len(p.messages) + 1
+		endIdx := p.totalMessages - p.messageOffset
+		if startIdx < 1 {
+			startIdx = 1
+		}
+		pageInfo := fmt.Sprintf("Showing %d-%d of %d messages", startIdx, endIdx, p.totalMessages)
+		if p.hasOlderMsgs {
+			pageInfo += " [p:older"
+			if p.messageOffset > 0 {
+				pageInfo += " n:newer"
+			}
+			pageInfo += "]"
+		} else if p.messageOffset > 0 {
+			pageInfo += " [n:newer]"
+		}
+		if len(pageInfo) > contentWidth {
+			pageInfo = pageInfo[:contentWidth-3] + "..."
+		}
+		sb.WriteString(styles.StatusModified.Render(pageInfo))
+		sb.WriteString("\n")
+	}
+
 	sepWidth := contentWidth
 	if sepWidth > 60 {
 		sepWidth = 60
@@ -1075,6 +1124,10 @@ func (p *Plugin) renderMainPane(paneWidth, height int) string {
 	sb.WriteString("\n")
 
 	contentHeight := height - 4 // Account for header lines
+	// Adjust for pagination indicator if visible (td-313ea851)
+	if p.totalMessages > maxMessagesInMemory {
+		contentHeight--
+	}
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
@@ -1627,6 +1680,7 @@ func (p *Plugin) renderContentBlocks(msg adapter.Message, maxWidth int) []string
 }
 
 // renderMessageContent renders text content with expand/collapse for long messages.
+// Uses render cache (td-8910b218) to avoid re-rendering unchanged content.
 func (p *Plugin) renderMessageContent(content string, msgID string, maxWidth int) []string {
 	if content == "" {
 		return nil
@@ -1638,31 +1692,47 @@ func (p *Plugin) renderMessageContent(content string, msgID string, maxWidth int
 
 	expanded := p.expandedMessages[msgID]
 
+	// Check cache (td-8910b218)
+	if cached, ok := p.getCachedRender(msgID, maxWidth, expanded); ok {
+		return strings.Split(cached, "\n")
+	}
+
+	var result []string
 	if isShort || expanded {
 		// Show full content
-		return p.renderContent(content, maxWidth)
+		result = p.renderContent(content, maxWidth)
+	} else {
+		// Collapsed: show preview with toggle hint
+		preview := content
+		if len(preview) > CollapsedPreviewChars {
+			preview = preview[:CollapsedPreviewChars]
+		}
+		// Clean up preview (no partial lines)
+		preview = strings.ReplaceAll(preview, "\n", " ")
+		preview = strings.TrimSpace(preview)
+		if len(preview) < len(content) {
+			preview += "..."
+		}
+		result = wrapText(preview, maxWidth)
 	}
 
-	// Collapsed: show preview with toggle hint
-	preview := content
-	if len(preview) > CollapsedPreviewChars {
-		preview = preview[:CollapsedPreviewChars]
-	}
-	// Clean up preview (no partial lines)
-	preview = strings.ReplaceAll(preview, "\n", " ")
-	preview = strings.TrimSpace(preview)
-	if len(preview) < len(content) {
-		preview += "..."
-	}
-
-	return wrapText(preview, maxWidth)
+	// Store in cache (td-8910b218)
+	p.setCachedRender(msgID, maxWidth, expanded, strings.Join(result, "\n"))
+	return result
 }
 
 // renderThinkingBlock renders a thinking block (collapsed by default).
+// Uses render cache (td-8910b218) to avoid re-rendering unchanged content.
 func (p *Plugin) renderThinkingBlock(block adapter.ContentBlock, msgID string, maxWidth int) []string {
-	var lines []string
-
 	expanded := p.expandedThinking[msgID]
+
+	// Use cache key with "thinking_" prefix to distinguish from content cache
+	thinkingCacheID := "thinking_" + msgID
+	if cached, ok := p.getCachedRender(thinkingCacheID, maxWidth, expanded); ok {
+		return strings.Split(cached, "\n")
+	}
+
+	var lines []string
 
 	// Header with token count
 	headerText := fmt.Sprintf("[thinking] %s tokens", formatK(block.TokenCount))
@@ -1676,6 +1746,8 @@ func (p *Plugin) renderThinkingBlock(block adapter.ContentBlock, msgID string, m
 		}
 	}
 
+	// Store in cache (td-8910b218)
+	p.setCachedRender(thinkingCacheID, maxWidth, expanded, strings.Join(lines, "\n"))
 	return lines
 }
 

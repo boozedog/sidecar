@@ -67,6 +67,13 @@ const (
 	PaneMessages
 )
 
+// renderCacheKey is used to cache rendered message content (td-8910b218).
+type renderCacheKey struct {
+	messageID string
+	width     int
+	expanded  bool // whether content is expanded (affects render)
+}
+
 // Plugin implements the conversations plugin.
 type Plugin struct {
 	ctx          *plugin.Context
@@ -93,6 +100,11 @@ type Plugin struct {
 	msgScrollOff     int
 	pageSize         int
 	hasMore          bool
+
+	// Pagination state (td-313ea851)
+	messageOffset  int // Start index in full message list (0 = most recent)
+	totalMessages  int // Total message count from adapter
+	hasOlderMsgs   bool // True if there are older messages to load
 	expandedThinking map[string]bool // message ID -> thinking expanded
 	sessionSummary     *SessionSummary  // computed summary for current session
 	summaryModelCounts map[string]int   // model usage counts for incremental summary updates
@@ -150,6 +162,18 @@ type Plugin struct {
 	// Full message line positions (all rendered messages, before scroll window)
 	// Used for accurate scroll calculations in ensureMessageCursorVisible
 	msgLinePositions []msgLinePos
+
+	// Render cache for message content (td-8910b218)
+	renderCache      map[renderCacheKey]string
+	renderCacheMutex sync.RWMutex
+
+	// Hit region optimization (td-ea784b03)
+	hitRegionsDirty bool
+	prevWidth       int
+	prevHeight      int
+	prevScrollOff   int
+	prevMsgScroll   int
+	prevTurnScroll  int
 }
 
 // msgLineRange tracks which screen lines a message occupies (after scroll).
@@ -182,6 +206,8 @@ func New() *Plugin {
 		mouseHandler:        mouse.NewHandler(),
 		contentRenderer:     renderer,
 		coalesceChan:        coalesceChan,
+		renderCache:         make(map[renderCacheKey]string),
+		hitRegionsDirty:     true, // Start dirty to ensure first render builds regions
 	}
 	p.coalescer = NewEventCoalescer(0, coalesceChan)
 	return p
@@ -355,6 +381,8 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			if p.sessionSummary != nil {
 				UpdateSessionSummary(p.sessionSummary, newMessages, p.summaryModelCounts, p.summaryFileSet)
 			}
+			// Mark hit regions dirty for new content (td-ea784b03)
+			p.hitRegionsDirty = true
 			// Don't reset cursors - user may be scrolled
 		} else {
 			// Full reload: different session or messages don't match
@@ -384,9 +412,18 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 					}
 				}
 			}
+			// Mark hit regions dirty for new content (td-ea784b03)
+			p.hitRegionsDirty = true
 		}
 
 		p.hasMore = len(msg.Messages) >= p.pageSize
+
+		// Update pagination state (td-313ea851)
+		p.totalMessages = msg.TotalCount
+		p.messageOffset = msg.Offset // Sync offset with actual loaded offset (td-39018be2)
+		// hasOlderMsgs: true when there are messages beyond the current window (td-07fc795d)
+		p.hasOlderMsgs = (msg.Offset + len(msg.Messages)) < msg.TotalCount
+
 		return p, nil
 
 	case WatchStartedMsg:
@@ -471,6 +508,14 @@ func (p *Plugin) setSelectedSession(sessionID string) {
 	p.messageScroll = 0
 	p.messageCursor = 0
 	p.turnViewMode = false // Start in conversation flow mode
+	// Reset pagination state (td-313ea851)
+	p.messageOffset = 0
+	p.totalMessages = 0
+	p.hasOlderMsgs = false
+	// Clear render cache on session change (td-8910b218)
+	p.clearRenderCache()
+	// Mark hit regions dirty (td-ea784b03)
+	p.hitRegionsDirty = true
 }
 
 func (p *Plugin) schedulePreviewLoad(sessionID string) tea.Cmd {
@@ -594,6 +639,7 @@ func (p *Plugin) updateSessions(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 	case "f":
 		// Open filter menu
 		p.filterMode = true
+		p.hitRegionsDirty = true // Filter menu replaces session list (td-455e378b)
 
 	case "r":
 		return p, p.loadSessions()
@@ -1013,7 +1059,28 @@ func (p *Plugin) updateMessages(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 	case "v":
 		// Toggle between conversation flow and turn view
 		p.turnViewMode = !p.turnViewMode
+		p.hitRegionsDirty = true // Different hit regions per view mode (td-455e378b)
 		return p, nil
+
+	case "p":
+		// Load older messages (td-313ea851)
+		if p.hasOlderMsgs && p.totalMessages > maxMessagesInMemory {
+			p.messageOffset += maxMessagesInMemory / 2 // Load half a page older
+			if p.messageOffset > p.totalMessages-maxMessagesInMemory {
+				p.messageOffset = p.totalMessages - maxMessagesInMemory
+			}
+			return p, p.loadMessages(p.selectedSession)
+		}
+
+	case "n":
+		// Load newer messages (td-313ea851)
+		if p.messageOffset > 0 {
+			p.messageOffset -= maxMessagesInMemory / 2 // Load half a page newer
+			if p.messageOffset < 0 {
+				p.messageOffset = 0
+			}
+			return p, p.loadMessages(p.selectedSession)
+		}
 
 	case "e":
 		// Toggle expand for selected message (content, tools, and thinking)
@@ -1031,7 +1098,11 @@ func (p *Plugin) updateMessages(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 					for _, tu := range msg.ToolUses {
 						p.expandedToolResults[tu.ID] = !p.expandedToolResults[tu.ID]
 					}
+					// Invalidate render cache for this message (td-5445abd6)
+					p.invalidateCacheForMessage(msg.ID)
 				}
+				// Mark hit regions dirty since expansion changes layout (td-ea784b03)
+				p.hitRegionsDirty = true
 			}
 		} else {
 			// Conversation flow: toggle for current message
@@ -1051,6 +1122,10 @@ func (p *Plugin) updateMessages(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 						p.expandedToolResults[block.ToolUseID] = !p.expandedToolResults[block.ToolUseID]
 					}
 				}
+				// Invalidate render cache for this message (td-5445abd6)
+				p.invalidateCacheForMessage(msg.ID)
+				// Mark hit regions dirty since expansion changes layout (td-ea784b03)
+				p.hitRegionsDirty = true
 			}
 		}
 
@@ -1328,8 +1403,9 @@ func (p *Plugin) loadSessions() tea.Cmd {
 	}
 }
 
-// loadMessages loads messages for a session.
+// loadMessages loads messages for a session with pagination support (td-313ea851).
 func (p *Plugin) loadMessages(sessionID string) tea.Cmd {
+	offset := p.messageOffset
 	return func() tea.Msg {
 		if len(p.adapters) == 0 {
 			return MessagesLoadedMsg{}
@@ -1343,12 +1419,32 @@ func (p *Plugin) loadMessages(sessionID string) tea.Cmd {
 			return ErrorMsg{Err: err}
 		}
 
-		// Limit to last N messages
+		totalCount := len(messages)
+		resultOffset := 0
+
+		// Apply pagination: load a window of maxMessagesInMemory messages
 		if len(messages) > maxMessagesInMemory {
-			messages = messages[len(messages)-maxMessagesInMemory:]
+			// offset indicates how many messages to skip from the end (most recent)
+			// offset=0 means show the most recent messages
+			// offset=100 means skip the 100 most recent and show older ones
+			endIdx := len(messages) - offset
+			if endIdx < 0 {
+				endIdx = 0
+			}
+			startIdx := endIdx - maxMessagesInMemory
+			if startIdx < 0 {
+				startIdx = 0
+			}
+			resultOffset = startIdx
+			messages = messages[startIdx:endIdx]
 		}
 
-		return MessagesLoadedMsg{SessionID: sessionID, Messages: messages}
+		return MessagesLoadedMsg{
+			SessionID:  sessionID,
+			Messages:   messages,
+			TotalCount: totalCount,
+			Offset:     resultOffset,
+		}
 	}
 }
 
@@ -1616,9 +1712,11 @@ func (p *Plugin) updateFilter(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 	switch key {
 	case "esc":
 		p.filterMode = false
+		p.hitRegionsDirty = true // Session list returns (td-455e378b)
 
 	case "enter":
 		p.filterMode = false
+		p.hitRegionsDirty = true // Session list returns (td-455e378b)
 		p.filterActive = p.filters.IsActive()
 		p.cursor = 0
 		p.scrollOff = 0
@@ -1823,8 +1921,10 @@ type SessionsLoadedMsg struct {
 }
 
 type MessagesLoadedMsg struct {
-	SessionID string
-	Messages []adapter.Message
+	SessionID  string
+	Messages   []adapter.Message
+	TotalCount int  // Total message count before truncation (td-313ea851)
+	Offset     int  // Offset into the message list (td-313ea851)
 }
 
 type WatchEventMsg struct {
@@ -1860,4 +1960,56 @@ func (p *Plugin) messagesMatch(old, newPrefix []adapter.Message) bool {
 		}
 	}
 	return true
+}
+
+// Render cache methods (td-8910b218)
+
+// clearRenderCache clears the entire render cache.
+func (p *Plugin) clearRenderCache() {
+	p.renderCacheMutex.Lock()
+	defer p.renderCacheMutex.Unlock()
+	p.renderCache = make(map[renderCacheKey]string)
+}
+
+// getCachedRender returns cached render content if available.
+func (p *Plugin) getCachedRender(msgID string, width int, expanded bool) (string, bool) {
+	p.renderCacheMutex.RLock()
+	defer p.renderCacheMutex.RUnlock()
+	key := renderCacheKey{messageID: msgID, width: width, expanded: expanded}
+	cached, ok := p.renderCache[key]
+	return cached, ok
+}
+
+// setCachedRender stores rendered content in cache with LRU eviction.
+func (p *Plugin) setCachedRender(msgID string, width int, expanded bool, content string) {
+	p.renderCacheMutex.Lock()
+	defer p.renderCacheMutex.Unlock()
+
+	// LRU eviction: limit cache to 100 entries
+	const maxCacheSize = 100
+	if len(p.renderCache) >= maxCacheSize {
+		// Simple eviction: clear half the cache
+		count := 0
+		for k := range p.renderCache {
+			delete(p.renderCache, k)
+			count++
+			if count >= maxCacheSize/2 {
+				break
+			}
+		}
+	}
+
+	key := renderCacheKey{messageID: msgID, width: width, expanded: expanded}
+	p.renderCache[key] = content
+}
+
+// invalidateCacheForMessage removes cache entries for a specific message.
+func (p *Plugin) invalidateCacheForMessage(msgID string) {
+	p.renderCacheMutex.Lock()
+	defer p.renderCacheMutex.Unlock()
+	for k := range p.renderCache {
+		if k.messageID == msgID {
+			delete(p.renderCache, k)
+		}
+	}
 }

@@ -1583,3 +1583,61 @@ func TestScrollSidebarFunction(t *testing.T) {
 		t.Errorf("expected cursor to stay at %d when scrolling down at bottom, got %d", len(p.sessions)-1, p.cursor)
 	}
 }
+
+// TestHitRegionsDirtyOnModeChange tests that hitRegionsDirty is set when view modes change (td-455e378b).
+func TestHitRegionsDirtyOnModeChange(t *testing.T) {
+	p := New()
+	p.adapters = map[string]adapter.Adapter{"mock": &mockAdapter{}}
+	p.width = 150
+	p.height = 30
+	p.activePane = PaneMessages
+	p.sessions = []adapter.Session{{ID: "test-1", Name: "Test", UpdatedAt: time.Now()}}
+	p.selectedSession = "test-1"
+
+	// Render to clear initial dirty flag
+	_ = p.View(p.width, p.height)
+	p.hitRegionsDirty = false
+
+	t.Run("turnViewMode toggle sets dirty", func(t *testing.T) {
+		p.hitRegionsDirty = false
+		// Simulate 'v' key press
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}}
+		p.Update(msg)
+		if !p.hitRegionsDirty {
+			t.Error("expected hitRegionsDirty=true after turnViewMode toggle")
+		}
+	})
+
+	t.Run("filterMode open sets dirty", func(t *testing.T) {
+		p.hitRegionsDirty = false
+		p.activePane = PaneSidebar
+		// Simulate 'f' key press
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}
+		p.Update(msg)
+		if !p.hitRegionsDirty {
+			t.Error("expected hitRegionsDirty=true when opening filter menu")
+		}
+	})
+
+	t.Run("filterMode close via esc sets dirty", func(t *testing.T) {
+		p.filterMode = true
+		p.hitRegionsDirty = false
+		// Simulate 'esc' key press
+		msg := tea.KeyMsg{Type: tea.KeyEscape}
+		p.Update(msg)
+		if !p.hitRegionsDirty {
+			t.Error("expected hitRegionsDirty=true when closing filter menu via esc")
+		}
+	})
+
+	t.Run("filterMode close via enter sets dirty", func(t *testing.T) {
+		p.filterMode = true
+		p.hitRegionsDirty = false
+		// Simulate 'enter' key press
+		msg := tea.KeyMsg{Type: tea.KeyEnter}
+		p.Update(msg)
+		if !p.hitRegionsDirty {
+			t.Error("expected hitRegionsDirty=true when closing filter menu via enter")
+		}
+	})
+}
