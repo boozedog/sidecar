@@ -193,14 +193,18 @@ func decodeRune(s string) (rune, int) {
 	if r < 0x80 {
 		return r, 1
 	}
-	// Multi-byte UTF-8 decoding
-	if r&0xE0 == 0xC0 && len(s) >= 2 {
+	// Multi-byte UTF-8 decoding with continuation byte validation.
+	// Continuation bytes must match pattern 10xxxxxx (0x80-0xBF).
+	// 2-byte: 110xxxxx 10xxxxxx
+	if r&0xE0 == 0xC0 && len(s) >= 2 && (s[1]&0xC0) == 0x80 {
 		return rune(s[0]&0x1F)<<6 | rune(s[1]&0x3F), 2
 	}
-	if r&0xF0 == 0xE0 && len(s) >= 3 {
+	// 3-byte: 1110xxxx 10xxxxxx 10xxxxxx
+	if r&0xF0 == 0xE0 && len(s) >= 3 && (s[1]&0xC0) == 0x80 && (s[2]&0xC0) == 0x80 {
 		return rune(s[0]&0x0F)<<12 | rune(s[1]&0x3F)<<6 | rune(s[2]&0x3F), 3
 	}
-	if r&0xF8 == 0xF0 && len(s) >= 4 {
+	// 4-byte: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+	if r&0xF8 == 0xF0 && len(s) >= 4 && (s[1]&0xC0) == 0x80 && (s[2]&0xC0) == 0x80 && (s[3]&0xC0) == 0x80 {
 		return rune(s[0]&0x07)<<18 | rune(s[1]&0x3F)<<12 | rune(s[2]&0x3F)<<6 | rune(s[3]&0x3F), 4
 	}
 	return r, 1 // fallback for invalid UTF-8
@@ -218,7 +222,11 @@ func runeWidth(r rune) int {
 		r >= 0xFE30 && r <= 0xFE6F || // CJK Compatibility Forms
 		r >= 0xFF00 && r <= 0xFF60 || // Fullwidth Forms
 		r >= 0xFFE0 && r <= 0xFFE6 || // Fullwidth Forms
-		r >= 0x20000 && r <= 0x2FFFF { // CJK Unified Ideographs Extension
+		r >= 0x20000 && r <= 0x2FFFF || // CJK Unified Ideographs Extension
+		// Emoji ranges (most render as width 2 in terminals)
+		r >= 0x1F300 && r <= 0x1F9FF || // Misc Symbols, Emoticons, Dingbats, Transport, etc.
+		r >= 0x2600 && r <= 0x26FF || // Misc Symbols (☀️, ☁️, etc.)
+		r >= 0x2700 && r <= 0x27BF { // Dingbats (✂️, ✅, etc.)
 		return 2
 	}
 	return 1

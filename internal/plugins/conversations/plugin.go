@@ -124,7 +124,7 @@ type Plugin struct {
 
 	// Layout state
 	activePane     FocusPane // Which pane is focused
-	sidebarRestore FocusPane // Pane to restore when showing sidebar
+	sidebarRestore FocusPane // Tracks pane focused before collapse; restored on expand via toggleSidebar()
 	sidebarWidth   int       // Calculated width (~30%)
 	sidebarVisible bool      // Toggle sidebar visibility with \
 	previewToken       int       // monotonically increasing token for debounced preview loads

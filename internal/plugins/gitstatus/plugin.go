@@ -60,7 +60,7 @@ type Plugin struct {
 
 	// Three-pane layout state
 	activePane     FocusPane // Which pane is focused
-	sidebarRestore FocusPane // Pane to restore when showing sidebar
+	sidebarRestore FocusPane // Tracks pane focused before collapse; restored on expand via toggleSidebar()
 	sidebarVisible bool      // Toggle sidebar with Tab
 	sidebarWidth   int       // Calculated width (~30%)
 	diffPaneWidth  int       // Calculated width (~70%)
@@ -1291,10 +1291,7 @@ func (p *Plugin) updateDiff(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 
 	case "\\":
 		// Toggle sidebar visibility
-		if p.sidebarVisible {
-			p.sidebarRestore = p.activePane
-		}
-		p.sidebarVisible = !p.sidebarVisible
+		p.toggleSidebar()
 
 	case "h", "left", "<", "H":
 		// Horizontal scroll left

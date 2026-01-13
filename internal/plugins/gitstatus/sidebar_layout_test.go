@@ -122,3 +122,112 @@ func TestCommitHitRegions_CleanTree(t *testing.T) {
 		t.Fatalf("hit test returned commit %d, want 0", idx)
 	}
 }
+
+// TestToggleSidebar tests the sidebar toggle focus restoration behavior.
+func TestToggleSidebar(t *testing.T) {
+	tests := []struct {
+		name            string
+		startPane       FocusPane
+		expectedRestore FocusPane
+	}{
+		{
+			name:            "sidebar to sidebar",
+			startPane:       PaneSidebar,
+			expectedRestore: PaneSidebar,
+		},
+		{
+			name:            "diff to diff",
+			startPane:       PaneDiff,
+			expectedRestore: PaneDiff,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &Plugin{
+				activePane:     tt.startPane,
+				sidebarVisible: true,
+				sidebarRestore: PaneSidebar,
+			}
+
+			// Collapse sidebar
+			p.toggleSidebar()
+
+			if p.sidebarVisible {
+				t.Error("sidebar should be hidden after collapse")
+			}
+			if p.sidebarRestore != tt.startPane {
+				t.Errorf("sidebarRestore = %d, want %d", p.sidebarRestore, tt.startPane)
+			}
+			// When collapsed from sidebar, focus should move to diff
+			if tt.startPane == PaneSidebar && p.activePane != PaneDiff {
+				t.Errorf("activePane should be PaneDiff after collapsing from sidebar, got %d", p.activePane)
+			}
+
+			// Expand sidebar
+			p.toggleSidebar()
+
+			if !p.sidebarVisible {
+				t.Error("sidebar should be visible after expand")
+			}
+			if p.activePane != tt.expectedRestore {
+				t.Errorf("activePane = %d, want %d after restore", p.activePane, tt.expectedRestore)
+			}
+		})
+	}
+}
+
+// TestToggleSidebarRapidToggle tests multiple rapid toggles don't corrupt state.
+func TestToggleSidebarRapidToggle(t *testing.T) {
+	p := &Plugin{
+		activePane:     PaneDiff,
+		sidebarVisible: true,
+		sidebarRestore: PaneSidebar,
+	}
+
+	// Toggle 5 times rapidly
+	for i := 0; i < 5; i++ {
+		p.toggleSidebar()
+	}
+
+	// After odd number of toggles, sidebar should be hidden
+	if p.sidebarVisible {
+		t.Error("sidebar should be hidden after odd number of toggles")
+	}
+
+	// Toggle once more to show
+	p.toggleSidebar()
+
+	if !p.sidebarVisible {
+		t.Error("sidebar should be visible")
+	}
+	// Should restore to PaneDiff
+	if p.activePane != PaneDiff {
+		t.Errorf("activePane should restore to PaneDiff, got %d", p.activePane)
+	}
+}
+
+// TestToggleSidebarCollapseFromDiff verifies focus stays on diff when collapsing from diff.
+func TestToggleSidebarCollapseFromDiff(t *testing.T) {
+	p := &Plugin{
+		activePane:     PaneDiff,
+		sidebarVisible: true,
+		sidebarRestore: PaneSidebar,
+	}
+
+	p.toggleSidebar()
+
+	// Focus should stay on diff (since we weren't on sidebar)
+	if p.activePane != PaneDiff {
+		t.Errorf("activePane should remain PaneDiff, got %d", p.activePane)
+	}
+}
+
+// TestSidebarRestoreInitialization verifies sidebarRestore is initialized correctly in New().
+func TestSidebarRestoreInitialization(t *testing.T) {
+	p := New()
+
+	if p.sidebarRestore != PaneSidebar {
+		t.Errorf("sidebarRestore should default to PaneSidebar, got %d", p.sidebarRestore)
+	}
+}

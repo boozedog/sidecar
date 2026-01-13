@@ -2802,3 +2802,106 @@ func TestRenderConversationFlowMaxScrollClamp(t *testing.T) {
 func containsSubstring(s, substr string) bool {
 	return strings.Contains(s, substr)
 }
+
+// TestToggleSidebar tests the sidebar toggle focus restoration behavior.
+func TestToggleSidebar(t *testing.T) {
+	tests := []struct {
+		name            string
+		startPane       FocusPane
+		expectedRestore FocusPane
+	}{
+		{
+			name:            "sidebar to sidebar",
+			startPane:       PaneSidebar,
+			expectedRestore: PaneSidebar,
+		},
+		{
+			name:            "messages to messages",
+			startPane:       PaneMessages,
+			expectedRestore: PaneMessages,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := New()
+			p.activePane = tt.startPane
+			p.sidebarVisible = true
+
+			// Collapse sidebar
+			p.toggleSidebar()
+
+			if p.sidebarVisible {
+				t.Error("sidebar should be hidden after collapse")
+			}
+			if p.sidebarRestore != tt.startPane {
+				t.Errorf("sidebarRestore = %d, want %d", p.sidebarRestore, tt.startPane)
+			}
+			// When collapsed from sidebar, focus should move to messages
+			if tt.startPane == PaneSidebar && p.activePane != PaneMessages {
+				t.Errorf("activePane should be PaneMessages after collapsing from sidebar, got %d", p.activePane)
+			}
+
+			// Expand sidebar
+			p.toggleSidebar()
+
+			if !p.sidebarVisible {
+				t.Error("sidebar should be visible after expand")
+			}
+			if p.activePane != tt.expectedRestore {
+				t.Errorf("activePane = %d, want %d after restore", p.activePane, tt.expectedRestore)
+			}
+		})
+	}
+}
+
+// TestToggleSidebarRapidToggle tests multiple rapid toggles don't corrupt state.
+func TestToggleSidebarRapidToggle(t *testing.T) {
+	p := New()
+	p.activePane = PaneMessages
+	p.sidebarVisible = true
+
+	// Toggle 5 times rapidly
+	for i := 0; i < 5; i++ {
+		p.toggleSidebar()
+	}
+
+	// After odd number of toggles, sidebar should be hidden
+	if p.sidebarVisible {
+		t.Error("sidebar should be hidden after odd number of toggles")
+	}
+
+	// Toggle once more to show
+	p.toggleSidebar()
+
+	if !p.sidebarVisible {
+		t.Error("sidebar should be visible")
+	}
+	// Should restore to PaneMessages
+	if p.activePane != PaneMessages {
+		t.Errorf("activePane should restore to PaneMessages, got %d", p.activePane)
+	}
+}
+
+// TestToggleSidebarCollapseFromMessages verifies focus stays on messages when collapsing from messages.
+func TestToggleSidebarCollapseFromMessages(t *testing.T) {
+	p := New()
+	p.activePane = PaneMessages
+	p.sidebarVisible = true
+
+	p.toggleSidebar()
+
+	// Focus should stay on messages (since we weren't on sidebar)
+	if p.activePane != PaneMessages {
+		t.Errorf("activePane should remain PaneMessages, got %d", p.activePane)
+	}
+}
+
+// TestSidebarRestoreInitialization verifies sidebarRestore is initialized correctly.
+func TestSidebarRestoreInitialization(t *testing.T) {
+	p := New()
+
+	if p.sidebarRestore != PaneSidebar {
+		t.Errorf("sidebarRestore should default to PaneSidebar, got %d", p.sidebarRestore)
+	}
+}
