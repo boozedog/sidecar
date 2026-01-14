@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/marcus/sidecar/internal/styles"
 )
 
@@ -218,8 +219,11 @@ func RenderSideBySide(diff *ParsedDiff, width, startLine, maxLines, horizontalOf
 				if pair.left.OldLineNo > 0 {
 					leftLineNo = fmt.Sprintf("%d", pair.left.OldLineNo)
 				}
-				leftContent := applyHorizontalOffset(pair.left.Content, horizontalOffset)
-				leftRendered = renderSideBySideContent(leftContent, pair.left.Type, contentWidth, highlighter)
+				// Highlight full content first to preserve syntax context, then apply offset
+				leftRendered = renderSideBySideContent(pair.left.Content, pair.left.Type, contentWidth+horizontalOffset, highlighter)
+				if horizontalOffset > 0 {
+					leftRendered = ansi.TruncateLeft(leftRendered, horizontalOffset, "")
+				}
 			}
 			leftRendered = padToWidth(leftRendered, contentWidth)
 
@@ -230,8 +234,11 @@ func RenderSideBySide(diff *ParsedDiff, width, startLine, maxLines, horizontalOf
 				if pair.right.NewLineNo > 0 {
 					rightLineNo = fmt.Sprintf("%d", pair.right.NewLineNo)
 				}
-				rightContent := applyHorizontalOffset(pair.right.Content, horizontalOffset)
-				rightRendered = renderSideBySideContent(rightContent, pair.right.Type, contentWidth, highlighter)
+				// Highlight full content first to preserve syntax context, then apply offset
+				rightRendered = renderSideBySideContent(pair.right.Content, pair.right.Type, contentWidth+horizontalOffset, highlighter)
+				if horizontalOffset > 0 {
+					rightRendered = ansi.TruncateLeft(rightRendered, horizontalOffset, "")
+				}
 			}
 			rightRendered = padToWidth(rightRendered, contentWidth)
 
@@ -320,25 +327,14 @@ func groupLinesForSideBySide(lines []DiffLine) []linePair {
 
 // renderDiffContentWithOffset renders line content with horizontal scroll, word-level and syntax highlighting.
 func renderDiffContentWithOffset(line DiffLine, maxWidth, horizontalOffset int, highlighter *SyntaxHighlighter) string {
-	// Apply horizontal offset first
-	content := line.Content
+	// Render full line first to preserve syntax highlighting context
+	rendered := renderDiffContent(line, maxWidth+horizontalOffset, highlighter)
+
+	// Apply horizontal offset to already-styled output using ANSI-aware truncation
 	if horizontalOffset > 0 {
-		runes := []rune(content)
-		if horizontalOffset >= len(runes) {
-			content = ""
-		} else {
-			content = string(runes[horizontalOffset:])
-		}
-		// Create a modified line with offset content
-		line = DiffLine{
-			Type:      line.Type,
-			Content:   content,
-			OldLineNo: line.OldLineNo,
-			NewLineNo: line.NewLineNo,
-			WordDiff:  nil, // Word diff doesn't work well with offset
-		}
+		rendered = ansi.TruncateLeft(rendered, horizontalOffset, "")
 	}
-	return renderDiffContent(line, maxWidth, highlighter)
+	return rendered
 }
 
 // renderDiffContent renders line content with word-level and syntax highlighting.
@@ -543,18 +539,6 @@ func padToWidth(s string, width int) string {
 		return s
 	}
 	return s + strings.Repeat(" ", width-visualWidth)
-}
-
-// applyHorizontalOffset removes the first n runes from a string.
-func applyHorizontalOffset(s string, offset int) string {
-	if offset <= 0 {
-		return s
-	}
-	runes := []rune(s)
-	if offset >= len(runes) {
-		return ""
-	}
-	return string(runes[offset:])
 }
 
 // SideBySideClipInfo contains information about horizontal clipping state.

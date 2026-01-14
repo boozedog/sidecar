@@ -406,7 +406,22 @@ func (p *Plugin) renderOutputContent(width, height int) string {
 		}
 	}
 
-	return hint + "\n" + strings.Join(lines[start:end], "\n")
+	// Apply horizontal offset and truncate each line
+	var displayLines []string
+	for _, line := range lines[start:end] {
+		displayLine := line
+		// Apply horizontal offset using ANSI-aware truncation
+		if p.previewHorizOffset > 0 {
+			displayLine = ansi.TruncateLeft(displayLine, p.previewHorizOffset, "")
+		}
+		// Truncate to width if needed
+		if lipgloss.Width(displayLine) > width {
+			displayLine = ansi.Truncate(displayLine, width, "")
+		}
+		displayLines = append(displayLines, displayLine)
+	}
+
+	return hint + "\n" + strings.Join(displayLines, "\n")
 }
 
 // renderDiffContent renders git diff.
@@ -434,10 +449,36 @@ func (p *Plugin) renderDiffContent(width, height int) string {
 		end = len(lines)
 	}
 
-	// Basic diff highlighting
+	// Diff highlighting with horizontal scroll support
+	// Pattern: style FIRST, then use ANSI-aware truncation for scrolling
 	var rendered []string
 	for _, line := range lines[start:end] {
-		rendered = append(rendered, colorDiffLine(line, width))
+		// Style the line FIRST (before any offset/truncation)
+		var styledLine string
+		switch {
+		case strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---"):
+			styledLine = styles.DiffHeader.Render(line)
+		case strings.HasPrefix(line, "@@"):
+			styledLine = lipgloss.NewStyle().Foreground(styles.Info).Render(line)
+		case strings.HasPrefix(line, "+"):
+			styledLine = styles.DiffAdd.Render(line)
+		case strings.HasPrefix(line, "-"):
+			styledLine = styles.DiffRemove.Render(line)
+		default:
+			styledLine = line
+		}
+
+		// Apply horizontal offset using ANSI-aware truncation
+		if p.previewHorizOffset > 0 {
+			styledLine = ansi.TruncateLeft(styledLine, p.previewHorizOffset, "")
+		}
+
+		// Truncate to width using ANSI-aware truncation
+		if lipgloss.Width(styledLine) > width {
+			styledLine = ansi.Truncate(styledLine, width, "")
+		}
+
+		rendered = append(rendered, styledLine)
 	}
 
 	return strings.Join(rendered, "\n")

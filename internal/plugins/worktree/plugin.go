@@ -57,8 +57,9 @@ type Plugin struct {
 	selectedIdx    int
 	scrollOffset   int  // Sidebar list scroll offset
 	visibleCount   int  // Number of visible list items
-	previewOffset    int
-	autoScrollOutput bool // Auto-scroll output to follow agent (paused when user scrolls up)
+	previewOffset      int
+	previewHorizOffset int  // Horizontal scroll offset for preview pane
+	autoScrollOutput   bool // Auto-scroll output to follow agent (paused when user scrolls up)
 	sidebarWidth     int  // Persisted sidebar width
 	sidebarVisible bool // Whether sidebar is visible (toggled with \)
 
@@ -706,6 +707,9 @@ func (p *Plugin) handleListKeys(msg tea.KeyMsg) tea.Cmd {
 	case "l", "right":
 		if p.activePane == PaneSidebar {
 			p.activePane = PanePreview
+		} else {
+			// Horizontal scroll right in preview pane
+			p.previewHorizOffset += 10
 		}
 	case "enter":
 		// Attach to tmux session if agent running, otherwise focus preview
@@ -717,7 +721,17 @@ func (p *Plugin) handleListKeys(msg tea.KeyMsg) tea.Cmd {
 		if p.activePane == PaneSidebar {
 			p.activePane = PanePreview
 		}
-	case "h", "left", "esc":
+	case "h", "left":
+		if p.activePane == PanePreview {
+			// Horizontal scroll left in preview pane
+			if p.previewHorizOffset > 0 {
+				p.previewHorizOffset -= 10
+				if p.previewHorizOffset < 0 {
+					p.previewHorizOffset = 0
+				}
+			}
+		}
+	case "esc":
 		if p.activePane == PanePreview {
 			p.activePane = PaneSidebar
 		}
@@ -1117,6 +1131,7 @@ func (p *Plugin) moveCursor(delta int) {
 	// Reset preview scroll state when changing worktree selection
 	if p.selectedIdx != oldIdx {
 		p.previewOffset = 0
+		p.previewHorizOffset = 0
 		p.autoScrollOutput = true
 	}
 	p.ensureVisible()
@@ -1136,6 +1151,7 @@ func (p *Plugin) ensureVisible() {
 func (p *Plugin) cyclePreviewTab(delta int) tea.Cmd {
 	p.previewTab = PreviewTab((int(p.previewTab) + delta + 3) % 3)
 	p.previewOffset = 0
+	p.previewHorizOffset = 0
 	p.autoScrollOutput = true // Reset auto-scroll when switching tabs
 
 	// Load content for the active tab

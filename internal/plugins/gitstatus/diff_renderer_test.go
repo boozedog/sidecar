@@ -209,29 +209,6 @@ func TestPadRight(t *testing.T) {
 	}
 }
 
-func TestApplyHorizontalOffset(t *testing.T) {
-	tests := []struct {
-		input  string
-		offset int
-		want   string
-	}{
-		{"hello world", 0, "hello world"},
-		{"hello world", 6, "world"},
-		{"hello world", 20, ""},
-		{"abc", 1, "bc"},
-		{"abc", 3, ""},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.input, func(t *testing.T) {
-			got := applyHorizontalOffset(tc.input, tc.offset)
-			if got != tc.want {
-				t.Errorf("applyHorizontalOffset(%q, %d) = %q, want %q", tc.input, tc.offset, got, tc.want)
-			}
-		})
-	}
-}
-
 func TestDiffViewMode_Constants(t *testing.T) {
 	// Verify the constants exist and are distinct
 	if DiffViewUnified == DiffViewSideBySide {
@@ -337,30 +314,5 @@ func TestRenderDiffContentWithOffset_DisablesWordDiff(t *testing.T) {
 	// Content should be offset
 	if strings.Contains(result5, "hello") {
 		t.Error("offset=5 should skip 'hello'")
-	}
-}
-
-func TestApplyHorizontalOffset_EdgeCases(t *testing.T) {
-	tests := []struct {
-		name   string
-		input  string
-		offset int
-		want   string
-	}{
-		{"negative offset", "hello", -5, "hello"},
-		{"zero offset", "hello", 0, "hello"},
-		{"exact length", "hello", 5, ""},
-		{"beyond length", "hello", 10, ""},
-		{"empty string", "", 5, ""},
-		// Note: function operates on bytes, not runes, so unicode chars are not handled specially
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := applyHorizontalOffset(tc.input, tc.offset)
-			if got != tc.want {
-				t.Errorf("applyHorizontalOffset(%q, %d) = %q, want %q", tc.input, tc.offset, got, tc.want)
-			}
-		})
 	}
 }
