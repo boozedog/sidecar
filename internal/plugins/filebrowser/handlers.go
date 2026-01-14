@@ -332,10 +332,7 @@ func (p *Plugin) handleTreeKey(key string) (plugin.Plugin, tea.Cmd) {
 }
 
 func (p *Plugin) handlePreviewKey(key string) (plugin.Plugin, tea.Cmd) {
-	lines := p.previewHighlighted
-	if len(lines) == 0 {
-		lines = p.previewLines
-	}
+	lines := p.getPreviewLines()
 	visibleHeight := p.visibleContentHeight()
 	maxScroll := len(lines) - visibleHeight
 	if maxScroll < 0 {

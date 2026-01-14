@@ -1130,6 +1130,18 @@ func (p *Plugin) isMarkdownFile() bool {
 	return ext == ".md" || ext == ".markdown"
 }
 
+// getPreviewLines returns the current preview content lines based on render mode.
+// When markdown render mode is active, returns rendered lines; otherwise raw/highlighted.
+func (p *Plugin) getPreviewLines() []string {
+	if p.markdownRenderMode && p.isMarkdownFile() && len(p.markdownRendered) > 0 {
+		return p.markdownRendered
+	}
+	if len(p.previewHighlighted) > 0 {
+		return p.previewHighlighted
+	}
+	return p.previewLines
+}
+
 // toggleMarkdownRender toggles between rendered and raw markdown view.
 func (p *Plugin) toggleMarkdownRender() {
 	if !p.isMarkdownFile() {

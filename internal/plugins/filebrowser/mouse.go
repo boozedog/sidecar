@@ -233,10 +233,7 @@ func (p *Plugin) handleMouseScroll(action mouse.MouseAction) (*Plugin, tea.Cmd) 
 	}
 
 	// Scroll preview pane
-	lines := p.previewHighlighted
-	if len(lines) == 0 {
-		lines = p.previewLines
-	}
+	lines := p.getPreviewLines()
 	visibleHeight := p.visibleContentHeight()
 	maxScroll := len(lines) - visibleHeight
 	if maxScroll < 0 {
