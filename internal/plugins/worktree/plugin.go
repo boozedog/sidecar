@@ -82,6 +82,7 @@ type Plugin struct {
 	createTaskID          string
 	createTaskTitle       string // Title of selected task for display
 	createFocus           int    // 0=name, 1=base, 2=task, 3=confirm, 4=cancel
+	createError           string // Error message to display in create modal
 
 	// Task search state for create modal
 	taskSearchInput    textinput.Model
@@ -257,12 +258,15 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		}
 
 	case CreateDoneMsg:
-		p.viewMode = ViewModeList
-		if msg.Err == nil {
+		if msg.Err != nil {
+			p.createError = msg.Err.Error()
+			// Stay in ViewModeCreate - don't close modal or clear state
+		} else {
+			p.viewMode = ViewModeList
 			p.worktrees = append(p.worktrees, msg.Worktree)
 			p.selectedIdx = len(p.worktrees) - 1
+			p.clearCreateModal()
 		}
-		p.clearCreateModal()
 
 	case DeleteDoneMsg:
 		if msg.Err == nil {
@@ -473,6 +477,7 @@ func (p *Plugin) clearCreateModal() {
 	p.createTaskID = ""
 	p.createTaskTitle = ""
 	p.createFocus = 0
+	p.createError = ""
 	p.taskSearchInput = textinput.Model{}
 	p.taskSearchAll = nil
 	p.taskSearchFiltered = nil
@@ -749,6 +754,8 @@ func (p *Plugin) handleCreateKeys(msg tea.KeyMsg) tea.Cmd {
 	}
 
 	// Delegate to focused textinput for all other keys
+	// Clear error when user types (they're correcting the issue)
+	p.createError = ""
 	var cmd tea.Cmd
 	switch p.createFocus {
 	case 0:

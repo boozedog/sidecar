@@ -669,6 +669,13 @@ func (p *Plugin) renderCreateModal(width, height int) string {
 	}
 	sb.WriteString("\n\n")
 
+	// Display error if present
+	if p.createError != "" {
+		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+		sb.WriteString(errStyle.Render("Error: " + p.createError))
+		sb.WriteString("\n\n")
+	}
+
 	// Buttons - Create and Cancel
 	createBtnStyle := styles.Button
 	cancelBtnStyle := styles.Button
