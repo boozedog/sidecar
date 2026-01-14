@@ -497,6 +497,15 @@ func (p *Plugin) renderCreateModal(width, height int) string {
 		modalW = width - 4
 	}
 
+	// Calculate input field width:
+	// - modalStyle has border (2) + padding (4) = 6 chars
+	// - inputStyle has border (2) + padding (2) = 4 chars
+	// - So input content width = modalW - 6 (modal chrome) - 4 (input chrome) = modalW - 10
+	inputW := modalW - 10
+	if inputW < 20 {
+		inputW = 20
+	}
+
 	var sb strings.Builder
 	sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Create New Worktree"))
 	sb.WriteString("\n\n")
@@ -513,7 +522,7 @@ func (p *Plugin) renderCreateModal(width, height int) string {
 	}
 	sb.WriteString(nameLabel)
 	sb.WriteString("\n")
-	sb.WriteString(nameStyle.Width(modalW - 4).Render(nameValue))
+	sb.WriteString(nameStyle.Width(inputW).Render(nameValue))
 	sb.WriteString("\n\n")
 
 	// Base branch field
@@ -528,7 +537,7 @@ func (p *Plugin) renderCreateModal(width, height int) string {
 	}
 	sb.WriteString(baseLabel)
 	sb.WriteString("\n")
-	sb.WriteString(baseStyle.Width(modalW - 4).Render(baseValue))
+	sb.WriteString(baseStyle.Width(inputW).Render(baseValue))
 	sb.WriteString("\n\n")
 
 	// Task ID field with search dropdown
@@ -548,7 +557,7 @@ func (p *Plugin) renderCreateModal(width, height int) string {
 	}
 	sb.WriteString(taskLabel)
 	sb.WriteString("\n")
-	sb.WriteString(taskStyle.Width(modalW - 4).Render(taskValue))
+	sb.WriteString(taskStyle.Width(inputW).Render(taskValue))
 
 	// Show task dropdown when focused and has results
 	if p.createFocus == 2 {
@@ -627,6 +636,12 @@ func (p *Plugin) renderTaskLinkModal(width, height int) string {
 		modalW = width - 4
 	}
 
+	// Calculate input field width (same as renderCreateModal)
+	inputW := modalW - 10
+	if inputW < 20 {
+		inputW = 20
+	}
+
 	var sb strings.Builder
 	title := "Link Task"
 	if p.linkingWorktree != nil {
@@ -644,7 +659,7 @@ func (p *Plugin) renderTaskLinkModal(width, height int) string {
 	}
 	sb.WriteString(searchLabel)
 	sb.WriteString("\n")
-	sb.WriteString(searchStyle.Width(modalW - 4).Render(searchValue))
+	sb.WriteString(searchStyle.Width(inputW).Render(searchValue))
 
 	// Task dropdown
 	if p.taskSearchLoading {
