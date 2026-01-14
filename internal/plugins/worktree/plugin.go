@@ -271,6 +271,9 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			// Detect conflicts across worktrees
 			cmds = append(cmds, p.loadConflicts())
 
+			// Load diff for the selected worktree so diff tab shows content immediately
+			cmds = append(cmds, p.loadSelectedDiff())
+
 			// Reconnect to existing tmux sessions after initial worktree load
 			if !p.initialReconnectDone {
 				p.initialReconnectDone = true
@@ -1130,8 +1133,11 @@ func (p *Plugin) cyclePreviewTab(delta int) tea.Cmd {
 	p.previewOffset = 0
 	p.autoScrollOutput = true // Reset auto-scroll when switching tabs
 
-	// Load task details if switching to Task tab
-	if p.previewTab == PreviewTabTask {
+	// Load content for the active tab
+	switch p.previewTab {
+	case PreviewTabDiff:
+		return p.loadSelectedDiff()
+	case PreviewTabTask:
 		return p.loadTaskDetailsIfNeeded()
 	}
 	return nil
