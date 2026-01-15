@@ -1,29 +1,27 @@
 package filebrowser
 
 import (
-	"io/fs"
-	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
 )
 
-// Watcher monitors the file system for changes.
+// Watcher monitors a single file for changes.
+// Only watches the currently previewed file, not the entire directory tree.
 type Watcher struct {
-	fsWatcher *fsnotify.Watcher
-	rootDir   string
-	events    chan struct{}
-	stop      chan struct{}
-	debounce  *time.Timer
-	mu        sync.Mutex
-	closed    bool
+	fsWatcher    *fsnotify.Watcher
+	watchedFile  string // Currently watched file (absolute path)
+	events       chan struct{}
+	stop         chan struct{}
+	debounce     *time.Timer
+	mu           sync.Mutex
+	closed       bool
 }
 
-// NewWatcher creates a file system watcher for the given directory.
-func NewWatcher(rootDir string) (*Watcher, error) {
+// NewWatcher creates a file watcher. Does not start watching anything until WatchFile is called.
+func NewWatcher() (*Watcher, error) {
 	fsw, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -31,48 +29,48 @@ func NewWatcher(rootDir string) (*Watcher, error) {
 
 	w := &Watcher{
 		fsWatcher: fsw,
-		rootDir:   rootDir,
 		events:    make(chan struct{}, 1),
 		stop:      make(chan struct{}),
-	}
-
-	// Recursively add all directories (fsnotify doesn't watch subdirs automatically)
-	if err := w.addRecursive(rootDir); err != nil {
-		fsw.Close()
-		return nil, err
 	}
 
 	go w.run()
 	return w, nil
 }
 
-// addRecursive adds a directory and all its subdirectories to the watcher.
-func (w *Watcher) addRecursive(dir string) error {
-	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+// WatchFile starts watching the specified file. Stops watching any previously watched file.
+// Pass empty string to stop watching without watching a new file.
+func (w *Watcher) WatchFile(path string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.closed {
+		return nil
+	}
+
+	// Remove old watch if any
+	if w.watchedFile != "" {
+		// Watch the directory containing the file (fsnotify works better with directories)
+		oldDir := filepath.Dir(w.watchedFile)
+		_ = w.fsWatcher.Remove(oldDir)
+		w.watchedFile = ""
+	}
+
+	// Add new watch if path provided
+	if path != "" {
+		absPath, err := filepath.Abs(path)
 		if err != nil {
-			// Return error for root dir, skip errors for subdirs
-			if path == dir {
-				return err
-			}
-			return nil // Skip unreadable subdirectories
+			return err
 		}
-		if !d.IsDir() {
-			return nil
+
+		// Watch the directory containing the file (fsnotify is more reliable with directories)
+		dir := filepath.Dir(absPath)
+		if err := w.fsWatcher.Add(dir); err != nil {
+			return err
 		}
-		// Skip common large/irrelevant directories
-		name := d.Name()
-		if name == ".git" || name == "node_modules" || name == "vendor" ||
-			name == ".next" || name == "dist" || name == "build" ||
-			name == "__pycache__" || name == ".venv" || name == "venv" ||
-			name == ".idea" || name == ".vscode" {
-			return filepath.SkipDir
-		}
-		// Skip hidden directories (except root)
-		if path != dir && strings.HasPrefix(name, ".") {
-			return filepath.SkipDir
-		}
-		return w.fsWatcher.Add(path)
-	})
+		w.watchedFile = absPath
+	}
+
+	return nil
 }
 
 // run processes file system events.
@@ -97,7 +95,22 @@ func (w *Watcher) run() {
 			}
 
 			w.mu.Lock()
+			// Only process events for the watched file
+			watchedFile := w.watchedFile
+			w.mu.Unlock()
+
+			if watchedFile == "" {
+				continue
+			}
+
+			// Check if event is for our watched file
+			eventPath, _ := filepath.Abs(event.Name)
+			if eventPath != watchedFile {
+				continue
+			}
+
 			// Debounce: wait 100ms for more events before signaling
+			w.mu.Lock()
 			if w.debounce != nil {
 				w.debounce.Stop()
 			}
@@ -116,12 +129,6 @@ func (w *Watcher) run() {
 			})
 			w.mu.Unlock()
 
-			// Watch newly created directories (recursively in case of mkdir -p)
-			if event.Op&fsnotify.Create != 0 {
-				if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
-					_ = w.addRecursive(event.Name)
-				}
-			}
 		case _, ok := <-w.fsWatcher.Errors:
 			if !ok {
 				return
@@ -131,7 +138,7 @@ func (w *Watcher) run() {
 	}
 }
 
-// Events returns a channel that signals when files change.
+// Events returns a channel that signals when the watched file changes.
 func (w *Watcher) Events() <-chan struct{} {
 	return w.events
 }

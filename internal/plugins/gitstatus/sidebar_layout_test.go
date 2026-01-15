@@ -231,3 +231,91 @@ func TestSidebarRestoreInitialization(t *testing.T) {
 		t.Errorf("sidebarRestore should default to PaneSidebar, got %d", p.sidebarRestore)
 	}
 }
+
+// TestFolderTriangleOnlyWithChildren verifies expand triangles only show for folders with children.
+func TestFolderTriangleOnlyWithChildren(t *testing.T) {
+	tests := []struct {
+		name           string
+		entry          *FileEntry
+		expectTriangle bool
+	}{
+		{
+			name: "folder with children shows triangle",
+			entry: &FileEntry{
+				Path:     "folder/",
+				Status:   StatusUntracked,
+				IsFolder: true,
+				Children: []*FileEntry{
+					{Path: "folder/file1.txt", Status: StatusUntracked},
+					{Path: "folder/file2.txt", Status: StatusUntracked},
+				},
+			},
+			expectTriangle: true,
+		},
+		{
+			name: "folder with no children shows no triangle",
+			entry: &FileEntry{
+				Path:     "empty-folder/",
+				Status:   StatusUntracked,
+				IsFolder: true,
+				Children: []*FileEntry{}, // Empty children
+			},
+			expectTriangle: false,
+		},
+		{
+			name: "folder with nil children shows no triangle",
+			entry: &FileEntry{
+				Path:     "nil-folder/",
+				Status:   StatusUntracked,
+				IsFolder: true,
+				Children: nil, // Nil children
+			},
+			expectTriangle: false,
+		},
+		{
+			name: "regular file shows no triangle",
+			entry: &FileEntry{
+				Path:     "file.txt",
+				Status:   StatusUntracked,
+				IsFolder: false,
+			},
+			expectTriangle: false,
+		},
+	}
+
+	p := &Plugin{}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := p.renderSidebarEntry(tt.entry, false, 40)
+
+			hasCollapsedTriangle := containsString(result, "▶")
+			hasExpandedTriangle := containsString(result, "▼")
+			hasTriangle := hasCollapsedTriangle || hasExpandedTriangle
+
+			if tt.expectTriangle && !hasTriangle {
+				t.Errorf("expected triangle in output for %q, got: %s", tt.name, result)
+			}
+			if !tt.expectTriangle && hasTriangle {
+				t.Errorf("did not expect triangle in output for %q, got: %s", tt.name, result)
+			}
+		})
+	}
+}
+
+// containsString checks if the styled string contains the given substring.
+// Strips ANSI codes for reliable string matching.
+func containsString(s, substr string) bool {
+	// Simple approach: check for the substring directly
+	// ANSI codes won't contain our triangle characters
+	return len(s) > 0 && len(substr) > 0 && (s == substr || len(s) >= len(substr) && findSubstring(s, substr))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

@@ -2,6 +2,7 @@ package filebrowser
 
 import (
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -314,7 +315,7 @@ func (p *Plugin) restoreState() tea.Cmd {
 // startWatcher initializes the file system watcher.
 func (p *Plugin) startWatcher() tea.Cmd {
 	return func() tea.Msg {
-		watcher, err := NewWatcher(p.ctx.WorkDir)
+		watcher, err := NewWatcher()
 		if err != nil {
 			p.ctx.Logger.Error("file browser: watcher failed", "error", err)
 			return nil
@@ -331,6 +332,18 @@ func (p *Plugin) listenForWatchEvents() tea.Cmd {
 	return func() tea.Msg {
 		<-p.watcher.Events()
 		return WatchEventMsg{}
+	}
+}
+
+// updateWatchedFile updates the file watcher to watch the current preview file.
+func (p *Plugin) updateWatchedFile() {
+	if p.watcher == nil {
+		return
+	}
+	if p.previewFile != "" {
+		_ = p.watcher.WatchFile(filepath.Join(p.ctx.WorkDir, p.previewFile))
+	} else {
+		_ = p.watcher.WatchFile("")
 	}
 }
 
@@ -400,6 +413,7 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		// Restore preview file and load content
 		if fbState.PreviewFile != "" {
 			p.previewFile = fbState.PreviewFile
+			p.updateWatchedFile()
 			p.previewScroll = fbState.PreviewScroll
 			return p, LoadPreview(p.ctx.WorkDir, p.previewFile)
 		}
@@ -453,12 +467,8 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		return p, p.listenForWatchEvents()
 
 	case WatchEventMsg:
-		// File system changed, refresh tree and preview (if viewing a file)
-		cmds := []tea.Cmd{
-			p.refresh(),
-			p.listenForWatchEvents(),
-		}
-		// Reload preview if we're currently viewing a file
+		// Watched file changed - reload preview (watcher only watches the previewed file)
+		cmds := []tea.Cmd{p.listenForWatchEvents()}
 		if p.previewFile != "" {
 			cmds = append(cmds, LoadPreview(p.ctx.WorkDir, p.previewFile))
 		}

@@ -2094,7 +2094,9 @@ func (p *Plugin) renderToolUseBlock(block adapter.ContentBlock, maxWidth int) []
 		// Red styling for errors with ✗ indicator
 		errorStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#F87171")) // Light red
-		lines = append(lines, errorStyle.Render("✗ "+toolHeader[2:])) // Replace icon with ✗
+		// Build error header without the original icon (avoid byte slicing Unicode)
+		errorHeader := "✗ " + strings.TrimPrefix(toolHeader, icon+" ")
+		lines = append(lines, errorStyle.Render(errorHeader))
 	} else {
 		lines = append(lines, styles.Code.Render(toolHeader))
 	}

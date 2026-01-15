@@ -84,6 +84,7 @@ func (p *Plugin) handleTreeKey(key string) (plugin.Plugin, tea.Cmd) {
 			} else {
 				// Load file preview and switch to preview pane
 				p.previewFile = node.Path
+				p.updateWatchedFile()
 				p.previewScroll = 0
 				p.previewLines = nil
 				p.previewError = nil
@@ -103,6 +104,7 @@ func (p *Plugin) handleTreeKey(key string) (plugin.Plugin, tea.Cmd) {
 			} else {
 				// Load file preview and switch to preview pane
 				p.previewFile = node.Path
+				p.updateWatchedFile()
 				p.previewScroll = 0
 				p.previewLines = nil
 				p.previewError = nil
@@ -947,6 +949,7 @@ func (p *Plugin) handleSearchKey(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 			// If it's a file, load preview
 			if !match.IsDir {
 				p.previewFile = match.Path
+				p.updateWatchedFile()
 				p.previewScroll = 0
 				p.previewLines = nil
 				p.previewError = nil
@@ -1019,6 +1022,7 @@ func (p *Plugin) loadPreviewForCursor() tea.Cmd {
 		return nil
 	}
 	p.previewFile = node.Path
+	p.updateWatchedFile()
 	p.previewScroll = 0
 	p.previewLines = nil
 	p.previewError = nil

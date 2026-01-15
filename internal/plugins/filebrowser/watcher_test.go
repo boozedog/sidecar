@@ -8,18 +8,13 @@ import (
 )
 
 func TestNewWatcher(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	w, err := NewWatcher(tmpDir)
+	w, err := NewWatcher()
 	if err != nil {
 		t.Fatalf("NewWatcher() failed: %v", err)
 	}
 
 	if w == nil {
 		t.Error("NewWatcher() returned nil")
-	}
-	if w.rootDir != tmpDir {
-		t.Errorf("rootDir = %q, want %q", w.rootDir, tmpDir)
 	}
 	if w.fsWatcher == nil {
 		t.Error("fsWatcher not initialized")
@@ -31,33 +26,28 @@ func TestNewWatcher(t *testing.T) {
 	w.Stop()
 }
 
-func TestNewWatcher_InvalidDirectory(t *testing.T) {
-	nonExistent := "/nonexistent/path/that/does/not/exist"
-
-	w, err := NewWatcher(nonExistent)
-	if err == nil {
-		t.Error("NewWatcher() should error for non-existent directory")
-		w.Stop()
-	}
-}
-
-func TestWatcher_FileChangeDetection(t *testing.T) {
+func TestWatcher_WatchFile(t *testing.T) {
 	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
 
-	w, err := NewWatcher(tmpDir)
+	// Create a test file
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	w, err := NewWatcher()
 	if err != nil {
 		t.Fatalf("NewWatcher() failed: %v", err)
 	}
 	defer w.Stop()
 
-	// Create a file
-	testFile := filepath.Join(tmpDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
+	// Watch the file
+	if err := w.WatchFile(testFile); err != nil {
+		t.Fatalf("WatchFile() failed: %v", err)
 	}
 
 	// Modify the file
-	time.Sleep(50 * time.Millisecond) // Wait for file system to settle
+	time.Sleep(50 * time.Millisecond)
 	if err := os.WriteFile(testFile, []byte("modified"), 0644); err != nil {
 		t.Fatalf("failed to modify test file: %v", err)
 	}
@@ -71,68 +61,175 @@ func TestWatcher_FileChangeDetection(t *testing.T) {
 	}
 }
 
-func TestWatcher_DirectoryWatching(t *testing.T) {
+func TestWatcher_WatchFile_IgnoresOtherFiles(t *testing.T) {
 	tmpDir := t.TempDir()
+	watchedFile := filepath.Join(tmpDir, "watched.txt")
+	otherFile := filepath.Join(tmpDir, "other.txt")
 
-	w, err := NewWatcher(tmpDir)
+	// Create both files
+	if err := os.WriteFile(watchedFile, []byte("watched"), 0644); err != nil {
+		t.Fatalf("failed to create watched file: %v", err)
+	}
+	if err := os.WriteFile(otherFile, []byte("other"), 0644); err != nil {
+		t.Fatalf("failed to create other file: %v", err)
+	}
+
+	w, err := NewWatcher()
 	if err != nil {
 		t.Fatalf("NewWatcher() failed: %v", err)
 	}
 	defer w.Stop()
 
-	// Create a new subdirectory
-	subDir := filepath.Join(tmpDir, "subdir")
-	if err := os.Mkdir(subDir, 0755); err != nil {
-		t.Fatalf("failed to create subdirectory: %v", err)
+	// Watch only one file
+	if err := w.WatchFile(watchedFile); err != nil {
+		t.Fatalf("WatchFile() failed: %v", err)
 	}
 
-	// Wait for event
-	select {
-	case <-w.Events():
-		// Event received
-	case <-time.After(500 * time.Millisecond):
-		t.Error("timeout waiting for directory creation event")
-	}
-
-	// Create a file in the new subdirectory
-	// The watcher should have picked up the new directory
-	testFile := filepath.Join(subDir, "test.txt")
+	// Modify the OTHER file (should NOT trigger event)
 	time.Sleep(50 * time.Millisecond)
-	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
-		t.Fatalf("failed to create file in subdirectory: %v", err)
+	if err := os.WriteFile(otherFile, []byte("modified other"), 0644); err != nil {
+		t.Fatalf("failed to modify other file: %v", err)
 	}
 
-	// Should detect the file creation in the subdirectory
+	// Should NOT receive event for other file
 	select {
 	case <-w.Events():
-		// Event received as expected
+		t.Error("received event for unwatched file")
+	case <-time.After(300 * time.Millisecond):
+		// Expected - no event for unwatched file
+	}
+
+	// Now modify the watched file (SHOULD trigger event)
+	if err := os.WriteFile(watchedFile, []byte("modified watched"), 0644); err != nil {
+		t.Fatalf("failed to modify watched file: %v", err)
+	}
+
+	// Should receive event for watched file
+	select {
+	case <-w.Events():
+		// Expected
 	case <-time.After(500 * time.Millisecond):
-		t.Error("timeout waiting for file creation in subdirectory")
+		t.Error("timeout waiting for event on watched file")
+	}
+}
+
+func TestWatcher_SwitchWatchedFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	file1 := filepath.Join(tmpDir, "file1.txt")
+	file2 := filepath.Join(tmpDir, "file2.txt")
+
+	// Create both files
+	if err := os.WriteFile(file1, []byte("file1"), 0644); err != nil {
+		t.Fatalf("failed to create file1: %v", err)
+	}
+	if err := os.WriteFile(file2, []byte("file2"), 0644); err != nil {
+		t.Fatalf("failed to create file2: %v", err)
+	}
+
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("NewWatcher() failed: %v", err)
+	}
+	defer w.Stop()
+
+	// Watch file1
+	if err := w.WatchFile(file1); err != nil {
+		t.Fatalf("WatchFile(file1) failed: %v", err)
+	}
+
+	// Switch to watching file2
+	if err := w.WatchFile(file2); err != nil {
+		t.Fatalf("WatchFile(file2) failed: %v", err)
+	}
+
+	// Modify file1 (should NOT trigger event since we switched)
+	time.Sleep(50 * time.Millisecond)
+	if err := os.WriteFile(file1, []byte("modified file1"), 0644); err != nil {
+		t.Fatalf("failed to modify file1: %v", err)
+	}
+
+	select {
+	case <-w.Events():
+		t.Error("received event for previously watched file after switch")
+	case <-time.After(300 * time.Millisecond):
+		// Expected - no event for unwatched file
+	}
+
+	// Modify file2 (SHOULD trigger event)
+	if err := os.WriteFile(file2, []byte("modified file2"), 0644); err != nil {
+		t.Fatalf("failed to modify file2: %v", err)
+	}
+
+	select {
+	case <-w.Events():
+		// Expected
+	case <-time.After(500 * time.Millisecond):
+		t.Error("timeout waiting for event on currently watched file")
+	}
+}
+
+func TestWatcher_WatchEmptyStopsWatching(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
+
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("NewWatcher() failed: %v", err)
+	}
+	defer w.Stop()
+
+	// Watch the file
+	if err := w.WatchFile(testFile); err != nil {
+		t.Fatalf("WatchFile() failed: %v", err)
+	}
+
+	// Stop watching by passing empty string
+	if err := w.WatchFile(""); err != nil {
+		t.Fatalf("WatchFile('') failed: %v", err)
+	}
+
+	// Modify the file (should NOT trigger event since we stopped watching)
+	time.Sleep(50 * time.Millisecond)
+	if err := os.WriteFile(testFile, []byte("modified"), 0644); err != nil {
+		t.Fatalf("failed to modify test file: %v", err)
+	}
+
+	select {
+	case <-w.Events():
+		t.Error("received event after stopping watch")
+	case <-time.After(300 * time.Millisecond):
+		// Expected - no event
 	}
 }
 
 func TestWatcher_Debounce(t *testing.T) {
 	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
 
-	w, err := NewWatcher(tmpDir)
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	w, err := NewWatcher()
 	if err != nil {
 		t.Fatalf("NewWatcher() failed: %v", err)
 	}
 	defer w.Stop()
 
-	// Create multiple files rapidly
-	testFile1 := filepath.Join(tmpDir, "test1.txt")
-	testFile2 := filepath.Join(tmpDir, "test2.txt")
-	testFile3 := filepath.Join(tmpDir, "test3.txt")
+	if err := w.WatchFile(testFile); err != nil {
+		t.Fatalf("WatchFile() failed: %v", err)
+	}
 
-	if err := os.WriteFile(testFile1, []byte("test"), 0644); err != nil {
-		t.Fatalf("failed to create test file 1: %v", err)
-	}
-	if err := os.WriteFile(testFile2, []byte("test"), 0644); err != nil {
-		t.Fatalf("failed to create test file 2: %v", err)
-	}
-	if err := os.WriteFile(testFile3, []byte("test"), 0644); err != nil {
-		t.Fatalf("failed to create test file 3: %v", err)
+	// Rapidly modify the file multiple times
+	for i := 0; i < 5; i++ {
+		if err := os.WriteFile(testFile, []byte("test"+string(rune('0'+i))), 0644); err != nil {
+			t.Fatalf("failed to modify test file: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	// Should receive event(s) but debouncing prevents too many
@@ -154,16 +251,13 @@ func TestWatcher_Debounce(t *testing.T) {
 	<-done
 
 	if eventCount == 0 {
-		t.Error("no events detected for multiple file changes")
+		t.Error("no events detected")
 	}
-	// Should have received fewer events than files created due to debouncing
-	// Exact count varies based on timing, but should be < 3
+	// Due to debouncing, we should have fewer events than modifications
 }
 
 func TestWatcher_Stop(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	w, err := NewWatcher(tmpDir)
+	w, err := NewWatcher()
 	if err != nil {
 		t.Fatalf("NewWatcher() failed: %v", err)
 	}
@@ -174,13 +268,7 @@ func TestWatcher_Stop(t *testing.T) {
 	// Wait for run() goroutine to exit and close the channel
 	time.Sleep(50 * time.Millisecond)
 
-	// Create a file after stopping - should not generate events
-	testFile := filepath.Join(tmpDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
-
-	// Channel should be closed after stop, not produce new events
+	// Channel should be closed after stop
 	select {
 	case _, ok := <-w.Events():
 		if ok {
@@ -194,22 +282,31 @@ func TestWatcher_Stop(t *testing.T) {
 
 func TestWatcher_EventsChannel(t *testing.T) {
 	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
 
-	w, err := NewWatcher(tmpDir)
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	w, err := NewWatcher()
 	if err != nil {
 		t.Fatalf("NewWatcher() failed: %v", err)
 	}
 	defer w.Stop()
+
+	if err := w.WatchFile(testFile); err != nil {
+		t.Fatalf("WatchFile() failed: %v", err)
+	}
 
 	eventsChan := w.Events()
 	if eventsChan == nil {
 		t.Error("Events() returned nil channel")
 	}
 
-	// Channel should be readable
-	testFile := filepath.Join(tmpDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
+	// Modify the file
+	time.Sleep(50 * time.Millisecond)
+	if err := os.WriteFile(testFile, []byte("modified"), 0644); err != nil {
+		t.Fatalf("failed to modify test file: %v", err)
 	}
 
 	select {
@@ -220,65 +317,22 @@ func TestWatcher_EventsChannel(t *testing.T) {
 	}
 }
 
-func TestWatcher_NewDirectoryAutoWatch(t *testing.T) {
+func TestWatcher_DeleteWatchedFile(t *testing.T) {
 	tmpDir := t.TempDir()
-
-	w, err := NewWatcher(tmpDir)
-	if err != nil {
-		t.Fatalf("NewWatcher() failed: %v", err)
-	}
-	defer w.Stop()
-
-	// Create a new directory
-	newDir := filepath.Join(tmpDir, "newdir")
-	if err := os.Mkdir(newDir, 0755); err != nil {
-		t.Fatalf("failed to create directory: %v", err)
-	}
-
-	// Wait for directory creation event
-	select {
-	case <-w.Events():
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("timeout waiting for directory creation")
-	}
-
-	// Now create a file in the new directory
-	// The watcher should automatically be watching this directory
-	newFile := filepath.Join(newDir, "newfile.txt")
-	time.Sleep(50 * time.Millisecond)
-	if err := os.WriteFile(newFile, []byte("content"), 0644); err != nil {
-		t.Fatalf("failed to create file in new directory: %v", err)
-	}
-
-	// Should detect the file creation in the newly watched directory
-	select {
-	case <-w.Events():
-		// Success - new directory is being watched
-	case <-time.After(500 * time.Millisecond):
-		t.Error("new directory not being watched automatically")
-	}
-}
-
-func TestWatcher_DeleteFile(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	w, err := NewWatcher(tmpDir)
-	if err != nil {
-		t.Fatalf("NewWatcher() failed: %v", err)
-	}
-	defer w.Stop()
-
-	// Create and then delete a file
 	testFile := filepath.Join(tmpDir, "test.txt")
+
 	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	// Wait for creation event
-	select {
-	case <-w.Events():
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("timeout waiting for creation event")
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("NewWatcher() failed: %v", err)
+	}
+	defer w.Stop()
+
+	if err := w.WatchFile(testFile); err != nil {
+		t.Fatalf("WatchFile() failed: %v", err)
 	}
 
 	// Delete the file
@@ -296,16 +350,8 @@ func TestWatcher_DeleteFile(t *testing.T) {
 	}
 }
 
-func TestWatcher_RenameFile(t *testing.T) {
+func TestWatcher_RenameWatchedFile(t *testing.T) {
 	tmpDir := t.TempDir()
-
-	w, err := NewWatcher(tmpDir)
-	if err != nil {
-		t.Fatalf("NewWatcher() failed: %v", err)
-	}
-	defer w.Stop()
-
-	// Create a file
 	oldPath := filepath.Join(tmpDir, "old.txt")
 	newPath := filepath.Join(tmpDir, "new.txt")
 
@@ -313,11 +359,14 @@ func TestWatcher_RenameFile(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	// Wait for creation event
-	select {
-	case <-w.Events():
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("timeout waiting for creation event")
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("NewWatcher() failed: %v", err)
+	}
+	defer w.Stop()
+
+	if err := w.WatchFile(oldPath); err != nil {
+		t.Fatalf("WatchFile() failed: %v", err)
 	}
 
 	// Rename the file
@@ -326,7 +375,7 @@ func TestWatcher_RenameFile(t *testing.T) {
 		t.Fatalf("failed to rename file: %v", err)
 	}
 
-	// Should detect the rename
+	// Should detect the rename (shows up as modification/deletion of watched file)
 	select {
 	case <-w.Events():
 		// Success
@@ -335,37 +384,18 @@ func TestWatcher_RenameFile(t *testing.T) {
 	}
 }
 
-func TestWatcher_EventChannelNonBlocking(t *testing.T) {
-	// Test that the buffered channel with non-blocking send doesn't block
-	tmpDir := t.TempDir()
-
-	w, err := NewWatcher(tmpDir)
+func TestWatcher_WatchClosedWatcher(t *testing.T) {
+	w, err := NewWatcher()
 	if err != nil {
 		t.Fatalf("NewWatcher() failed: %v", err)
 	}
-	defer w.Stop()
 
-	// Generate many rapid changes
-	for i := 0; i < 5; i++ {
-		testFile := filepath.Join(tmpDir, "test"+string(rune('0'+i))+".txt")
-		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
-			t.Fatalf("failed to create test file: %v", err)
-		}
-	}
+	w.Stop()
+	time.Sleep(50 * time.Millisecond)
 
-	// Should be able to read events without blocking
-	timeout := time.After(2 * time.Second)
-	eventCount := 0
-
-	for {
-		select {
-		case <-w.Events():
-			eventCount++
-		case <-timeout:
-			if eventCount == 0 {
-				t.Error("no events detected")
-			}
-			return
-		}
+	// WatchFile on closed watcher should not panic
+	err = w.WatchFile("/some/path")
+	if err != nil {
+		// Some error is acceptable, but no panic
 	}
 }

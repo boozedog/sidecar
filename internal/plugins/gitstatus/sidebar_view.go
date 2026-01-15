@@ -319,31 +319,35 @@ func (p *Plugin) renderSidebarEntry(entry *FileEntry, selected bool, maxWidth in
 
 	// Handle folder entries specially
 	if entry.IsFolder {
-		// Show expand/collapse indicator and file count
-		indicator := "▶"
-		if entry.IsExpanded {
-			indicator = "▼"
-		}
 		folderName := entry.Path
 		fileCount := len(entry.Children)
 		countStr := fmt.Sprintf("(%d)", fileCount)
 
+		// Only show expand/collapse indicator if folder has children
+		indicator := ""
+		if fileCount > 0 {
+			indicator = "▶ "
+			if entry.IsExpanded {
+				indicator = "▼ "
+			}
+		}
+
 		// Calculate available width
-		availableWidth := maxWidth - 4 // status + indicator + spacing
+		availableWidth := maxWidth - 2 - len(indicator) // status + indicator + spacing
 		displayName := folderName
 		if len(folderName)+len(countStr)+1 > availableWidth && availableWidth > 10 {
 			displayName = folderName[:availableWidth-len(countStr)-4] + "…/"
 		}
 
 		if selected {
-			plainLine := fmt.Sprintf("%s %s %s %s", string(entry.Status), indicator, displayName, countStr)
+			plainLine := fmt.Sprintf("%s %s%s %s", string(entry.Status), indicator, displayName, countStr)
 			if len(plainLine) < maxWidth {
 				plainLine += strings.Repeat(" ", maxWidth-len(plainLine))
 			}
 			return styles.ListItemSelected.Render(plainLine)
 		}
 
-		return styles.ListItemNormal.Render(fmt.Sprintf("%s %s %s %s", status, indicator, displayName, styles.Muted.Render(countStr)))
+		return styles.ListItemNormal.Render(fmt.Sprintf("%s %s%s %s", status, indicator, displayName, styles.Muted.Render(countStr)))
 	}
 
 	// Path - truncate if needed

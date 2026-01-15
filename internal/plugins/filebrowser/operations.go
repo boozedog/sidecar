@@ -623,6 +623,7 @@ func (p *Plugin) selectQuickOpenMatch() (plugin.Plugin, tea.Cmd) {
 
 	// Load preview
 	p.previewFile = match.Path
+	p.updateWatchedFile()
 	p.previewScroll = 0
 	p.previewLines = nil
 	p.previewError = nil
@@ -681,6 +682,7 @@ func (p *Plugin) openProjectSearchResult() (plugin.Plugin, tea.Cmd) {
 
 	// Load preview
 	p.previewFile = path
+	p.updateWatchedFile()
 	p.previewScroll = 0
 	p.previewLines = nil
 	p.previewError = nil
@@ -1053,6 +1055,7 @@ func (p *Plugin) navigateToFile(path string) (plugin.Plugin, tea.Cmd) {
 
 	// Load preview
 	p.previewFile = path
+	p.updateWatchedFile()
 	p.previewScroll = 0
 	p.previewLines = nil
 	p.previewError = nil
