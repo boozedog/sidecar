@@ -209,3 +209,185 @@ func TestShouldShowSkipPermissions(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildAgentCommand(t *testing.T) {
+	tests := []struct {
+		name      string
+		agentType AgentType
+		skipPerms bool
+		taskID    string
+		wantFlag  string   // Expected skip-perms flag in output
+		wantPrompt bool    // Whether prompt should be included
+	}{
+		// Claude tests
+		{
+			name:       "claude no skip no task",
+			agentType:  AgentClaude,
+			skipPerms:  false,
+			taskID:     "",
+			wantFlag:   "",
+			wantPrompt: false,
+		},
+		{
+			name:       "claude with skip no task",
+			agentType:  AgentClaude,
+			skipPerms:  true,
+			taskID:     "",
+			wantFlag:   "--dangerously-skip-permissions",
+			wantPrompt: false,
+		},
+		// Codex tests
+		{
+			name:       "codex no skip no task",
+			agentType:  AgentCodex,
+			skipPerms:  false,
+			taskID:     "",
+			wantFlag:   "",
+			wantPrompt: false,
+		},
+		{
+			name:       "codex with skip no task",
+			agentType:  AgentCodex,
+			skipPerms:  true,
+			taskID:     "",
+			wantFlag:   "--dangerously-bypass-approvals-and-sandbox",
+			wantPrompt: false,
+		},
+		// Gemini tests
+		{
+			name:       "gemini no skip no task",
+			agentType:  AgentGemini,
+			skipPerms:  false,
+			taskID:     "",
+			wantFlag:   "",
+			wantPrompt: false,
+		},
+		{
+			name:       "gemini with skip no task",
+			agentType:  AgentGemini,
+			skipPerms:  true,
+			taskID:     "",
+			wantFlag:   "--yolo",
+			wantPrompt: false,
+		},
+		// Cursor tests
+		{
+			name:       "cursor no skip no task",
+			agentType:  AgentCursor,
+			skipPerms:  false,
+			taskID:     "",
+			wantFlag:   "",
+			wantPrompt: false,
+		},
+		{
+			name:       "cursor with skip no task",
+			agentType:  AgentCursor,
+			skipPerms:  true,
+			taskID:     "",
+			wantFlag:   "-f",
+			wantPrompt: false,
+		},
+		// OpenCode tests (no skip flag)
+		{
+			name:       "opencode no skip no task",
+			agentType:  AgentOpenCode,
+			skipPerms:  false,
+			taskID:     "",
+			wantFlag:   "",
+			wantPrompt: false,
+		},
+		{
+			name:       "opencode with skip no task (no flag available)",
+			agentType:  AgentOpenCode,
+			skipPerms:  true,
+			taskID:     "",
+			wantFlag:   "",
+			wantPrompt: false,
+		},
+		// Aider tests
+		{
+			name:       "aider no skip no task",
+			agentType:  AgentAider,
+			skipPerms:  false,
+			taskID:     "",
+			wantFlag:   "",
+			wantPrompt: false,
+		},
+		{
+			name:       "aider with skip no task",
+			agentType:  AgentAider,
+			skipPerms:  true,
+			taskID:     "",
+			wantFlag:   "--yes",
+			wantPrompt: false,
+		},
+	}
+
+	// Create a minimal plugin (no ctx needed for these tests without taskID)
+	p := &Plugin{}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wt := &Worktree{TaskID: tt.taskID}
+			result := p.buildAgentCommand(tt.agentType, wt, tt.skipPerms)
+
+			// Check base command
+			baseCmd := getAgentCommand(tt.agentType)
+			if !strings.HasPrefix(result, baseCmd) {
+				t.Errorf("command should start with %q, got %q", baseCmd, result)
+			}
+
+			// Check skip permissions flag
+			if tt.wantFlag != "" {
+				if !strings.Contains(result, tt.wantFlag) {
+					t.Errorf("command should contain flag %q, got %q", tt.wantFlag, result)
+				}
+			} else if tt.skipPerms {
+				// If skipPerms but no wantFlag, ensure no flag was added
+				for agent, flag := range SkipPermissionsFlags {
+					if agent == tt.agentType && flag != "" {
+						t.Errorf("command should not contain flag for %s when wantFlag is empty", tt.agentType)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestBuildAgentCommandSyntax(t *testing.T) {
+	// Test expected output format for each agent
+	tests := []struct {
+		agentType AgentType
+		skipPerms bool
+		expected  string
+	}{
+		{AgentClaude, false, "claude"},
+		{AgentClaude, true, "claude --dangerously-skip-permissions"},
+		{AgentCodex, false, "codex"},
+		{AgentCodex, true, "codex --dangerously-bypass-approvals-and-sandbox"},
+		{AgentGemini, false, "gemini"},
+		{AgentGemini, true, "gemini --yolo"},
+		{AgentCursor, false, "cursor-agent"},
+		{AgentCursor, true, "cursor-agent -f"},
+		{AgentOpenCode, false, "opencode"},
+		{AgentOpenCode, true, "opencode"}, // No skip flag
+		{AgentAider, false, "aider"},
+		{AgentAider, true, "aider --yes"},
+	}
+
+	p := &Plugin{}
+	for _, tt := range tests {
+		name := string(tt.agentType)
+		if tt.skipPerms {
+			name += "_skip"
+		}
+		t.Run(name, func(t *testing.T) {
+			wt := &Worktree{TaskID: ""} // No task context
+			result := p.buildAgentCommand(tt.agentType, wt, tt.skipPerms)
+			if result != tt.expected {
+				t.Errorf("buildAgentCommand(%s, skipPerms=%v) = %q, want %q",
+					tt.agentType, tt.skipPerms, result, tt.expected)
+			}
+		})
+	}
+}

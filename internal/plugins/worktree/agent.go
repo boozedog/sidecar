@@ -140,28 +140,100 @@ func getAgentCommand(agentType AgentType) string {
 func (p *Plugin) buildAgentCommand(agentType AgentType, wt *Worktree, skipPerms bool) string {
 	baseCmd := getAgentCommand(agentType)
 
-	// Add skip permissions flag if enabled and supported
-	if skipPerms {
-		if flag := SkipPermissionsFlags[agentType]; flag != "" {
-			baseCmd = baseCmd + " " + flag
+	// Get task context if available
+	var ctx string
+	if wt.TaskID != "" {
+		ctx = p.getTaskContext(wt.TaskID)
+	}
+
+	// Escape context for shell safety (single quotes with proper escaping)
+	var escapedCtx string
+	if ctx != "" {
+		escapedCtx = strings.ReplaceAll(ctx, "'", "'\"'\"'")
+	}
+
+	// Build command with appropriate syntax for each agent type
+	// Each agent has different CLI syntax for flags and prompts
+	switch agentType {
+	case AgentClaude:
+		// claude [--dangerously-skip-permissions] "prompt"
+		if skipPerms {
+			if flag := SkipPermissionsFlags[agentType]; flag != "" {
+				baseCmd = baseCmd + " " + flag
+			}
 		}
-	}
+		if escapedCtx != "" {
+			return fmt.Sprintf("%s '%s'", baseCmd, escapedCtx)
+		}
+		return baseCmd
 
-	// Only add context for Claude if we have a linked task
-	if agentType != AgentClaude || wt.TaskID == "" {
+	case AgentCodex:
+		// codex [--dangerously-bypass-approvals-and-sandbox] "prompt"
+		if skipPerms {
+			if flag := SkipPermissionsFlags[agentType]; flag != "" {
+				baseCmd = baseCmd + " " + flag
+			}
+		}
+		if escapedCtx != "" {
+			return fmt.Sprintf("%s '%s'", baseCmd, escapedCtx)
+		}
+		return baseCmd
+
+	case AgentAider:
+		// aider [--yes] --message "prompt"
+		if skipPerms {
+			if flag := SkipPermissionsFlags[agentType]; flag != "" {
+				baseCmd = baseCmd + " " + flag
+			}
+		}
+		if escapedCtx != "" {
+			return fmt.Sprintf("%s --message '%s'", baseCmd, escapedCtx)
+		}
+		return baseCmd
+
+	case AgentGemini:
+		// gemini [--yolo] "prompt"
+		if skipPerms {
+			if flag := SkipPermissionsFlags[agentType]; flag != "" {
+				baseCmd = baseCmd + " " + flag
+			}
+		}
+		if escapedCtx != "" {
+			return fmt.Sprintf("%s '%s'", baseCmd, escapedCtx)
+		}
+		return baseCmd
+
+	case AgentCursor:
+		// cursor-agent [-f] "prompt"
+		if skipPerms {
+			if flag := SkipPermissionsFlags[agentType]; flag != "" {
+				baseCmd = baseCmd + " " + flag
+			}
+		}
+		if escapedCtx != "" {
+			return fmt.Sprintf("%s '%s'", baseCmd, escapedCtx)
+		}
+		return baseCmd
+
+	case AgentOpenCode:
+		// opencode run "message" for non-interactive mode (no skip-perms flag)
+		if escapedCtx != "" {
+			return fmt.Sprintf("%s run '%s'", baseCmd, escapedCtx)
+		}
+		return baseCmd
+
+	default:
+		// Generic fallback: cmd [flag] "prompt"
+		if skipPerms {
+			if flag := SkipPermissionsFlags[agentType]; flag != "" {
+				baseCmd = baseCmd + " " + flag
+			}
+		}
+		if escapedCtx != "" {
+			return fmt.Sprintf("%s '%s'", baseCmd, escapedCtx)
+		}
 		return baseCmd
 	}
-
-	// Get task context
-	ctx := p.getTaskContext(wt.TaskID)
-	if ctx == "" {
-		return baseCmd
-	}
-
-	// Pass context as initial prompt to Claude
-	// Escape quotes for shell safety
-	escapedCtx := strings.ReplaceAll(ctx, "'", "'\"'\"'")
-	return fmt.Sprintf("%s '%s'", baseCmd, escapedCtx)
 }
 
 // getAgentCommandWithContext returns the agent command with optional task context (legacy, no skip perms).
