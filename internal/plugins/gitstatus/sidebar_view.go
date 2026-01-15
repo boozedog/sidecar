@@ -481,9 +481,10 @@ func (p *Plugin) renderRecentCommits(currentY *int, maxVisible int) string {
 		if msgWidth < 10 {
 			msgWidth = 10
 		}
+		// Truncate commit message (rune-safe for Unicode)
 		msg := commit.Subject
-		if len(msg) > msgWidth && msgWidth > 3 {
-			msg = msg[:msgWidth-1] + "…"
+		if runes := []rune(msg); len(runes) > msgWidth && msgWidth > 3 {
+			msg = string(runes[:msgWidth-1]) + "…"
 		}
 
 		// Register hit region for this commit with ABSOLUTE index

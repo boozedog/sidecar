@@ -43,8 +43,7 @@ func ExportSessionAsMarkdown(session *adapter.Session, messages []adapter.Messag
 	for _, msg := range messages {
 		// Role and timestamp (capitalize first letter)
 		role := msg.Role
-		if len(role) > 0 {
-			runes := []rune(role)
+		if runes := []rune(role); len(runes) > 0 {
 			role = strings.ToUpper(string(runes[:1])) + string(runes[1:])
 		}
 		ts := msg.Timestamp.Format("15:04:05")
@@ -156,7 +155,7 @@ func sanitizeFilename(name string) string {
 	)
 	name = replacer.Replace(name)
 
-	// Truncate if too long
+	// Truncate if too long (rune-safe for Unicode)
 	if runes := []rune(name); len(runes) > 50 {
 		name = string(runes[:50])
 	}

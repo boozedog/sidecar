@@ -271,8 +271,7 @@ func formatTurnAsMarkdown(turn *Turn) string {
 
 	// Header
 	role := turn.Role
-	if len(role) > 0 {
-		runes := []rune(role)
+	if runes := []rune(role); len(runes) > 0 {
 		role = strings.ToUpper(string(runes[:1])) + string(runes[1:])
 	}
 	sb.WriteString(fmt.Sprintf("## %s (%s)\n\n", role, turn.FirstTimestamp()))

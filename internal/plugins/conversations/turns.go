@@ -43,8 +43,8 @@ func (t *Turn) Preview(maxLen int) string {
 			if content == "" {
 				continue
 			}
-			if len(content) > maxLen {
-				return content[:maxLen-3] + "..."
+			if runes := []rune(content); len(runes) > maxLen {
+				return string(runes[:maxLen-3]) + "..."
 			}
 			return content
 		}
@@ -52,8 +52,8 @@ func (t *Turn) Preview(maxLen int) string {
 	// Fallback: show tool result count or first content
 	if len(t.Messages) > 0 && t.Messages[0].Content != "" {
 		content := stripXMLTags(t.Messages[0].Content)
-		if len(content) > maxLen {
-			return content[:maxLen-3] + "..."
+		if runes := []rune(content); len(runes) > maxLen {
+			return string(runes[:maxLen-3]) + "..."
 		}
 		return content
 	}

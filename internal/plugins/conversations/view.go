@@ -202,11 +202,11 @@ func adapterAbbrev(session adapter.Session) string {
 		if name == "" {
 			return ""
 		}
-		runes := []rune(name)
-		if len(runes) <= 2 {
+		if runes := []rune(name); len(runes) <= 2 {
 			return strings.ToUpper(name)
+		} else {
+			return strings.ToUpper(string(runes[:2]))
 		}
-		return strings.ToUpper(string(runes[:2]))
 	}
 }
 
@@ -1098,9 +1098,9 @@ func (p *Plugin) renderCompactSessionRow(session adapter.Session, selected bool,
 		nameWidth = 5
 	}
 
-	// Truncate name to fit
-	if len(name) > nameWidth {
-		name = name[:nameWidth-3] + "..."
+	// Truncate name to fit (rune-safe for Unicode)
+	if runes := []rune(name); len(runes) > nameWidth {
+		name = string(runes[:nameWidth-3]) + "..."
 	}
 
 	// Calculate padding for right-aligned stats
@@ -1672,10 +1672,10 @@ func (p *Plugin) renderCompactMessage(msg adapter.Message, msgIndex int, maxWidt
 		tokens = fmt.Sprintf(" (%s→%s)", formatK(msg.InputTokens), formatK(msg.OutputTokens))
 	}
 
-	// Calculate if we need to truncate role
+	// Calculate if we need to truncate role (rune-safe for Unicode)
 	role := msg.Role
-	// Account for: cursor(2) + [](2) + ts(5) + space(1) + role + tokens
 	roleRunes := []rune(role)
+	// Account for: cursor(2) + [](2) + ts(5) + space(1) + role + tokens
 	usedWidth := 2 + 2 + len(ts) + 1 + len(roleRunes) + len(tokens)
 	if usedWidth > maxWidth && len(roleRunes) > 4 {
 		role = string(roleRunes[:4])
@@ -1701,7 +1701,7 @@ func (p *Plugin) renderCompactMessage(msg adapter.Message, msgIndex int, maxWidt
 		lines = append(lines, styles.Muted.Render(thinkingLine))
 	}
 
-	// Content preview (truncated)
+	// Content preview (truncated, rune-safe for Unicode)
 	content := msg.Content
 	content = strings.ReplaceAll(content, "\n", " ")
 	content = strings.TrimSpace(content)
@@ -1709,8 +1709,8 @@ func (p *Plugin) renderCompactMessage(msg adapter.Message, msgIndex int, maxWidt
 	if contentMaxLen < 10 {
 		contentMaxLen = 10
 	}
-	if len(content) > contentMaxLen {
-		content = content[:contentMaxLen-3] + "..."
+	if runes := []rune(content); len(runes) > contentMaxLen {
+		content = string(runes[:contentMaxLen-3]) + "..."
 	}
 	if content != "" {
 		lines = append(lines, "  "+styles.Body.Render(content))
@@ -1969,10 +1969,10 @@ func (p *Plugin) renderMessageContent(content string, msgID string, maxWidth int
 		// Show full content
 		result = p.renderContent(content, maxWidth)
 	} else {
-		// Collapsed: show preview with toggle hint
+		// Collapsed: show preview with toggle hint (rune-safe for Unicode)
 		preview := content
-		if len(preview) > CollapsedPreviewChars {
-			preview = preview[:CollapsedPreviewChars]
+		if runes := []rune(preview); len(runes) > CollapsedPreviewChars {
+			preview = string(runes[:CollapsedPreviewChars])
 		}
 		// Clean up preview (no partial lines)
 		preview = strings.ReplaceAll(preview, "\n", " ")
@@ -2027,10 +2027,10 @@ func (p *Plugin) renderThinkingBlock(block adapter.ContentBlock, msgID string, m
 		preview = strings.ReplaceAll(preview, "\n", " ")
 		preview = strings.Join(strings.Fields(preview), " ")
 
-		// Truncate preview to fit
+		// Truncate preview to fit (rune-safe for Unicode)
 		maxPreviewLen := 60
-		if len(preview) > maxPreviewLen {
-			preview = preview[:maxPreviewLen-3] + "..."
+		if runes := []rune(preview); len(runes) > maxPreviewLen {
+			preview = string(runes[:maxPreviewLen-3]) + "..."
 		}
 
 		header := fmt.Sprintf("%s thinking (%s tokens) ▶", thinkingIcon, tokenStr)
@@ -2144,9 +2144,9 @@ func (p *Plugin) renderToolUseBlock(block adapter.ContentBlock, maxWidth int) []
 			break
 		}
 		if preview != "" {
-			// Show first meaningful line as preview
-			if len(preview) > maxWidth-6 {
-				preview = preview[:maxWidth-9] + "..."
+			// Show first meaningful line as preview (rune-safe for Unicode)
+			if runes := []rune(preview); len(runes) > maxWidth-6 {
+				preview = string(runes[:maxWidth-9]) + "..."
 			}
 			lines = append(lines, styles.Muted.Render("  → "+preview))
 		}

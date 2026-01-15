@@ -286,11 +286,100 @@ func TestLoadPromptsDefaultTicketMode(t *testing.T) {
 	}
 }
 
-func TestLoadPromptsEmptyDirs(t *testing.T) {
-	// Test loading from directories without config files
-	prompts := LoadPrompts(t.TempDir(), t.TempDir())
+func TestLoadPromptsEmptyDirsCreatesDefaults(t *testing.T) {
+	// Test that empty dirs trigger default prompt creation
+	globalDir := t.TempDir()
+	projectDir := t.TempDir()
 
-	if len(prompts) != 0 {
-		t.Errorf("Expected 0 prompts from empty dirs, got %d", len(prompts))
+	prompts := LoadPrompts(globalDir, projectDir)
+
+	// Should create 5 default prompts
+	if len(prompts) != 5 {
+		t.Errorf("Expected 5 default prompts, got %d", len(prompts))
+	}
+
+	// Verify config file was created
+	configPath := filepath.Join(globalDir, "config.yaml")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Error("Expected config.yaml to be created in global dir")
+	}
+
+	// Verify prompts have correct source
+	for _, p := range prompts {
+		if p.Source != "global" {
+			t.Errorf("Default prompt %q Source = %q, want 'global'", p.Name, p.Source)
+		}
+	}
+}
+
+func TestDefaultPrompts(t *testing.T) {
+	prompts := DefaultPrompts()
+
+	if len(prompts) != 5 {
+		t.Fatalf("Expected 5 default prompts, got %d", len(prompts))
+	}
+
+	// Verify expected prompt names exist
+	expectedNames := map[string]bool{
+		"Begin Work on Ticket":    false,
+		"Code Review Ticket":      false,
+		"Plan to Epic (No Impl)":  false,
+		"Plan to Epic + Implement": false,
+		"TD Review Session":       false,
+	}
+
+	for _, p := range prompts {
+		if _, ok := expectedNames[p.Name]; ok {
+			expectedNames[p.Name] = true
+		}
+	}
+
+	for name, found := range expectedNames {
+		if !found {
+			t.Errorf("Missing default prompt: %q", name)
+		}
+	}
+
+	// Verify ticketMode settings
+	for _, p := range prompts {
+		switch p.Name {
+		case "Begin Work on Ticket", "Code Review Ticket":
+			if p.TicketMode != TicketRequired {
+				t.Errorf("Prompt %q TicketMode = %q, want 'required'", p.Name, p.TicketMode)
+			}
+		default:
+			if p.TicketMode != TicketNone {
+				t.Errorf("Prompt %q TicketMode = %q, want 'none'", p.Name, p.TicketMode)
+			}
+		}
+	}
+}
+
+func TestEnsureDefaultPromptsDoesNotOverwrite(t *testing.T) {
+	// Test that existing config is not overwritten
+	globalDir := t.TempDir()
+
+	// Create existing config
+	existingConfig := `prompts:
+  - name: existing-prompt
+    body: Existing body
+`
+	err := os.WriteFile(filepath.Join(globalDir, "config.yaml"), []byte(existingConfig), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write existing config: %v", err)
+	}
+
+	// EnsureDefaultPrompts should return false (no changes)
+	if EnsureDefaultPrompts(globalDir) {
+		t.Error("EnsureDefaultPrompts should not overwrite existing config")
+	}
+
+	// Load and verify existing config is preserved
+	prompts := LoadPrompts(globalDir, t.TempDir())
+	if len(prompts) != 1 {
+		t.Errorf("Expected 1 existing prompt, got %d", len(prompts))
+	}
+	if prompts[0].Name != "existing-prompt" {
+		t.Errorf("Prompt name = %q, want 'existing-prompt'", prompts[0].Name)
 	}
 }

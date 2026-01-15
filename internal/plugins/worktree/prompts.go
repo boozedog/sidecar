@@ -35,6 +35,7 @@ type configWithPrompts struct {
 
 // LoadPrompts loads and merges prompts from global and project config directories.
 // Project prompts override global prompts with the same name.
+// If no config exists, creates global config with default prompts.
 // Returns sorted list by name.
 func LoadPrompts(globalConfigDir, projectDir string) []Prompt {
 	// Load from global config
@@ -43,6 +44,13 @@ func LoadPrompts(globalConfigDir, projectDir string) []Prompt {
 	// Load from project config (.sidecar/ directory)
 	projectConfigDir := filepath.Join(projectDir, ".sidecar")
 	projectPrompts := loadPromptsFromDir(projectConfigDir, "project")
+
+	// If no prompts found, try to create defaults
+	if len(globalPrompts) == 0 && len(projectPrompts) == 0 {
+		if EnsureDefaultPrompts(globalConfigDir) {
+			globalPrompts = loadPromptsFromDir(globalConfigDir, "global")
+		}
+	}
 
 	// Merge: project overrides global by name
 	merged := make(map[string]Prompt)
@@ -132,4 +140,75 @@ func ExtractFallback(body string) string {
 // HasTicketPlaceholder returns true if the body contains {{ticket}} or {{ticket || '...'}}
 func HasTicketPlaceholder(body string) bool {
 	return strings.Contains(body, "{{ticket")
+}
+
+// DefaultPrompts returns the built-in default prompts.
+// These serve as examples users can modify.
+func DefaultPrompts() []Prompt {
+	return []Prompt{
+		{
+			Name:       "Begin Work on Ticket",
+			TicketMode: TicketRequired,
+			Body:       "Start work on {{ticket}}. Use td to track progress.",
+			Source:     "default",
+		},
+		{
+			Name:       "Code Review Ticket",
+			TicketMode: TicketRequired,
+			Body:       "Do a detailed code review of {{ticket}}. Focus on correctness and tests.",
+			Source:     "default",
+		},
+		{
+			Name:       "Plan to Epic (No Impl)",
+			TicketMode: TicketNone,
+			Body:       "Plan this task into an epic with sub-tasks using td. Do not implement yet.",
+			Source:     "default",
+		},
+		{
+			Name:       "Plan to Epic + Implement",
+			TicketMode: TicketNone,
+			Body:       "Plan this task into an epic with sub-tasks using td, then implement them.",
+			Source:     "default",
+		},
+		{
+			Name:       "TD Review Session",
+			TicketMode: TicketNone,
+			Body: `Start a td review session. Review open tasks, fix obvious bugs immediately, create tasks for larger issues.
+
+Use: td usage --new-session`,
+			Source: "default",
+		},
+	}
+}
+
+// EnsureDefaultPrompts creates the global config with default prompts if no config exists.
+// Returns true if defaults were created.
+func EnsureDefaultPrompts(globalConfigDir string) bool {
+	// Check if any config file exists
+	extensions := []string{".yaml", ".yml", ".json"}
+	for _, ext := range extensions {
+		path := filepath.Join(globalConfigDir, "config"+ext)
+		if _, err := os.Stat(path); err == nil {
+			return false // Config exists, don't overwrite
+		}
+	}
+
+	// Create directory if needed
+	if err := os.MkdirAll(globalConfigDir, 0755); err != nil {
+		return false
+	}
+
+	// Write default config as YAML
+	cfg := configWithPrompts{Prompts: DefaultPrompts()}
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return false
+	}
+
+	path := filepath.Join(globalConfigDir, "config.yaml")
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return false
+	}
+
+	return true
 }

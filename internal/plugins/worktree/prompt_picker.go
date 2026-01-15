@@ -128,6 +128,21 @@ func (pp *PromptPicker) View() string {
 	sb.WriteString(dimText("Esc to cancel"))
 	sb.WriteString("\n\n")
 
+	// Handle empty prompts case
+	if len(pp.prompts) == 0 {
+		sb.WriteString("No prompts configured.\n\n")
+		sb.WriteString(dimText("Add prompts to one of these config files:"))
+		sb.WriteString("\n")
+		sb.WriteString(dimText("  Global:  ~/.config/sidecar/config.yaml"))
+		sb.WriteString("\n")
+		sb.WriteString(dimText("  Project: .sidecar/config.yaml"))
+		sb.WriteString("\n\n")
+		sb.WriteString(dimText("See: docs/guides/creating-prompts.md"))
+		sb.WriteString("\n\n")
+		sb.WriteString(dimText("Press Esc or Enter to continue without a prompt"))
+		return sb.String()
+	}
+
 	// Filter input
 	sb.WriteString("Filter: ")
 	filterStyle := inputStyle.Width(30)
@@ -173,14 +188,14 @@ func (pp *PromptPicker) View() string {
 		// Ticket mode
 		ticket := string(p.TicketMode)
 
-		// Preview (truncate)
+		// Preview (truncate, rune-safe for Unicode)
 		preview := strings.ReplaceAll(p.Body, "\n", " ")
 		maxPreview := pp.width - 50
 		if maxPreview < 10 {
 			maxPreview = 10
 		}
-		if len(preview) > maxPreview {
-			preview = preview[:maxPreview-3] + "..."
+		if runes := []rune(preview); len(runes) > maxPreview {
+			preview = string(runes[:maxPreview-3]) + "..."
 		}
 
 		line := fmt.Sprintf("%s%-24s %-7s %-10s %s", prefix, truncateString(p.Name, 24), scope, ticket, preview)
@@ -204,15 +219,16 @@ func (pp *PromptPicker) View() string {
 	return sb.String()
 }
 
-// truncateString truncates a string to maxLen, adding "..." if truncated.
+// truncateString truncates a string to maxLen runes, adding "..." if truncated.
 func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
 		return s
 	}
 	if maxLen <= 3 {
-		return s[:maxLen]
+		return string(runes[:maxLen])
 	}
-	return s[:maxLen-3] + "..."
+	return string(runes[:maxLen-3]) + "..."
 }
 
 // dimText is defined in view.go
