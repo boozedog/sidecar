@@ -333,25 +333,10 @@ func (p *Plugin) renderWorktreeItem(wt *Worktree, selected bool, width int) stri
 func (p *Plugin) renderPreviewContent(width, height int) string {
 	var lines []string
 
-	// Hide tabs when no worktree is selected
+	// Hide tabs when no worktree is selected - show tmux guide instead
 	wt := p.selectedWorktree()
 	if wt == nil {
-		// Center the message vertically
-		emptyMsg := "No worktree selected"
-		emptyStartY := (height - 1) / 2
-		if emptyStartY < 0 {
-			emptyStartY = 0
-		}
-		for i := 0; i < emptyStartY; i++ {
-			lines = append(lines, "")
-		}
-		// Center horizontally
-		pad := (width - len(emptyMsg)) / 2
-		if pad < 0 {
-			pad = 0
-		}
-		lines = append(lines, dimText(strings.Repeat(" ", pad)+emptyMsg))
-		return strings.Join(lines, "\n")
+		return p.renderTmuxGuide(width, height)
 	}
 
 	// Tab header
@@ -378,6 +363,49 @@ func (p *Plugin) renderPreviewContent(width, height int) string {
 	// This catches any content that wasn't properly truncated
 	result := strings.Join(lines, "\n")
 	return truncateAllLines(result, width)
+}
+
+// renderTmuxGuide renders a helpful tmux guide when no worktree is selected.
+func (p *Plugin) renderTmuxGuide(width, height int) string {
+	var lines []string
+
+	// Title
+	title := lipgloss.NewStyle().Bold(true).Render("tmux Quick Reference")
+	lines = append(lines, title)
+	lines = append(lines, "")
+
+	// Section: Attaching to agent sessions
+	sectionStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("62"))
+	lines = append(lines, sectionStyle.Render("Agent Sessions"))
+	lines = append(lines, dimText("  Enter      Attach to selected worktree session"))
+	lines = append(lines, dimText("  Ctrl-b d   Detach from session (return here)"))
+	lines = append(lines, "")
+
+	// Section: Navigation inside tmux
+	lines = append(lines, sectionStyle.Render("Scrolling (in attached session)"))
+	lines = append(lines, dimText("  Ctrl-b [        Enter scroll mode"))
+	lines = append(lines, dimText("  PgUp/PgDn       Scroll page (fn+↑/↓ on Mac)"))
+	lines = append(lines, dimText("  ↑/↓             Scroll line by line"))
+	lines = append(lines, dimText("  q               Exit scroll mode"))
+	lines = append(lines, "")
+
+	// Section: Interacting with editors
+	lines = append(lines, sectionStyle.Render("Editor Navigation"))
+	lines = append(lines, dimText("  When agent opens vim/nano:"))
+	lines = append(lines, dimText("    :q!      Quit vim without saving"))
+	lines = append(lines, dimText("    :wq      Save and quit vim"))
+	lines = append(lines, dimText("    Ctrl-x   Exit nano"))
+	lines = append(lines, "")
+
+	// Section: Common tasks
+	lines = append(lines, sectionStyle.Render("Tips"))
+	lines = append(lines, dimText("  • Create a worktree with 'n' to start"))
+	lines = append(lines, dimText("  • Agent output streams in the Output tab"))
+	lines = append(lines, dimText("  • Attach to interact with the agent directly"))
+	lines = append(lines, "")
+	lines = append(lines, dimText("Customize tmux: ~/.tmux.conf (man tmux for options)"))
+
+	return strings.Join(lines, "\n")
 }
 
 // truncateAllLines ensures every line in the content is truncated to maxWidth.
