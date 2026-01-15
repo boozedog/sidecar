@@ -66,6 +66,10 @@ type Plugin struct {
 	sidebarWidth     int  // Persisted sidebar width
 	sidebarVisible bool // Whether sidebar is visible (toggled with \)
 
+	// Kanban view state
+	kanbanCol int // Current column index (0=Active, 1=Waiting, 2=Done, 3=Paused)
+	kanbanRow int // Current row within the column
+
 	// Agent state
 	attachedSession string // Name of worktree we're attached to (pauses polling)
 
@@ -798,6 +802,11 @@ func (p *Plugin) cancelDelete() tea.Cmd {
 func (p *Plugin) handleListKeys(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
 	case "j", "down":
+		if p.viewMode == ViewModeKanban {
+			// Kanban mode: move down within column
+			p.moveKanbanRow(1)
+			return p.loadSelectedContent()
+		}
 		if p.activePane == PaneSidebar {
 			p.moveCursor(1)
 			return p.loadSelectedContent()
@@ -810,6 +819,11 @@ func (p *Plugin) handleListKeys(msg tea.KeyMsg) tea.Cmd {
 			}
 		}
 	case "k", "up":
+		if p.viewMode == ViewModeKanban {
+			// Kanban mode: move up within column
+			p.moveKanbanRow(-1)
+			return p.loadSelectedContent()
+		}
 		if p.activePane == PaneSidebar {
 			p.moveCursor(-1)
 			return p.loadSelectedContent()
@@ -869,6 +883,11 @@ func (p *Plugin) handleListKeys(msg tea.KeyMsg) tea.Cmd {
 	case "p":
 		return p.pushSelected()
 	case "l", "right":
+		if p.viewMode == ViewModeKanban {
+			// Kanban mode: move to next column
+			p.moveKanbanColumn(1)
+			return p.loadSelectedContent()
+		}
 		if p.activePane == PaneSidebar {
 			p.activePane = PanePreview
 		} else {
@@ -886,6 +905,11 @@ func (p *Plugin) handleListKeys(msg tea.KeyMsg) tea.Cmd {
 			p.activePane = PanePreview
 		}
 	case "h", "left":
+		if p.viewMode == ViewModeKanban {
+			// Kanban mode: move to previous column
+			p.moveKanbanColumn(-1)
+			return p.loadSelectedContent()
+		}
 		if p.activePane == PanePreview {
 			// Horizontal scroll left in preview pane
 			if p.previewHorizOffset > 0 {
@@ -925,9 +949,10 @@ func (p *Plugin) handleListKeys(msg tea.KeyMsg) tea.Cmd {
 				p.diffViewMode = DiffViewUnified
 				_ = state.SetWorktreeDiffMode("unified")
 			}
-		} else if p.activePane == PaneSidebar {
+		} else if p.activePane == PaneSidebar || p.viewMode == ViewModeKanban {
 			if p.viewMode == ViewModeList {
 				p.viewMode = ViewModeKanban
+				p.syncListToKanban()
 			} else if p.viewMode == ViewModeKanban {
 				p.viewMode = ViewModeList
 			}
@@ -1859,4 +1884,128 @@ func (p *Plugin) FocusContext() string {
 		}
 		return "worktree-list"
 	}
+}
+
+// kanbanColumnOrder defines the order of columns in kanban view.
+var kanbanColumnOrder = []WorktreeStatus{StatusActive, StatusWaiting, StatusDone, StatusPaused}
+
+// getKanbanColumns returns worktrees grouped by status for kanban view.
+func (p *Plugin) getKanbanColumns() map[WorktreeStatus][]*Worktree {
+	columns := map[WorktreeStatus][]*Worktree{
+		StatusActive:  {},
+		StatusWaiting: {},
+		StatusDone:    {},
+		StatusPaused:  {},
+		StatusError:   {},
+	}
+	for _, wt := range p.worktrees {
+		columns[wt.Status] = append(columns[wt.Status], wt)
+	}
+	return columns
+}
+
+// selectedKanbanWorktree returns the worktree at the current kanban position.
+func (p *Plugin) selectedKanbanWorktree() *Worktree {
+	columns := p.getKanbanColumns()
+	if p.kanbanCol < 0 || p.kanbanCol >= len(kanbanColumnOrder) {
+		return nil
+	}
+	status := kanbanColumnOrder[p.kanbanCol]
+	items := columns[status]
+	if p.kanbanRow < 0 || p.kanbanRow >= len(items) {
+		return nil
+	}
+	return items[p.kanbanRow]
+}
+
+// syncKanbanToList syncs the kanban selection to the list selectedIdx.
+func (p *Plugin) syncKanbanToList() {
+	wt := p.selectedKanbanWorktree()
+	if wt == nil {
+		return
+	}
+	for i, w := range p.worktrees {
+		if w.Name == wt.Name {
+			p.selectedIdx = i
+			return
+		}
+	}
+}
+
+// moveKanbanColumn moves selection to an adjacent column.
+func (p *Plugin) moveKanbanColumn(delta int) {
+	columns := p.getKanbanColumns()
+	newCol := p.kanbanCol + delta
+
+	// Wrap around or clamp
+	if newCol < 0 {
+		newCol = 0
+	}
+	if newCol >= len(kanbanColumnOrder) {
+		newCol = len(kanbanColumnOrder) - 1
+	}
+
+	if newCol != p.kanbanCol {
+		p.kanbanCol = newCol
+		// Try to preserve row position, but clamp to new column's item count
+		status := kanbanColumnOrder[p.kanbanCol]
+		items := columns[status]
+		if len(items) == 0 {
+			p.kanbanRow = 0
+		} else if p.kanbanRow >= len(items) {
+			p.kanbanRow = len(items) - 1
+		}
+		p.syncKanbanToList()
+	}
+}
+
+// moveKanbanRow moves selection within the current column.
+func (p *Plugin) moveKanbanRow(delta int) {
+	columns := p.getKanbanColumns()
+	status := kanbanColumnOrder[p.kanbanCol]
+	items := columns[status]
+
+	if len(items) == 0 {
+		return
+	}
+
+	newRow := p.kanbanRow + delta
+	if newRow < 0 {
+		newRow = 0
+	}
+	if newRow >= len(items) {
+		newRow = len(items) - 1
+	}
+
+	if newRow != p.kanbanRow {
+		p.kanbanRow = newRow
+		p.syncKanbanToList()
+	}
+}
+
+// syncListToKanban syncs the list selectedIdx to kanban position.
+// Called when switching from list to kanban view.
+func (p *Plugin) syncListToKanban() {
+	wt := p.selectedWorktree()
+	if wt == nil {
+		p.kanbanCol = 0
+		p.kanbanRow = 0
+		return
+	}
+
+	columns := p.getKanbanColumns()
+	for colIdx, status := range kanbanColumnOrder {
+		items := columns[status]
+		for rowIdx, item := range items {
+			if item.Name == wt.Name {
+				p.kanbanCol = colIdx
+				p.kanbanRow = rowIdx
+				return
+			}
+		}
+	}
+
+	// Worktree not found in any column, default to first column
+	p.kanbanCol = 0
+	p.kanbanRow = 0
 }

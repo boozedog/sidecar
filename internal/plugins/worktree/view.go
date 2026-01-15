@@ -1527,68 +1527,95 @@ func (p *Plugin) renderKanbanView(width, height int) string {
 	lines = append(lines, strings.Repeat(horizSep, innerWidth))
 
 	// Group worktrees by status
-	columns := map[WorktreeStatus][]*Worktree{
-		StatusActive:  {},
-		StatusWaiting: {},
-		StatusDone:    {},
-		StatusPaused:  {},
-		StatusError:   {},
-	}
-	for _, wt := range p.worktrees {
-		columns[wt.Status] = append(columns[wt.Status], wt)
-	}
+	columns := p.getKanbanColumns()
 
-	// Column headers and order
-	columnOrder := []WorktreeStatus{StatusActive, StatusWaiting, StatusDone, StatusPaused}
+	// Column headers and colors
 	columnTitles := map[WorktreeStatus]string{
 		StatusActive:  "● Active",
 		StatusWaiting: "💬 Waiting",
-		StatusDone:    "✓ Done",
+		StatusDone:    "✓ Ready",
 		StatusPaused:  "⏸ Paused",
-		StatusError:   "✗ Error",
+	}
+	columnColors := map[WorktreeStatus]lipgloss.Color{
+		StatusActive:  styles.StatusCompleted.GetForeground().(lipgloss.Color), // Green
+		StatusWaiting: styles.StatusModified.GetForeground().(lipgloss.Color),  // Yellow
+		StatusDone:    lipgloss.Color("81"),                                    // Cyan
+		StatusPaused:  lipgloss.Color("245"),                                   // Gray
 	}
 
 	// Calculate column widths (account for panel borders)
-	numCols := len(columnOrder)
+	numCols := len(kanbanColumnOrder)
 	colWidth := (innerWidth - numCols - 1) / numCols // -1 for separators
-	if colWidth < 15 {
-		colWidth = 15
+	if colWidth < 18 {
+		colWidth = 18
 	}
 
-	// Render column headers
+	// Render column headers with colors
 	var colHeaders []string
-	for _, status := range columnOrder {
+	for colIdx, status := range kanbanColumnOrder {
 		items := columns[status]
 		title := fmt.Sprintf("%s (%d)", columnTitles[status], len(items))
-		colHeaders = append(colHeaders, styles.Title.Width(colWidth).Render(title))
+		headerStyle := lipgloss.NewStyle().Bold(true).Foreground(columnColors[status]).Width(colWidth)
+		// Highlight selected column header
+		if colIdx == p.kanbanCol {
+			headerStyle = headerStyle.Underline(true)
+		}
+		colHeaders = append(colHeaders, headerStyle.Render(title))
 	}
 	lines = append(lines, strings.Join(colHeaders, vertSep))
 	lines = append(lines, strings.Repeat(horizSep, innerWidth))
 
+	// Card dimensions: 4 lines per card (name, agent, task, stats)
+	cardHeight := 4
 	// Calculate content height (account for panel border + header + separators)
 	contentHeight := height - 6 // panel borders (2) + header + 2 separators + column headers
-	if contentHeight < 1 {
-		contentHeight = 1
+	if contentHeight < cardHeight {
+		contentHeight = cardHeight
+	}
+	maxCards := contentHeight / cardHeight
+
+	// Find the maximum number of cards in any column (for row rendering)
+	maxInColumn := 0
+	for _, status := range kanbanColumnOrder {
+		if len(columns[status]) > maxInColumn {
+			maxInColumn = len(columns[status])
+		}
+	}
+	if maxInColumn > maxCards {
+		maxInColumn = maxCards
 	}
 
-	// Render column content
-	for row := 0; row < contentHeight; row++ {
-		var rowCells []string
-		for _, status := range columnOrder {
-			items := columns[status]
-			cell := ""
-			if row < len(items) {
-				wt := items[row]
-				// Truncate name to fit column
-				name := wt.Name
-				if len(name) > colWidth-4 {
-					name = name[:colWidth-7] + "..."
+	// Render cards row by row
+	for cardIdx := 0; cardIdx < maxInColumn; cardIdx++ {
+		// Each card has 4 lines
+		for lineIdx := 0; lineIdx < cardHeight; lineIdx++ {
+			var rowCells []string
+			for colIdx, status := range kanbanColumnOrder {
+				items := columns[status]
+				var cellContent string
+
+				if cardIdx < len(items) {
+					wt := items[cardIdx]
+					isSelected := colIdx == p.kanbanCol && cardIdx == p.kanbanRow
+					cellContent = p.renderKanbanCardLine(wt, lineIdx, colWidth-1, isSelected, columnColors[status])
+				} else {
+					cellContent = strings.Repeat(" ", colWidth-1)
 				}
-				cell = fmt.Sprintf(" %s %s", wt.Status.Icon(), name)
+
+				rowCells = append(rowCells, cellContent)
 			}
-			rowCells = append(rowCells, styles.ListItemNormal.Width(colWidth).Render(cell))
+			lines = append(lines, strings.Join(rowCells, vertSep))
 		}
-		lines = append(lines, strings.Join(rowCells, vertSep))
+	}
+
+	// Fill remaining height with empty space
+	renderedRows := maxInColumn * cardHeight
+	for i := renderedRows; i < contentHeight; i++ {
+		var emptyCells []string
+		for range kanbanColumnOrder {
+			emptyCells = append(emptyCells, strings.Repeat(" ", colWidth-1))
+		}
+		lines = append(lines, strings.Join(emptyCells, vertSep))
 	}
 
 	// Build content for panel
@@ -1596,4 +1623,63 @@ func (p *Plugin) renderKanbanView(width, height int) string {
 
 	// Wrap in panel with gradient border (active since kanban is full-screen)
 	return styles.RenderPanel(content, width, height, true)
+}
+
+// renderKanbanCardLine renders a single line of a kanban card.
+// lineIdx: 0=name, 1=agent, 2=task, 3=stats
+func (p *Plugin) renderKanbanCardLine(wt *Worktree, lineIdx, width int, isSelected bool, _ lipgloss.Color) string {
+	var content string
+
+	switch lineIdx {
+	case 0:
+		// Line 0: Status icon + name
+		name := wt.Name
+		maxNameLen := width - 3 // Account for icon and space
+		if len(name) > maxNameLen {
+			name = name[:maxNameLen-3] + "..."
+		}
+		content = fmt.Sprintf(" %s %s", wt.Status.Icon(), name)
+	case 1:
+		// Line 1: Agent type
+		agentStr := ""
+		if wt.Agent != nil {
+			agentStr = "  " + string(wt.Agent.Type)
+		} else if wt.ChosenAgentType != "" && wt.ChosenAgentType != AgentNone {
+			agentStr = "  " + string(wt.ChosenAgentType)
+		}
+		content = agentStr
+	case 2:
+		// Line 2: Task ID
+		if wt.TaskID != "" {
+			taskStr := wt.TaskID
+			maxLen := width - 2
+			if len(taskStr) > maxLen {
+				taskStr = taskStr[:maxLen-3] + "..."
+			}
+			content = "  " + taskStr
+		}
+	case 3:
+		// Line 3: Stats (+/- lines)
+		if wt.Stats != nil && (wt.Stats.Additions > 0 || wt.Stats.Deletions > 0) {
+			content = fmt.Sprintf("  +%d -%d", wt.Stats.Additions, wt.Stats.Deletions)
+		}
+	}
+
+	// Pad to width
+	contentWidth := lipgloss.Width(content)
+	if contentWidth < width {
+		content += strings.Repeat(" ", width-contentWidth)
+	}
+
+	// Apply styling
+	if isSelected {
+		return styles.ListItemSelected.Width(width).Render(content)
+	}
+
+	// Dim non-name lines
+	if lineIdx > 0 {
+		return styles.Muted.Width(width).Render(content)
+	}
+
+	return lipgloss.NewStyle().Width(width).Render(content)
 }
