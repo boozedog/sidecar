@@ -100,6 +100,12 @@ func (p *Plugin) StartAgent(wt *Worktree, agentType AgentType) tea.Cmd {
 		envCmd := fmt.Sprintf("export TD_SESSION_ID=%s", sessionName)
 		exec.Command("tmux", "send-keys", "-t", sessionName, envCmd, "Enter").Run()
 
+		// Apply environment isolation to prevent conflicts (GOWORK, etc.)
+		envOverrides := BuildEnvOverrides(p.ctx.WorkDir)
+		for _, exportCmd := range GenerateExportCommands(envOverrides) {
+			exec.Command("tmux", "send-keys", "-t", sessionName, exportCmd, "Enter").Run()
+		}
+
 		// If worktree has a linked task, start it in td
 		if wt.TaskID != "" {
 			tdStartCmd := fmt.Sprintf("td start %s", wt.TaskID)
@@ -279,6 +285,12 @@ func (p *Plugin) StartAgentWithOptions(wt *Worktree, agentType AgentType, skipPe
 		// Set TD_SESSION_ID environment variable for td session tracking
 		envCmd := fmt.Sprintf("export TD_SESSION_ID=%s", sessionName)
 		exec.Command("tmux", "send-keys", "-t", sessionName, envCmd, "Enter").Run()
+
+		// Apply environment isolation to prevent conflicts (GOWORK, etc.)
+		envOverrides := BuildEnvOverrides(p.ctx.WorkDir)
+		for _, exportCmd := range GenerateExportCommands(envOverrides) {
+			exec.Command("tmux", "send-keys", "-t", sessionName, exportCmd, "Enter").Run()
+		}
 
 		// If worktree has a linked task, start it in td
 		if wt.TaskID != "" {

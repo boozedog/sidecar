@@ -198,8 +198,11 @@ func (p *Plugin) runSetupScript(worktreePath, branchName string) error {
 	cmd := exec.Command("bash", scriptPath)
 	cmd.Dir = worktreePath
 
-	// Set environment variables for the script
-	cmd.Env = append(os.Environ(),
+	// Build isolated environment with overrides applied
+	isolatedEnv := ApplyEnvOverrides(os.Environ(), BuildEnvOverrides(p.ctx.WorkDir))
+
+	// Add worktree-specific variables
+	cmd.Env = append(isolatedEnv,
 		"MAIN_WORKTREE="+p.ctx.WorkDir,
 		"WORKTREE_BRANCH="+branchName,
 		"WORKTREE_PATH="+worktreePath,
