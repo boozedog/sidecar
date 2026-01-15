@@ -9,6 +9,7 @@ All notable changes to sidecar are documented here.
 - Pass task context to all agent types in worktrees plugin
 - Better workspace initial environment handling
 - Minor improvements to Claude Code adapter
+- Consolidate env var commands in worktree sessions (cleaner output)
 
 ### Dependencies
 - Updated embedded td to latest

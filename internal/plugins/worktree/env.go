@@ -113,6 +113,28 @@ func GenerateExportCommands(overrides map[string]string) []string {
 	return cmds
 }
 
+// GenerateSingleEnvCommand returns a single shell command that applies all env overrides.
+// This is less noisy than sending multiple commands individually.
+func GenerateSingleEnvCommand(overrides map[string]string) string {
+	var exports, unsets []string
+	for key, value := range overrides {
+		if value == "" {
+			unsets = append(unsets, key)
+		} else {
+			exports = append(exports, key+"="+shellQuote(value))
+		}
+	}
+
+	var parts []string
+	if len(exports) > 0 {
+		parts = append(parts, "export "+strings.Join(exports, " "))
+	}
+	if len(unsets) > 0 {
+		parts = append(parts, "unset "+strings.Join(unsets, " "))
+	}
+	return strings.Join(parts, "; ")
+}
+
 // ApplyEnvOverrides applies overrides to an existing environment slice.
 // Returns a new slice with overrides applied.
 func ApplyEnvOverrides(baseEnv []string, overrides map[string]string) []string {
