@@ -136,6 +136,8 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			if p.selectedIdx >= len(p.worktrees) && p.selectedIdx > 0 {
 				p.selectedIdx--
 			}
+			// Store any warnings for display
+			p.deleteWarnings = msg.Warnings
 			// Clear preview pane content to ensure old diff doesn't persist
 			p.diffContent = ""
 			p.diffRaw = ""
@@ -435,7 +437,7 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			}
 
 			// Check if all cleanup tasks are done
-			cmds = append(cmds, p.checkCleanupComplete())
+			p.checkCleanupComplete()
 		}
 
 	case RemoteBranchDeleteMsg:
@@ -451,7 +453,7 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 				p.mergeState.CleanupResults.RemoteBranchDeleted = true
 			}
 			// Check if all cleanup tasks are done
-			cmds = append(cmds, p.checkCleanupComplete())
+			p.checkCleanupComplete()
 		}
 
 	case PullAfterMergeMsg:
@@ -463,7 +465,7 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			p.mergeState.CleanupResults.PullSuccess = msg.Success
 			p.mergeState.CleanupResults.PullError = msg.Err
 			// Check if all cleanup tasks are done
-			cmds = append(cmds, p.checkCleanupComplete())
+			p.checkCleanupComplete()
 		}
 
 	case reconnectedAgentsMsg:

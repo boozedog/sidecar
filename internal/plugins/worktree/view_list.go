@@ -152,7 +152,20 @@ func (p *Plugin) renderSidebarContent(width, height int) string {
 	// Header
 	header := styles.Title.Render("Worktrees")
 	lines = append(lines, header)
-	lines = append(lines, "") // Empty line after header
+
+	// Show warnings from delete operation if any
+	if len(p.deleteWarnings) > 0 {
+		warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214")) // Orange
+		for _, w := range p.deleteWarnings {
+			// Truncate warning to fit width
+			if len(w) > width-2 {
+				w = w[:width-5] + "..."
+			}
+			lines = append(lines, warningStyle.Render("⚠ "+w))
+		}
+	}
+
+	lines = append(lines, "") // Empty line after header/warnings
 
 	// Track Y position for hit regions (add 3 for border + header + empty line)
 	currentY := 3

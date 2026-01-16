@@ -184,6 +184,77 @@ func TestParsePRMergeStatus(t *testing.T) {
 	}
 }
 
+func TestCheckCleanupComplete(t *testing.T) {
+	tests := []struct {
+		name        string
+		pendingOps  int
+		wantDone    bool
+		wantOpsLeft int
+	}{
+		{
+			name:        "last operation completes",
+			pendingOps:  1,
+			wantDone:    true,
+			wantOpsLeft: 0,
+		},
+		{
+			name:        "still waiting for more",
+			pendingOps:  3,
+			wantDone:    false,
+			wantOpsLeft: 2,
+		},
+		{
+			name:        "already zero",
+			pendingOps:  0,
+			wantDone:    true,
+			wantOpsLeft: -1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &Plugin{
+				mergeState: &MergeWorkflowState{
+					Step:              MergeStepCleanup,
+					StepStatus:        make(map[MergeWorkflowStep]string),
+					PendingCleanupOps: tt.pendingOps,
+				},
+			}
+
+			done := p.checkCleanupComplete()
+
+			if done != tt.wantDone {
+				t.Errorf("checkCleanupComplete() = %v, want %v", done, tt.wantDone)
+			}
+			if p.mergeState.PendingCleanupOps != tt.wantOpsLeft {
+				t.Errorf("PendingCleanupOps = %v, want %v", p.mergeState.PendingCleanupOps, tt.wantOpsLeft)
+			}
+			if done && p.mergeState.Step != MergeStepDone {
+				t.Errorf("Step = %v, want MergeStepDone when done", p.mergeState.Step)
+			}
+		})
+	}
+}
+
+func TestDeleteDoneMsgWarnings(t *testing.T) {
+	// Test that DeleteDoneMsg properly carries warnings
+	msg := DeleteDoneMsg{
+		Name:     "test-worktree",
+		Err:      nil,
+		Warnings: []string{"Local branch: branch 'feature' not found", "Remote branch: not found"},
+	}
+
+	if msg.Name != "test-worktree" {
+		t.Errorf("Name = %v, want test-worktree", msg.Name)
+	}
+	if msg.Err != nil {
+		t.Errorf("Err = %v, want nil", msg.Err)
+	}
+	if len(msg.Warnings) != 2 {
+		t.Errorf("len(Warnings) = %v, want 2", len(msg.Warnings))
+	}
+}
+
 func TestParseExistingPRURL(t *testing.T) {
 	tests := []struct {
 		name      string

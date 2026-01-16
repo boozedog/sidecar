@@ -91,8 +91,9 @@ type DeleteWorktreeMsg struct {
 
 // DeleteDoneMsg signals worktree deletion completed.
 type DeleteDoneMsg struct {
-	Name string
-	Err  error
+	Name     string
+	Err      error
+	Warnings []string // Non-fatal warnings (e.g., branch deletion failures)
 }
 
 // RemoteCheckDoneMsg signals remote branch existence check completed.

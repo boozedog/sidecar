@@ -189,6 +189,7 @@ type Plugin struct {
 	deleteRemoteBranchOpt    bool      // Checkbox: delete remote branch
 	deleteHasRemote          bool      // Whether remote branch exists
 	deleteConfirmFocus       int       // 0=local checkbox, 1=remote checkbox (if exists), then delete/cancel btns
+	deleteWarnings           []string  // Warnings from last delete operation (e.g., branch deletion failures)
 
 	// Initial reconnection tracking
 	initialReconnectDone bool

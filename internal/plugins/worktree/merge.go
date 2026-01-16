@@ -79,7 +79,8 @@ type MergeWorkflowState struct {
 	ConfirmationHover   int  // Mouse hover state
 
 	// Cleanup results for summary display
-	CleanupResults *CleanupResults
+	CleanupResults     *CleanupResults
+	PendingCleanupOps  int // Counter for parallel cleanup operations in flight
 }
 
 // CleanupResults holds the results of cleanup operations for display in summary.
@@ -800,14 +801,19 @@ func (p *Plugin) advanceMergeStep() tea.Cmd {
 
 		var cmds []tea.Cmd
 
+		// Count pending operations for completion tracking
+		pendingOps := 0
+
 		// Local cleanup (worktree + branch)
 		if p.mergeState.DeleteLocalWorktree || p.mergeState.DeleteLocalBranch {
 			cmds = append(cmds, p.performSelectedCleanup(p.mergeState.Worktree, p.mergeState))
+			pendingOps++
 		}
 
 		// Remote cleanup (in parallel)
 		if p.mergeState.DeleteRemoteBranch {
 			cmds = append(cmds, p.deleteRemoteBranch(p.mergeState.Worktree))
+			pendingOps++
 		}
 
 		// Pull changes to current branch (in parallel)
@@ -817,7 +823,10 @@ func (p *Plugin) advanceMergeStep() tea.Cmd {
 				baseBranch = "main"
 			}
 			cmds = append(cmds, p.pullAfterMerge(p.mergeState.Worktree, baseBranch))
+			pendingOps++
 		}
+
+		p.mergeState.PendingCleanupOps = pendingOps
 
 		return tea.Batch(cmds...)
 
@@ -837,62 +846,22 @@ func (p *Plugin) cancelMergeWorkflow() {
 	p.viewMode = ViewModeList
 }
 
-// checkCleanupComplete checks if all cleanup operations are done and advances to done step.
-func (p *Plugin) checkCleanupComplete() tea.Cmd {
-	return func() tea.Msg {
-		if p.mergeState == nil || p.mergeState.Step != MergeStepCleanup {
-			return nil
-		}
+// checkCleanupComplete decrements pending ops counter and advances to done step when all complete.
+// Returns true if all cleanup operations are now complete.
+func (p *Plugin) checkCleanupComplete() bool {
+	if p.mergeState == nil || p.mergeState.Step != MergeStepCleanup {
+		return false
+	}
 
-		// Check if we're waiting for any operations
-		// If remote cleanup was requested but not done yet, wait
-		if p.mergeState.DeleteRemoteBranch && p.mergeState.CleanupResults != nil &&
-			!p.mergeState.CleanupResults.RemoteBranchDeleted &&
-			!hasRemoteBranchError(p.mergeState.CleanupResults.Errors) {
-			return nil // Still waiting for remote
-		}
+	p.mergeState.PendingCleanupOps--
 
-		// If local cleanup was requested but not done yet, wait
-		localRequested := p.mergeState.DeleteLocalWorktree || p.mergeState.DeleteLocalBranch
-		localDone := p.mergeState.CleanupResults != nil &&
-			(p.mergeState.CleanupResults.LocalWorktreeDeleted || p.mergeState.CleanupResults.LocalBranchDeleted ||
-				hasLocalError(p.mergeState.CleanupResults.Errors))
-
-		if localRequested && !localDone {
-			return nil // Still waiting for local
-		}
-
-		// If pull was requested but not done yet, wait
-		if p.mergeState.PullAfterMerge && p.mergeState.CleanupResults != nil &&
-			!p.mergeState.CleanupResults.PullAttempted {
-			return nil // Still waiting for pull
-		}
-
+	if p.mergeState.PendingCleanupOps <= 0 {
 		// All done - advance to done step
 		p.mergeState.StepStatus[MergeStepCleanup] = "done"
 		p.mergeState.Step = MergeStepDone
 		p.mergeState.StepStatus[MergeStepDone] = "done"
-
-		return nil
+		return true
 	}
-}
 
-// hasRemoteBranchError checks if there's a remote branch error in the errors list.
-func hasRemoteBranchError(errors []string) bool {
-	for _, err := range errors {
-		if len(err) > 7 && err[:7] == "Remote " {
-			return true
-		}
-	}
-	return false
-}
-
-// hasLocalError checks if there's a local worktree/branch error in the errors list.
-func hasLocalError(errors []string) bool {
-	for _, err := range errors {
-		if len(err) > 9 && (err[:9] == "Worktree:" || err[:7] == "Branch:") {
-			return true
-		}
-	}
 	return false
 }

@@ -1,6 +1,7 @@
 package worktree
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -198,6 +199,8 @@ func (p *Plugin) executeDelete() tea.Cmd {
 	p.cachedTask = nil
 
 	return func() tea.Msg {
+		var warnings []string
+
 		// Delete the worktree first
 		err := doDeleteWorktree(path)
 		if err != nil {
@@ -207,19 +210,18 @@ func (p *Plugin) executeDelete() tea.Cmd {
 		// Delete local branch if requested
 		if deleteLocal {
 			if branchErr := deleteBranch(workDir, branch); branchErr != nil {
-				// Log but don't fail - worktree was deleted successfully
-				// Error will be visible if branch deletion fails
+				warnings = append(warnings, fmt.Sprintf("Local branch: %v", branchErr))
 			}
 		}
 
 		// Delete remote branch if requested
 		if deleteRemote {
 			if remoteErr := deleteRemoteBranchCmd(workDir, branch); remoteErr != nil {
-				// Log but don't fail - worktree was deleted successfully
+				warnings = append(warnings, fmt.Sprintf("Remote branch: %v", remoteErr))
 			}
 		}
 
-		return DeleteDoneMsg{Name: name, Err: nil}
+		return DeleteDoneMsg{Name: name, Err: nil, Warnings: warnings}
 	}
 }
 
@@ -237,6 +239,9 @@ func (p *Plugin) cancelDelete() tea.Cmd {
 
 // handleListKeys handles keys in list view (and kanban view).
 func (p *Plugin) handleListKeys(msg tea.KeyMsg) tea.Cmd {
+	// Clear any deletion warnings on key interaction
+	p.deleteWarnings = nil
+
 	switch msg.String() {
 	case "j", "down":
 		if p.viewMode == ViewModeKanban {
