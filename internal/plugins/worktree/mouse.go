@@ -94,10 +94,24 @@ func (p *Plugin) handleMouseHover(action mouse.MouseAction) tea.Cmd {
 		default:
 			p.promptPicker.ClearHover()
 		}
+	case ViewModeMerge:
+		if action.Region == nil {
+			p.mergeMethodHover = 0
+			return nil
+		}
+		switch action.Region.ID {
+		case regionMergeMethodOption:
+			if idx, ok := action.Region.Data.(int); ok {
+				p.mergeMethodHover = idx + 1 // 1=Create PR, 2=Direct Merge
+			}
+		default:
+			p.mergeMethodHover = 0
+		}
 	default:
 		p.createButtonHover = 0
 		p.agentChoiceButtonHover = 0
 		p.deleteConfirmButtonHover = 0
+		p.mergeMethodHover = 0
 	}
 	return nil
 }
@@ -262,6 +276,12 @@ func (p *Plugin) handleMouseClick(action mouse.MouseAction) tea.Cmd {
 				p.linkingWorktree = nil
 				return p.linkTask(wt, task.ID)
 			}
+		}
+	case regionMergeMethodOption:
+		// Click on merge method option (0=Create PR, 1=Direct Merge)
+		if idx, ok := action.Region.Data.(int); ok && p.mergeState != nil &&
+			p.mergeState.Step == MergeStepMergeMethod {
+			p.mergeState.MergeMethodOption = idx
 		}
 	case regionMergeRadio:
 		// Click on merge radio option (0=delete, 1=keep)

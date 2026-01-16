@@ -296,6 +296,8 @@ var DimStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
    ```
    Without this, mouse Y calculations will be off by 1 row compared to lipgloss-styled modals.
 
+6. **`ui.OverlayModal()` changes the expected offset** - When calculating hit regions, use `modalY + 1` as the border offset, not `modalY + 2`. OverlayModal's centering algorithm makes content start 1 row earlier than you'd expect from counting border + padding. This is a common source of off-by-one click errors.
+
 ## Hit Region Calculation for Modal Buttons
 
 Calculating mouse hit regions for modal buttons is error-prone. Common issues:
@@ -306,13 +308,15 @@ Hit regions are calculated separately from rendering, so they can drift. Sources
 
 1. **Newlines after components**: `sb.WriteString("\n")` after a multi-line component (like textarea) may add an extra blank line if the component's `View()` already includes a trailing newline.
 
-2. **Border vs padding confusion**: Modal border adds 1 row, padding adds more. Track separately:
+2. **Border vs padding confusion**: Modal border adds 1 row, padding adds more. However, when using `ui.OverlayModal()`, the centering algorithm shifts content by 1 less than expected:
    ```go
-   // Modal with Border() + Padding(1, 2):
-   // - Row 0: Top border (1 row)
-   // - Row 1: Top padding (1 row)
-   // - Row 2+: Content starts here
-   offset := 2 // border(1) + padding(1)
+   // Modal with Border() + Padding(1, 2) using ui.OverlayModal():
+   // - OverlayModal centers based on line count, which effectively
+   //   makes content start at modalY + 1, NOT modalY + 2
+   offset := 1 // Adjusted for OverlayModal centering
+
+   // Without OverlayModal (direct lipgloss.Place()):
+   // offset := 2 // border(1) + padding(1)
    ```
 
 3. **Content line counting**: Count actual rendered lines, not logical sections:
@@ -337,10 +341,10 @@ func (p *Plugin) registerButtonHitRegion() {
     startX := (p.width - modalWidth) / 2
     startY := (p.height - modalHeight) / 2
 
-    // Content lines from modal top:
-    // border(1) + padding(1) + header(2) + label(1) + items + blank(1) + input(4) + button
-    // The +1 at end accounts for trailing newline after input component
-    buttonY := startY + 2 + 2 + 1 + itemCount + 1 + 4 + 1
+    // Content lines from modal top (using ui.OverlayModal):
+    // Border offset is 1 (adjusted for OverlayModal centering, not 2)
+    // Then: header(2) + label(1) + items + blank(1) + input(4) + button
+    buttonY := startY + 1 + 2 + 1 + itemCount + 1 + 4 + 1
 
     p.mouseHandler.HitMap.AddRect(regionButton, buttonX, buttonY, width, 1, nil)
 }

@@ -1045,14 +1045,22 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 			baseBranch = "main"
 		}
 
+		// Style helpers for selection and hover states
+		selectedStyle := func(s string) string {
+			return lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(s)
+		}
+		hoverStyle := func(s string) string {
+			return lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(s)
+		}
+
 		// Option 1: Create PR (default)
 		prIcon := "○"
 		prStyle := dimText
 		if p.mergeState.MergeMethodOption == 0 {
 			prIcon = "●"
-			prStyle = func(s string) string {
-				return lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(s)
-			}
+			prStyle = selectedStyle
+		} else if p.mergeMethodHover == 1 {
+			prStyle = hoverStyle
 		}
 		sb.WriteString(prStyle(fmt.Sprintf(" %s Create Pull Request (Recommended)", prIcon)))
 		sb.WriteString("\n")
@@ -1064,9 +1072,9 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 		directStyle := dimText
 		if p.mergeState.MergeMethodOption == 1 {
 			directIcon = "●"
-			directStyle = func(s string) string {
-				return lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(s)
-			}
+			directStyle = selectedStyle
+		} else if p.mergeMethodHover == 2 {
+			directStyle = hoverStyle
 		}
 		sb.WriteString(directStyle(fmt.Sprintf(" %s Direct Merge", directIcon)))
 		sb.WriteString("\n")
@@ -1298,6 +1306,34 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 
 	content := sb.String()
 	modal := modalStyle.Width(modalW).Render(content)
+
+	// Register hit regions for merge method options during MergeStepMergeMethod
+	if p.mergeState.Step == MergeStepMergeMethod {
+		modalH := lipgloss.Height(modal)
+		modalX := (width - modalW) / 2
+		modalY := (height - modalH) / 2
+
+		// Calculate position of merge method radio options
+		// Border offset is 1 (adjusted for OverlayModal centering)
+		// Content structure before step content:
+		// - Title (1 line)
+		// - blank (1 line)
+		// - Progress steps: 5 if UseDirectMerge, 7 otherwise
+		// - blank (1 line)
+		// - separator (1 line)
+		// - blank (2 lines from \n\n)
+		progressSteps := 7
+		if p.mergeState.UseDirectMerge {
+			progressSteps = 5
+		}
+		// Lines before step content: 1 + 1 + progressSteps + 1 + 1 + 2 = progressSteps + 6
+		// Then "Choose Merge Method:" (1) + blank (1) = 2 more lines before options
+		option1Y := modalY + 1 + progressSteps + 6 + 2 // border offset + header content + step header + blank
+		option2Y := option1Y + 3                        // Option 1 text + description + blank
+
+		p.mouseHandler.HitMap.AddRect(regionMergeMethodOption, modalX+2, option1Y, modalW-6, 1, 0) // Create PR
+		p.mouseHandler.HitMap.AddRect(regionMergeMethodOption, modalX+2, option2Y, modalW-6, 1, 1) // Direct Merge
+	}
 
 	// Register hit regions for radio buttons during MergeStepWaitingMerge
 	if p.mergeState.Step == MergeStepWaitingMerge {

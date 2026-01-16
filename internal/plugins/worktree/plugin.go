@@ -56,6 +56,7 @@ const (
 	regionTaskLinkDropdown = "task-link-dropdown"
 
 	// Merge modal regions
+	regionMergeMethodOption     = "merge-method-option"
 	regionMergeRadio            = "merge-radio"
 	regionMergeConfirmCheckbox  = "merge-confirm-checkbox"
 	regionMergeConfirmButton    = "merge-confirm-btn"
@@ -168,7 +169,8 @@ type Plugin struct {
 	taskMarkdownWidth    int      // Width used for cached render
 
 	// Merge workflow state
-	mergeState *MergeWorkflowState
+	mergeState       *MergeWorkflowState
+	mergeMethodHover int // 0=none, 1=Create PR option, 2=Direct Merge option (for mouse hover)
 
 	// Commit-before-merge state
 	mergeCommitState        *MergeCommitState
