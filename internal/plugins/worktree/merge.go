@@ -60,6 +60,7 @@ type MergeWorkflowState struct {
 	PRTitle          string
 	PRBody           string
 	PRURL            string
+	ExistingPR       bool   // True if using an existing PR (vs newly created)
 	Error            error
 	StepStatus       map[MergeWorkflowStep]string // "pending", "running", "done", "error", "skipped"
 	DeleteAfterMerge bool                         // true = delete worktree after merge (default)
@@ -94,10 +95,11 @@ type CleanupResults struct {
 
 // MergeStepCompleteMsg signals a merge workflow step completed.
 type MergeStepCompleteMsg struct {
-	WorktreeName string
-	Step         MergeWorkflowStep
-	Data         string // Step-specific data (e.g., PR URL)
-	Err          error
+	WorktreeName    string
+	Step            MergeWorkflowStep
+	Data            string // Step-specific data (e.g., PR URL)
+	Err             error
+	ExistingPRFound bool // True if PR already existed (vs newly created)
 }
 
 // CheckPRMergedMsg signals the result of checking if a PR was merged.
@@ -310,6 +312,41 @@ func (p *Plugin) pushForMerge(wt *Worktree) tea.Cmd {
 	}
 }
 
+// parseExistingPRURL extracts the PR URL from a "PR already exists" error message.
+// Returns the URL and true if found, empty string and false otherwise.
+func parseExistingPRURL(output string) (string, bool) {
+	// Error format: "a pull request for branch X into branch Y already exists: <URL>: exit status 1"
+	const marker = "already exists:"
+	idx := strings.Index(output, marker)
+	if idx == -1 {
+		return "", false
+	}
+
+	// Extract URL after marker
+	rest := strings.TrimSpace(output[idx+len(marker):])
+
+	// Find the URL - it starts with http and ends before ": exit" or end of string
+	if !strings.HasPrefix(rest, "http") {
+		return "", false
+	}
+
+	// Find where URL ends - look for ": exit" pattern which follows the URL
+	endIdx := strings.Index(rest, ": exit")
+	if endIdx == -1 {
+		// No ": exit" suffix, URL goes to end (trim whitespace)
+		endIdx = strings.IndexAny(rest, " \t\n")
+		if endIdx == -1 {
+			endIdx = len(rest)
+		}
+	}
+
+	url := strings.TrimSpace(rest[:endIdx])
+	if url == "" {
+		return "", false
+	}
+	return url, true
+}
+
 // createPR creates a pull request using gh CLI.
 func (p *Plugin) createPR(wt *Worktree, title, body string) tea.Cmd {
 	return func() tea.Msg {
@@ -330,10 +367,20 @@ func (p *Plugin) createPR(wt *Worktree, title, body string) tea.Cmd {
 		output, err := cmd.CombinedOutput()
 
 		if err != nil {
+			// Check if PR already exists
+			outputStr := string(output)
+			if existingURL, found := parseExistingPRURL(outputStr); found {
+				return MergeStepCompleteMsg{
+					WorktreeName:    wt.Name,
+					Step:            MergeStepCreatePR,
+					Data:            existingURL,
+					ExistingPRFound: true,
+				}
+			}
 			return MergeStepCompleteMsg{
 				WorktreeName: wt.Name,
 				Step:         MergeStepCreatePR,
-				Err:          fmt.Errorf("gh pr create: %s: %w", strings.TrimSpace(string(output)), err),
+				Err:          fmt.Errorf("gh pr create: %s: %w", strings.TrimSpace(outputStr), err),
 			}
 		}
 

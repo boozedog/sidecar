@@ -1093,7 +1093,11 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 		sb.WriteString("Creating pull request...")
 
 	case MergeStepWaitingMerge:
-		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Pull Request Created"))
+		if p.mergeState.ExistingPR {
+			sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214")).Render("Using Existing Pull Request"))
+		} else {
+			sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Pull Request Created"))
+		}
 		sb.WriteString("\n\n")
 		if p.mergeState.PRURL != "" {
 			sb.WriteString(fmt.Sprintf("URL: %s", p.mergeState.PRURL))
