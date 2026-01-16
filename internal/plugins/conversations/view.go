@@ -1046,10 +1046,22 @@ func (p *Plugin) renderGroupedCompactSessions(sb *strings.Builder, groups []Sess
 }
 
 // renderCompactSessionRow renders a compact session row for the sidebar.
-// Format: [active] [icon] Session title...              12m  45k
+// Format: [active] [icon] [worktree] Session title...              12m  45k
 func (p *Plugin) renderCompactSessionRow(session adapter.Session, selected bool, maxWidth int) string {
 	// Get badge text for width calculations (plain text length)
 	badgeText := adapterBadgeText(session)
+
+	// Format worktree badge if session is from a different worktree
+	worktreeBadge := ""
+	if session.WorktreeName != "" {
+		// Truncate long worktree names to keep UI clean (rune-safe for Unicode)
+		wtName := session.WorktreeName
+		runes := []rune(wtName)
+		if len(runes) > 12 {
+			wtName = string(runes[:9]) + "..."
+		}
+		worktreeBadge = "[" + wtName + "]"
+	}
 
 	// Format duration - only if we have data
 	lengthCol := ""
@@ -1076,8 +1088,11 @@ func (p *Plugin) renderCompactSessionRow(session adapter.Session, selected bool,
 	}
 
 	// Calculate prefix length for width calculations
-	// active(1) + badge + space
+	// active(1) + badge + space + worktree + space (if worktree)
 	prefixLen := 1 + len(badgeText) + 1
+	if worktreeBadge != "" {
+		prefixLen += len(worktreeBadge) + 1 // badge + space
+	}
 	if session.IsSubAgent {
 		prefixLen += 2 // extra indent for sub-agents
 	}
@@ -1110,6 +1125,9 @@ func (p *Plugin) renderCompactSessionRow(session adapter.Session, selected bool,
 	}
 	visibleLen += 1                              // indicator
 	visibleLen += len(badgeText) + 1 + len(name) // badge + space + name
+	if worktreeBadge != "" {
+		visibleLen += len(worktreeBadge) + 1 // worktree badge + space
+	}
 	padding := maxWidth - visibleLen - rightColWidth - 1
 	if padding < 0 {
 		padding = 0
@@ -1132,16 +1150,25 @@ func (p *Plugin) renderCompactSessionRow(session adapter.Session, selected bool,
 		sb.WriteString(" ")
 	}
 
-	// Colored adapter icon + name based on session type
+	// Colored adapter icon + worktree badge + name based on session type
 	if session.IsSubAgent {
 		// Sub-agents: muted styling
 		sb.WriteString(styles.Muted.Render(badgeText))
 		sb.WriteString(" ")
+		if worktreeBadge != "" {
+			sb.WriteString(styles.Muted.Render(worktreeBadge))
+			sb.WriteString(" ")
+		}
 		sb.WriteString(styles.Subtitle.Render(name))
 	} else {
 		// Top-level: use colored adapter icon
 		sb.WriteString(renderAdapterIcon(session))
 		sb.WriteString(" ")
+		if worktreeBadge != "" {
+			// Cyan/teal color for worktree badge to stand out
+			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#14B8A6")).Render(worktreeBadge))
+			sb.WriteString(" ")
+		}
 		sb.WriteString(styles.Body.Render(name))
 	}
 
@@ -1181,6 +1208,10 @@ func (p *Plugin) renderCompactSessionRow(session adapter.Session, selected bool,
 		}
 		plain.WriteString(badgeText)
 		plain.WriteString(" ")
+		if worktreeBadge != "" {
+			plain.WriteString(worktreeBadge)
+			plain.WriteString(" ")
+		}
 		plain.WriteString(name)
 		if rightColWidth > 0 && padding > 0 {
 			plain.WriteString(strings.Repeat(" ", padding))

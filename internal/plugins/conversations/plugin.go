@@ -3,6 +3,8 @@ package conversations
 import (
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -1452,30 +1454,80 @@ func (p *Plugin) Diagnostics() []plugin.Diagnostic {
 }
 
 // loadSessions loads sessions from the adapter.
+// Queries sessions from all related worktree paths to show cross-worktree conversations.
+// Sessions from deleted worktrees are marked with "(deleted)" in their worktree name.
 func (p *Plugin) loadSessions() tea.Cmd {
 	return func() tea.Msg {
 		if len(p.adapters) == 0 {
 			return SessionsLoadedMsg{}
 		}
 
+		// Get all related worktree paths (main repo + all worktrees)
+		worktreePaths := app.GetAllRelatedPaths(p.ctx.WorkDir)
+		if len(worktreePaths) == 0 {
+			// Not a git repo or no worktrees - just use current workdir
+			worktreePaths = []string{p.ctx.WorkDir}
+		}
+
+		// Track seen sessions to avoid duplicates (same session loaded from multiple paths)
+		seenSessions := make(map[string]bool)
 		var sessions []adapter.Session
+
+		// Get current working directory for worktree name comparison
+		currentPath := p.ctx.WorkDir
+		if absPath, err := filepath.Abs(currentPath); err == nil {
+			currentPath = absPath
+		}
+
 		for id, a := range p.adapters {
-			adapterSessions, err := a.Sessions(p.ctx.WorkDir)
-			if err != nil {
-				continue
+			for _, wtPath := range worktreePaths {
+				adapterSessions, err := a.Sessions(wtPath)
+				if err != nil {
+					continue
+				}
+
+				// Get worktree name for sessions from this path
+				wtName := app.WorktreeNameForPath(p.ctx.WorkDir, wtPath)
+
+				for i := range adapterSessions {
+					// Skip duplicates
+					if seenSessions[adapterSessions[i].ID] {
+						continue
+					}
+					seenSessions[adapterSessions[i].ID] = true
+
+					if adapterSessions[i].AdapterID == "" {
+						adapterSessions[i].AdapterID = id
+					}
+					if adapterSessions[i].AdapterName == "" {
+						adapterSessions[i].AdapterName = a.Name()
+					}
+					if adapterSessions[i].AdapterIcon == "" {
+						adapterSessions[i].AdapterIcon = a.Icon()
+					}
+
+					// Set worktree fields if session is from a different worktree
+					absWtPath := wtPath
+					if abs, err := filepath.Abs(wtPath); err == nil {
+						absWtPath = abs
+					}
+					if absWtPath != currentPath {
+						adapterSessions[i].WorktreeName = wtName
+						adapterSessions[i].WorktreePath = absWtPath
+					}
+
+					sessions = append(sessions, adapterSessions[i])
+				}
 			}
-			for i := range adapterSessions {
-				if adapterSessions[i].AdapterID == "" {
-					adapterSessions[i].AdapterID = id
-				}
-				if adapterSessions[i].AdapterName == "" {
-					adapterSessions[i].AdapterName = a.Name()
-				}
-				if adapterSessions[i].AdapterIcon == "" {
-					adapterSessions[i].AdapterIcon = a.Icon()
+		}
+
+		// Mark sessions from deleted worktrees
+		for i := range sessions {
+			if sessions[i].WorktreePath != "" {
+				if _, err := os.Stat(sessions[i].WorktreePath); os.IsNotExist(err) {
+					sessions[i].WorktreeName = sessions[i].WorktreeName + " (deleted)"
 				}
 			}
-			sessions = append(sessions, adapterSessions...)
 		}
 
 		sort.Slice(sessions, func(i, j int) bool {
@@ -1532,32 +1584,43 @@ func (p *Plugin) loadMessages(sessionID string) tea.Cmd {
 }
 
 // startWatcher starts watching for session changes.
+// Monitors all related worktree paths for live updates across worktrees.
 func (p *Plugin) startWatcher() tea.Cmd {
 	return func() tea.Msg {
 		if len(p.adapters) == 0 {
 			return WatchStartedMsg{Channel: nil}
 		}
 
+		// Get all related worktree paths (main repo + all worktrees)
+		worktreePaths := app.GetAllRelatedPaths(p.ctx.WorkDir)
+		if len(worktreePaths) == 0 {
+			// Not a git repo or no worktrees - just use current workdir
+			worktreePaths = []string{p.ctx.WorkDir}
+		}
+
 		merged := make(chan adapter.Event, 32)
 		var wg sync.WaitGroup
 		watchCount := 0
 
+		// Watch all worktree paths with each adapter
 		for _, a := range p.adapters {
-			ch, err := a.Watch(p.ctx.WorkDir)
-			if err != nil || ch == nil {
-				continue
-			}
-			watchCount++
-			wg.Add(1)
-			go func(c <-chan adapter.Event) {
-				defer wg.Done()
-				for evt := range c {
-					select {
-					case merged <- evt:
-					default:
-					}
+			for _, wtPath := range worktreePaths {
+				ch, err := a.Watch(wtPath)
+				if err != nil || ch == nil {
+					continue
 				}
-			}(ch)
+				watchCount++
+				wg.Add(1)
+				go func(c <-chan adapter.Event) {
+					defer wg.Done()
+					for evt := range c {
+						select {
+						case merged <- evt:
+						default:
+						}
+					}
+				}(ch)
+			}
 		}
 
 		if watchCount == 0 {

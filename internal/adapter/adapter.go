@@ -44,6 +44,10 @@ type Session struct {
 	EstCost      float64 // Estimated cost in dollars
 	IsSubAgent   bool    // True if this is a sub-agent spawned by another session
 	MessageCount int     // Number of user/assistant messages (0 = metadata-only)
+
+	// Worktree fields - populated when session is from a different worktree
+	WorktreeName string // Branch name or directory name of the worktree (empty if main or non-worktree)
+	WorktreePath string // Absolute path to the worktree (empty if same as current workdir)
 }
 
 // ThinkingBlock represents Claude's extended thinking content.
