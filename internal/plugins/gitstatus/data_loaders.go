@@ -1,0 +1,161 @@
+package gitstatus
+
+import (
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+// loadDiff loads the diff for a file.
+func (p *Plugin) loadDiff(path string, staged bool, status FileStatus) tea.Cmd {
+	workDir := p.ctx.WorkDir
+	return func() tea.Msg {
+		var rawDiff string
+		var err error
+
+		// Untracked files need special handling - create new file diff
+		if status == StatusUntracked {
+			rawDiff, err = GetNewFileDiff(workDir, path)
+		} else {
+			rawDiff, err = GetDiff(workDir, path, staged)
+		}
+		if err != nil {
+			return ErrorMsg{Err: err}
+		}
+
+		return DiffLoadedMsg{Content: rawDiff, Raw: rawDiff}
+	}
+}
+
+// loadInlineDiff loads a diff for inline preview in the three-pane view.
+func (p *Plugin) loadInlineDiff(path string, staged bool, status FileStatus) tea.Cmd {
+	workDir := p.ctx.WorkDir
+	return func() tea.Msg {
+		var rawDiff string
+		var err error
+
+		// Untracked files need special handling - create new file diff
+		if status == StatusUntracked {
+			rawDiff, err = GetNewFileDiff(workDir, path)
+		} else {
+			rawDiff, err = GetDiff(workDir, path, staged)
+		}
+		if err != nil {
+			return InlineDiffLoadedMsg{File: path, Raw: "", Parsed: nil}
+		}
+		parsed, _ := ParseUnifiedDiff(rawDiff)
+		return InlineDiffLoadedMsg{File: path, Raw: rawDiff, Parsed: parsed}
+	}
+}
+
+// loadRecentCommits loads recent commits for the sidebar with push status.
+func (p *Plugin) loadRecentCommits() tea.Cmd {
+	workDir := p.ctx.WorkDir
+	return func() tea.Msg {
+		commits, pushStatus, err := GetCommitHistoryWithPushStatus(workDir, commitHistoryPageSize)
+		if err != nil {
+			return RecentCommitsLoadedMsg{Commits: nil, PushStatus: nil}
+		}
+		return RecentCommitsLoadedMsg{Commits: commits, PushStatus: pushStatus}
+	}
+}
+
+// loadMoreCommits fetches the next batch of commits for infinite scroll.
+func (p *Plugin) loadMoreCommits() tea.Cmd {
+	if p.loadingMoreCommits {
+		return nil
+	}
+	p.loadingMoreCommits = true
+
+	workDir := p.ctx.WorkDir
+	skip := len(p.recentCommits)
+	return func() tea.Msg {
+		commits, pushStatus, err := GetCommitHistoryWithPushStatusOffset(workDir, commitHistoryPageSize, skip)
+		if err != nil {
+			return MoreCommitsLoadedMsg{Commits: nil, PushStatus: nil}
+		}
+		return MoreCommitsLoadedMsg{Commits: commits, PushStatus: pushStatus}
+	}
+}
+
+// loadCommitStats fetches stats for a specific commit (lazy loading).
+func (p *Plugin) loadCommitStats(hash string) tea.Cmd {
+	workDir := p.ctx.WorkDir
+	return func() tea.Msg {
+		commit, err := GetCommitDetail(workDir, hash)
+		if err != nil || commit == nil {
+			return CommitStatsLoadedMsg{Hash: hash, Stats: CommitStats{}}
+		}
+		return CommitStatsLoadedMsg{Hash: hash, Stats: commit.Stats}
+	}
+}
+
+// loadFilteredCommits fetches commits with current filter options.
+func (p *Plugin) loadFilteredCommits() tea.Cmd {
+	workDir := p.ctx.WorkDir
+	opts := HistoryFilterOpts{
+		Author: p.historyFilterAuthor,
+		Path:   p.historyFilterPath,
+		Limit:  50,
+	}
+	return func() tea.Msg {
+		commits, pushStatus, err := GetCommitHistoryFilteredWithPushStatus(workDir, opts)
+		if err != nil {
+			return FilteredCommitsLoadedMsg{Commits: nil, PushStatus: nil}
+		}
+		return FilteredCommitsLoadedMsg{Commits: commits, PushStatus: pushStatus}
+	}
+}
+
+// loadFolderDiff loads a concatenated diff for all files in a folder.
+func (p *Plugin) loadFolderDiff(entry *FileEntry) tea.Cmd {
+	workDir := p.ctx.WorkDir
+	folderPath := entry.Path
+	children := entry.Children
+	return func() tea.Msg {
+		rawDiff, err := GetFolderDiff(workDir, children)
+		if err != nil {
+			return InlineDiffLoadedMsg{File: folderPath, Raw: "", Parsed: nil}
+		}
+		parsed, _ := ParseUnifiedDiff(rawDiff)
+		return InlineDiffLoadedMsg{File: folderPath, Raw: rawDiff, Parsed: parsed}
+	}
+}
+
+// loadFullFolderDiff loads a concatenated diff for full-screen view.
+func (p *Plugin) loadFullFolderDiff(entry *FileEntry) tea.Cmd {
+	workDir := p.ctx.WorkDir
+	children := entry.Children
+	return func() tea.Msg {
+		rawDiff, err := GetFolderDiff(workDir, children)
+		if err != nil {
+			return ErrorMsg{Err: err}
+		}
+
+		return DiffLoadedMsg{Content: rawDiff, Raw: rawDiff}
+	}
+}
+
+// loadCommitFileDiff loads diff for a file in a commit.
+func (p *Plugin) loadCommitFileDiff(hash, path string) tea.Cmd {
+	workDir := p.ctx.WorkDir
+	return func() tea.Msg {
+		rawDiff, err := GetCommitDiff(workDir, hash, path)
+		if err != nil {
+			return ErrorMsg{Err: err}
+		}
+
+		return DiffLoadedMsg{Content: rawDiff, Raw: rawDiff}
+	}
+}
+
+
+// loadCommitDetailForPreview loads commit detail for inline preview.
+func (p *Plugin) loadCommitDetailForPreview(hash string) tea.Cmd {
+	workDir := p.ctx.WorkDir
+	return func() tea.Msg {
+		commit, err := GetCommitDetail(workDir, hash)
+		if err != nil {
+			return ErrorMsg{Err: err}
+		}
+		return CommitPreviewLoadedMsg{Commit: commit}
+	}
+}
