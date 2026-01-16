@@ -76,6 +76,24 @@ func (p *Plugin) handleMouseHover(action mouse.MouseAction) tea.Cmd {
 		default:
 			p.deleteConfirmButtonHover = 0
 		}
+	case ViewModePromptPicker:
+		if p.promptPicker == nil {
+			return nil
+		}
+		if action.Region == nil {
+			p.promptPicker.ClearHover()
+			return nil
+		}
+		switch action.Region.ID {
+		case regionPromptItem:
+			if idx, ok := action.Region.Data.(int); ok {
+				p.promptPicker.SetHover(idx)
+			}
+		case regionPromptFilter:
+			p.promptPicker.ClearHover()
+		default:
+			p.promptPicker.ClearHover()
+		}
 	default:
 		p.createButtonHover = 0
 		p.agentChoiceButtonHover = 0
@@ -178,6 +196,12 @@ func (p *Plugin) handleMouseClick(action mouse.MouseAction) tea.Cmd {
 			p.blurCreateInputs()
 			p.createFocus = focusIdx
 			p.focusCreateInput()
+
+			// If clicking prompt field, open the picker
+			if focusIdx == 2 {
+				p.promptPicker = NewPromptPicker(p.createPrompts, p.width, p.height)
+				p.viewMode = ViewModePromptPicker
+			}
 		}
 	case regionCreateDropdown:
 		// Click on dropdown item
@@ -262,6 +286,11 @@ func (p *Plugin) handleMouseClick(action mouse.MouseAction) tea.Cmd {
 			p.mergeState.DeleteRemoteBranch = false
 			p.mergeState.ConfirmationFocus = 4
 			return p.advanceMergeStep()
+		}
+	case regionPromptFilter:
+		// Click on filter input in prompt picker - focus it
+		if p.promptPicker != nil {
+			p.promptPicker.FocusFilter()
 		}
 	case regionPromptItem:
 		// Click on prompt item in picker - select it

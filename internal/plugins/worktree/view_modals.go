@@ -729,6 +729,11 @@ func (p *Plugin) renderPromptPickerModal(width, height int) string {
 	modalX := (width - modalW) / 2
 	modalY := (height - modalH) / 2
 
+	// Register hit region for filter input
+	// Layout: border(1) + padding(1) + header(1) + blank(1) + "Filter:" label(1) = 5 lines before filter input
+	filterY := modalY + 2 + 3 // border+padding + header + blank + label
+	p.mouseHandler.HitMap.AddRect(regionPromptFilter, modalX+2, filterY, 32, 1, nil)
+
 	// Register hit regions for prompt items
 	// Layout: border(1) + padding(1) + header(2) + filter(3) + column headers(2) = 9 lines before items
 	// "None" option is first, then filtered prompts

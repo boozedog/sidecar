@@ -11,12 +11,14 @@ import (
 
 // PromptPicker is a modal for selecting a prompt template.
 type PromptPicker struct {
-	prompts     []Prompt        // all available prompts
-	filtered    []Prompt        // filtered by query
-	filterInput textinput.Model // filter text input
-	selectedIdx int             // highlighted row (0-based into filtered, -1 = none option)
-	width       int
-	height      int
+	prompts       []Prompt        // all available prompts
+	filtered      []Prompt        // filtered by query
+	filterInput   textinput.Model // filter text input
+	selectedIdx   int             // highlighted row (0-based into filtered, -1 = none option)
+	hoverIdx      int             // hovered row for mouse feedback (-2 = no hover, -1 = none, 0+ = prompt)
+	filterFocused bool            // true when filter has keyboard focus (vs item list)
+	width         int
+	height        int
 }
 
 // PromptSelectedMsg is sent when a prompt is selected.
@@ -33,14 +35,17 @@ func NewPromptPicker(prompts []Prompt, width, height int) *PromptPicker {
 	ti.Placeholder = "Type to filter..."
 	ti.Prompt = ""
 	ti.Width = 30
+	ti.Focus() // Focus filter input by default when picker opens
 
 	pp := &PromptPicker{
-		prompts:     prompts,
-		filtered:    prompts,
-		filterInput: ti,
-		selectedIdx: -1, // Start on "none" option
-		width:       width,
-		height:      height,
+		prompts:       prompts,
+		filtered:      prompts,
+		filterInput:   ti,
+		selectedIdx:   -1,   // Start on "none" option
+		hoverIdx:      -2,   // No hover initially
+		filterFocused: true, // Start with filter focused
+		width:         width,
+		height:        height,
 	}
 	return pp
 }
@@ -52,6 +57,16 @@ func (pp *PromptPicker) Update(msg tea.Msg) (*PromptPicker, tea.Cmd) {
 		switch msg.String() {
 		case "esc", "q":
 			return pp, func() tea.Msg { return PromptCancelledMsg{} }
+
+		case "tab", "shift+tab":
+			// Toggle between filter focus and item list focus
+			pp.filterFocused = !pp.filterFocused
+			if pp.filterFocused {
+				pp.filterInput.Focus()
+			} else {
+				pp.filterInput.Blur()
+			}
+			return pp, nil
 
 		case "enter":
 			if pp.selectedIdx < 0 {
@@ -65,12 +80,14 @@ func (pp *PromptPicker) Update(msg tea.Msg) (*PromptPicker, tea.Cmd) {
 			return pp, nil
 
 		case "up", "k":
+			// Only navigate items when list is focused (or always allow for convenience)
 			if pp.selectedIdx > -1 {
 				pp.selectedIdx--
 			}
 			return pp, nil
 
 		case "down", "j":
+			// Only navigate items when list is focused (or always allow for convenience)
 			if pp.selectedIdx < len(pp.filtered)-1 {
 				pp.selectedIdx++
 			}
@@ -87,11 +104,13 @@ func (pp *PromptPicker) Update(msg tea.Msg) (*PromptPicker, tea.Cmd) {
 			return pp, nil
 
 		default:
-			// Handle filter input
-			var cmd tea.Cmd
-			pp.filterInput, cmd = pp.filterInput.Update(msg)
-			pp.applyFilter()
-			return pp, cmd
+			// Handle filter input only when filter is focused
+			if pp.filterFocused {
+				var cmd tea.Cmd
+				pp.filterInput, cmd = pp.filterInput.Update(msg)
+				pp.applyFilter()
+				return pp, cmd
+			}
 		}
 	}
 	return pp, nil
@@ -115,6 +134,22 @@ func (pp *PromptPicker) applyFilter() {
 	if pp.selectedIdx >= len(pp.filtered) {
 		pp.selectedIdx = len(pp.filtered) - 1
 	}
+}
+
+// FocusFilter focuses the filter input field.
+func (pp *PromptPicker) FocusFilter() {
+	pp.filterFocused = true
+	pp.filterInput.Focus()
+}
+
+// SetHover sets the hover index for visual feedback.
+func (pp *PromptPicker) SetHover(idx int) {
+	pp.hoverIdx = idx
+}
+
+// ClearHover clears the hover state.
+func (pp *PromptPicker) ClearHover() {
+	pp.hoverIdx = -2
 }
 
 // View renders the prompt picker modal.
@@ -143,10 +178,13 @@ func (pp *PromptPicker) View() string {
 		return sb.String()
 	}
 
-	// Filter input
+	// Filter input - show focused style when filter has keyboard focus
 	sb.WriteString("Filter:")
 	sb.WriteString("\n")
 	filterStyle := inputStyle.Width(30)
+	if pp.filterFocused {
+		filterStyle = inputFocusedStyle.Width(30)
+	}
 	sb.WriteString(filterStyle.Render(pp.filterInput.View()))
 	sb.WriteString("\n\n")
 
@@ -157,7 +195,7 @@ func (pp *PromptPicker) View() string {
 	sb.WriteString(colStyle.Render(strings.Repeat("─", min(pp.width-6, 70))))
 	sb.WriteString("\n")
 
-	// "None" option
+	// "None" option - style priority: selected > hover > default
 	nonePrefix := "  "
 	if pp.selectedIdx == -1 {
 		nonePrefix = "▶ "
@@ -165,6 +203,8 @@ func (pp *PromptPicker) View() string {
 	noneLine := fmt.Sprintf("%s%-24s %-7s %-10s %s", nonePrefix, "(none)", "", "", "No prompt template")
 	if pp.selectedIdx == -1 {
 		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(noneLine))
+	} else if pp.hoverIdx == -1 {
+		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("250")).Render(noneLine))
 	} else {
 		sb.WriteString(dimText(noneLine))
 	}
@@ -201,8 +241,11 @@ func (pp *PromptPicker) View() string {
 
 		line := fmt.Sprintf("%s%-24s %-7s %-10s %s", prefix, truncateString(p.Name, 24), scope, ticket, preview)
 
+		// Style priority: selected > hover > default
 		if i == pp.selectedIdx {
 			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(line))
+		} else if i == pp.hoverIdx {
+			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("250")).Render(line))
 		} else {
 			sb.WriteString(dimText(line))
 		}
@@ -215,7 +258,7 @@ func (pp *PromptPicker) View() string {
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(dimText("  Enter: select   ↑/↓: move   Type to filter"))
+	sb.WriteString(dimText("  Enter: select   ↑/↓: move   Tab: toggle focus"))
 
 	return sb.String()
 }

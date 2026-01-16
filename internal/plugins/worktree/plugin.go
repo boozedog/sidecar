@@ -60,7 +60,8 @@ const (
 	regionMergeSkipButton       = "merge-skip-btn"
 
 	// Prompt Picker modal regions
-	regionPromptItem = "prompt-item"
+	regionPromptItem   = "prompt-item"
+	regionPromptFilter = "prompt-filter"
 )
 
 // Plugin implements the worktree manager plugin.
