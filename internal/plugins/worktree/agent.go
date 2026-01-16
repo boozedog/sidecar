@@ -25,11 +25,13 @@ const (
 	captureLineCount = 600
 
 	// Polling intervals - adaptive based on agent status
-	pollIntervalInitial = 500 * time.Millisecond // First poll after agent starts
-	pollIntervalActive  = 500 * time.Millisecond // Agent actively processing
-	pollIntervalIdle    = 3 * time.Second        // No change detected
-	pollIntervalWaiting = 5 * time.Second        // Agent waiting for user input
-	pollIntervalDone    = 10 * time.Second       // Agent completed/exited
+	pollIntervalInitial    = 500 * time.Millisecond // First poll after agent starts
+	pollIntervalActive     = 500 * time.Millisecond // Agent actively processing
+	pollIntervalIdle       = 3 * time.Second        // No change detected
+	pollIntervalWaiting    = 5 * time.Second        // Agent waiting for user input
+	pollIntervalDone       = 10 * time.Second       // Agent completed/exited
+	pollIntervalBackground = 5 * time.Second        // Output not visible, plugin focused
+	pollIntervalUnfocused  = 15 * time.Second       // Plugin not focused
 )
 
 // AgentStartedMsg signals an agent has been started in a worktree.
@@ -37,7 +39,7 @@ type AgentStartedMsg struct {
 	WorktreeName string
 	SessionName  string
 	AgentType    AgentType
-	Reconnected  bool  // True if we reconnected to an existing session
+	Reconnected  bool // True if we reconnected to an existing session
 	Err          error
 }
 
@@ -81,19 +83,19 @@ func (p *Plugin) StartAgent(wt *Worktree, agentType AgentType) tea.Cmd {
 		if checkCmd.Run() == nil {
 			// Session exists - reconnect to it instead of failing
 			return AgentStartedMsg{
-				WorktreeName:  wt.Name,
-				SessionName:   sessionName,
-				AgentType:     agentType,
-				Reconnected:   true, // Flag that we reconnected to existing session
+				WorktreeName: wt.Name,
+				SessionName:  sessionName,
+				AgentType:    agentType,
+				Reconnected:  true, // Flag that we reconnected to existing session
 			}
 		}
 
 		// Create new detached session with working directory
 		args := []string{
 			"new-session",
-			"-d",             // Detached
+			"-d",              // Detached
 			"-s", sessionName, // Session name
-			"-c", wt.Path,    // Working directory
+			"-c", wt.Path, // Working directory
 		}
 
 		cmd := exec.Command("tmux", args...)
@@ -258,7 +260,7 @@ func (p *Plugin) StartAgentWithOptions(wt *Worktree, agentType AgentType, skipPe
 			"new-session",
 			"-d",              // Detached
 			"-s", sessionName, // Session name
-			"-c", wt.Path,     // Working directory
+			"-c", wt.Path, // Working directory
 		}
 
 		cmd := exec.Command("tmux", args...)
@@ -320,7 +322,7 @@ func (p *Plugin) AttachToWorktreeDir(wt *Worktree) tea.Cmd {
 			"new-session",
 			"-d",              // Detached
 			"-s", sessionName, // Session name
-			"-c", wt.Path,     // Working directory
+			"-c", wt.Path, // Working directory
 		}
 		cmd := exec.Command("tmux", args...)
 		if err := cmd.Run(); err != nil {
@@ -478,12 +480,12 @@ func detectStatus(output string) WorktreeStatus {
 
 	// Waiting patterns (agent needs user input) - highest priority
 	waitingPatterns := []string{
-		"[y/n]",        // Claude Code permission prompt
-		"(y/n)",        // Aider style
-		"allow edit",   // Claude Code file edit
-		"allow bash",   // Claude Code bash command
-		"waiting for",  // Generic waiting
-		"press enter",  // Continue prompt
+		"[y/n]",       // Claude Code permission prompt
+		"(y/n)",       // Aider style
+		"allow edit",  // Claude Code file edit
+		"allow bash",  // Claude Code bash command
+		"waiting for", // Generic waiting
+		"press enter", // Continue prompt
 		"continue?",
 		"approve",
 		"confirm",

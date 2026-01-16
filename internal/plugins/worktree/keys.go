@@ -326,7 +326,7 @@ func (p *Plugin) handleListKeys(msg tea.KeyMsg) tea.Cmd {
 		p.viewMode = ViewModeConfirmDelete
 		p.deleteConfirmWorktree = wt
 		p.deleteConfirmButtonHover = 0
-		p.deleteLocalBranchOpt = false  // Default: don't delete branches
+		p.deleteLocalBranchOpt = false // Default: don't delete branches
 		p.deleteRemoteBranchOpt = false
 		p.deleteHasRemote = false
 		p.deleteConfirmFocus = 1 // Focus delete button (index 1 when no remote)
@@ -401,12 +401,15 @@ func (p *Plugin) handleListKeys(msg tea.KeyMsg) tea.Cmd {
 				p.diffViewMode = DiffViewUnified
 				_ = state.SetWorktreeDiffMode("unified")
 			}
+			return nil
 		} else if p.activePane == PaneSidebar || p.viewMode == ViewModeKanban {
 			if p.viewMode == ViewModeList {
 				p.viewMode = ViewModeKanban
 				p.syncListToKanban()
+				return nil
 			} else if p.viewMode == ViewModeKanban {
 				p.viewMode = ViewModeList
+				return p.pollSelectedAgentNowIfVisible()
 			}
 		}
 	case "ctrl+d":
@@ -466,9 +469,9 @@ func (p *Plugin) handleListKeys(msg tea.KeyMsg) tea.Cmd {
 		}
 		// Agent exists - show choice modal (attach or restart)
 		p.agentChoiceWorktree = wt
-		p.agentChoiceIdx = 0           // Default to attach
-		p.agentChoiceButtonFocus = 0   // Start with options focused
-		p.agentChoiceButtonHover = 0   // Clear hover state
+		p.agentChoiceIdx = 0         // Default to attach
+		p.agentChoiceButtonFocus = 0 // Start with options focused
+		p.agentChoiceButtonHover = 0 // Clear hover state
 		p.viewMode = ViewModeAgentChoice
 		return nil
 	case "S":

@@ -27,18 +27,18 @@ const (
 	dividerHitWidth = 3 // Wider hit target for drag
 
 	// Hit region IDs
-	regionSidebar              = "sidebar"
-	regionPreviewPane          = "preview-pane"
-	regionPaneDivider          = "pane-divider"
-	regionWorktreeItem         = "worktree-item"
-	regionPreviewTab           = "preview-tab"
-	regionAgentChoiceOption    = "agent-choice-option"
-	regionAgentChoiceConfirm   = "agent-choice-confirm"
-	regionAgentChoiceCancel    = "agent-choice-cancel"
-	regionDeleteConfirmDelete      = "delete-confirm-delete"
-	regionDeleteConfirmCancel      = "delete-confirm-cancel"
-	regionDeleteLocalBranchCheck   = "delete-local-branch-check"
-	regionDeleteRemoteBranchCheck  = "delete-remote-branch-check"
+	regionSidebar                 = "sidebar"
+	regionPreviewPane             = "preview-pane"
+	regionPaneDivider             = "pane-divider"
+	regionWorktreeItem            = "worktree-item"
+	regionPreviewTab              = "preview-tab"
+	regionAgentChoiceOption       = "agent-choice-option"
+	regionAgentChoiceConfirm      = "agent-choice-confirm"
+	regionAgentChoiceCancel       = "agent-choice-cancel"
+	regionDeleteConfirmDelete     = "delete-confirm-delete"
+	regionDeleteConfirmCancel     = "delete-confirm-cancel"
+	regionDeleteLocalBranchCheck  = "delete-local-branch-check"
+	regionDeleteRemoteBranchCheck = "delete-remote-branch-check"
 
 	// Kanban view regions
 	regionKanbanCard   = "kanban-card"
@@ -56,11 +56,11 @@ const (
 	regionTaskLinkDropdown = "task-link-dropdown"
 
 	// Merge modal regions
-	regionMergeMethodOption     = "merge-method-option"
-	regionMergeRadio            = "merge-radio"
-	regionMergeConfirmCheckbox  = "merge-confirm-checkbox"
-	regionMergeConfirmButton    = "merge-confirm-btn"
-	regionMergeSkipButton       = "merge-skip-btn"
+	regionMergeMethodOption    = "merge-method-option"
+	regionMergeRadio           = "merge-radio"
+	regionMergeConfirmCheckbox = "merge-confirm-checkbox"
+	regionMergeConfirmButton   = "merge-confirm-btn"
+	regionMergeSkipButton      = "merge-skip-btn"
 
 	// Prompt Picker modal regions
 	regionPromptItem   = "prompt-item"
@@ -83,17 +83,17 @@ type Plugin struct {
 	managedSessions map[string]bool
 
 	// View state
-	viewMode       ViewMode
-	activePane     FocusPane
-	previewTab     PreviewTab
-	selectedIdx    int
-	scrollOffset   int  // Sidebar list scroll offset
-	visibleCount   int  // Number of visible list items
+	viewMode           ViewMode
+	activePane         FocusPane
+	previewTab         PreviewTab
+	selectedIdx        int
+	scrollOffset       int // Sidebar list scroll offset
+	visibleCount       int // Number of visible list items
 	previewOffset      int
 	previewHorizOffset int  // Horizontal scroll offset for preview pane
 	autoScrollOutput   bool // Auto-scroll output to follow agent (paused when user scrolls up)
-	sidebarWidth     int  // Persisted sidebar width
-	sidebarVisible bool // Whether sidebar is visible (toggled with \)
+	sidebarWidth       int  // Persisted sidebar width
+	sidebarVisible     bool // Whether sidebar is visible (toggled with \)
 
 	// Kanban view state
 	kanbanCol int // Current column index (0=Active, 1=Waiting, 2=Done, 3=Paused)
@@ -331,13 +331,50 @@ func (p *Plugin) Stop() {
 	// Cleanup managed tmux sessions if needed
 }
 
-
 // selectedWorktree returns the currently selected worktree.
 func (p *Plugin) selectedWorktree() *Worktree {
 	if p.selectedIdx < 0 || p.selectedIdx >= len(p.worktrees) {
 		return nil
 	}
 	return p.worktrees[p.selectedIdx]
+}
+
+// outputVisibleFor returns true when a worktree's output is on-screen.
+func (p *Plugin) outputVisibleFor(worktreeName string) bool {
+	if !p.focused {
+		return false
+	}
+	if p.viewMode != ViewModeList {
+		return false
+	}
+	if p.previewTab != PreviewTabOutput {
+		return false
+	}
+	wt := p.selectedWorktree()
+	if wt == nil || wt.Name != worktreeName {
+		return false
+	}
+	return true
+}
+
+// backgroundPollInterval returns the poll delay when output isn't visible.
+func (p *Plugin) backgroundPollInterval() time.Duration {
+	if p.focused {
+		return pollIntervalBackground
+	}
+	return pollIntervalUnfocused
+}
+
+// pollSelectedAgentNowIfVisible triggers an immediate poll for visible output.
+func (p *Plugin) pollSelectedAgentNowIfVisible() tea.Cmd {
+	wt := p.selectedWorktree()
+	if wt == nil || wt.Agent == nil {
+		return nil
+	}
+	if !p.outputVisibleFor(wt.Name) {
+		return nil
+	}
+	return p.scheduleAgentPoll(wt.Name, 0)
 }
 
 // removeWorktreeByName removes a worktree from the list by name.
@@ -429,24 +466,56 @@ func (p *Plugin) cyclePreviewTab(delta int) tea.Cmd {
 	p.autoScrollOutput = true // Reset auto-scroll when switching tabs
 
 	// Load content for the active tab
+	var cmds []tea.Cmd
 	switch p.previewTab {
 	case PreviewTabDiff:
-		return p.loadSelectedDiff()
+		if cmd := p.loadSelectedDiff(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	case PreviewTabTask:
-		return p.loadTaskDetailsIfNeeded()
+		if cmd := p.loadTaskDetailsIfNeeded(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	}
-	return nil
+	if cmd := p.pollSelectedAgentNowIfVisible(); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	if len(cmds) == 0 {
+		return nil
+	}
+	if len(cmds) == 1 {
+		return cmds[0]
+	}
+	return tea.Batch(cmds...)
 }
 
 // loadSelectedContent loads content based on the active preview tab.
 // Always loads diff (for preloading), and also loads task if task tab is active.
 func (p *Plugin) loadSelectedContent() tea.Cmd {
+	var cmds []tea.Cmd
 	switch p.previewTab {
 	case PreviewTabTask:
-		return tea.Batch(p.loadSelectedDiff(), p.loadTaskDetailsIfNeeded())
+		if cmd := p.loadSelectedDiff(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		if cmd := p.loadTaskDetailsIfNeeded(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	default:
-		return p.loadSelectedDiff()
+		if cmd := p.loadSelectedDiff(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	}
+	if cmd := p.pollSelectedAgentNowIfVisible(); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	if len(cmds) == 0 {
+		return nil
+	}
+	if len(cmds) == 1 {
+		return cmds[0]
+	}
+	return tea.Batch(cmds...)
 }
 
 // loadTaskDetailsIfNeeded loads task details if not cached or stale.

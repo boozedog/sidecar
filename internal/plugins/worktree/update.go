@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	app "github.com/marcus/sidecar/internal/app"
 	"github.com/marcus/sidecar/internal/plugin"
 )
 
@@ -14,6 +15,11 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case app.PluginFocusedMsg:
+		if p.focused {
+			return p, p.pollSelectedAgentNowIfVisible()
+		}
+
 	case RefreshMsg:
 		if !p.refreshing {
 			p.refreshing = true
@@ -192,6 +198,8 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		if p.attachedSession == msg.WorktreeName {
 			return p, nil
 		}
+		// Always poll for status updates (needed for sidebar indicators),
+		// but use longer intervals when output isn't visible
 		return p, p.handlePollAgent(msg.WorktreeName)
 
 	case AgentOutputMsg:
@@ -209,6 +217,12 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		case StatusDone, StatusError:
 			interval = pollIntervalDone
 		}
+		if !p.outputVisibleFor(msg.WorktreeName) {
+			background := p.backgroundPollInterval()
+			if background > interval {
+				interval = background
+			}
+		}
 		return p, p.scheduleAgentPoll(msg.WorktreeName, interval)
 
 	case AgentPollUnchangedMsg:
@@ -219,6 +233,12 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			interval = pollIntervalWaiting
 		case StatusDone, StatusError:
 			interval = pollIntervalDone
+		}
+		if !p.outputVisibleFor(msg.WorktreeName) {
+			background := p.backgroundPollInterval()
+			if background > interval {
+				interval = background
+			}
 		}
 		return p, p.scheduleAgentPoll(msg.WorktreeName, interval)
 
