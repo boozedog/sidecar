@@ -363,12 +363,13 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 					cmds = append(cmds, p.advanceMergeStep())
 				case MergeStepCreatePR:
 					p.mergeState.PRURL = msg.Data
+					p.mergeState.ExistingPR = msg.ExistingPRFound
 					// Save PR URL to worktree for indicator in list
 					if wt := p.mergeState.Worktree; wt != nil && msg.Data != "" {
 						wt.PRURL = msg.Data
 						savePRURL(wt.Path, msg.Data)
 					}
-					// PR created - advanceMergeStep handles status transition
+					// PR created (or existing found) - advanceMergeStep handles status transition
 					cmds = append(cmds, p.advanceMergeStep())
 				case MergeStepCleanup:
 					// Cleanup done, mark done and remove from worktree list
