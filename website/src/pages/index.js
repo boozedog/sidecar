@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
@@ -236,6 +236,20 @@ function WorktreesPane() {
 }
 
 function Frame({ activeTab, onTabChange }) {
+  const [time, setTime] = useState(() => {
+    const now = new Date();
+    return now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+  });
+
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setTime(now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }));
+    };
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const renderPane = () => {
     switch (activeTab) {
       case 'td': return <TdPane />;
@@ -257,7 +271,7 @@ function Frame({ activeTab, onTabChange }) {
         </div>
         <div className="sc-topRight">
           <span className="sc-codeInline">sidecar</span>
-          <span className="sc-lineDim">07:43</span>
+          <span className="sc-lineDim">{time}</span>
         </div>
       </div>
 
@@ -948,38 +962,90 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Suggested Setup */}
-        <section className="sc-setup">
+        {/* Supported Agents */}
+        <section className="sc-agents">
           <div className="container">
-            <div className="sc-frame">
-              <div className="sc-frameTop">
-                <div className="sc-dots" aria-hidden="true">
-                  <span className="sc-dot" />
-                  <span className="sc-dot" />
-                  <span className="sc-dot" />
+            <h2 className="sc-agentsTitle">Works with your favorite coding agents</h2>
+            <p className="sc-agentsSubtitle">
+              Sidecar reads session data from multiple AI coding tools, giving you a unified view of agent activity
+            </p>
+
+            <div className="sc-agentsGrid">
+              <div className="sc-agentCard">
+                <div className="sc-agentLogo">
+                  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="32" height="32" rx="6" fill="#D97706"/>
+                    <path d="M16 6L8 10v12l8 4 8-4V10l-8-4zm0 2.2l5.6 2.8L16 13.8l-5.6-2.8L16 8.2zM10 11.8l5 2.5v7.4l-5-2.5v-7.4zm12 0v7.4l-5 2.5v-7.4l5-2.5z" fill="white"/>
+                  </svg>
                 </div>
-                <div className="sc-topRight">
-                  <span className="sc-codeInline">Suggested setup</span>
+                <div className="sc-agentInfo">
+                  <h3 className="sc-agentName">Claude Code</h3>
+                  <p className="sc-agentDesc">Anthropic's official CLI for Claude</p>
                 </div>
               </div>
 
-              <div className="sc-codeBlock" style={{ border: 'none', borderRadius: 0 }}>
-                <div className="sc-lineDim">
-                  Split your terminal: agent left, Sidecar right
+              <div className="sc-agentCard">
+                <div className="sc-agentLogo">
+                  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="32" height="32" rx="6" fill="#10A37F"/>
+                    <circle cx="16" cy="16" r="8" stroke="white" strokeWidth="2" fill="none"/>
+                    <circle cx="16" cy="16" r="3" fill="white"/>
+                  </svg>
                 </div>
-                <div style={{ height: 8 }} />
-                <pre style={{ margin: 0, whiteSpace: 'pre', color: 'rgba(232,232,227,0.86)' }}>
-{`+-----------------------------+---------------------+
-|                             |                     |
-|   Claude Code / Cursor      |      Sidecar        |
-|                             |   [Git] [Files]     |
-|   $ claude                  |   [TD]  [Convos]    |
-|   > fix the auth bug...     |                     |
-|                             |                     |
-+-----------------------------+---------------------+`}
-                </pre>
+                <div className="sc-agentInfo">
+                  <h3 className="sc-agentName">Codex</h3>
+                  <p className="sc-agentDesc">OpenAI's code generation model</p>
+                </div>
+              </div>
+
+              <div className="sc-agentCard">
+                <div className="sc-agentLogo">
+                  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="32" height="32" rx="6" fill="#4285F4"/>
+                    <path d="M16 8l-6.93 12h13.86L16 8z" fill="#EA4335"/>
+                    <path d="M9.07 20L16 8v12H9.07z" fill="#FBBC05"/>
+                    <path d="M22.93 20L16 8v12h6.93z" fill="#34A853"/>
+                  </svg>
+                </div>
+                <div className="sc-agentInfo">
+                  <h3 className="sc-agentName">Gemini CLI</h3>
+                  <p className="sc-agentDesc">Google's multimodal AI assistant</p>
+                </div>
+              </div>
+
+              <div className="sc-agentCard">
+                <div className="sc-agentLogo">
+                  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="32" height="32" rx="6" fill="#6366F1"/>
+                    <path d="M10 10h12v12H10V10z" stroke="white" strokeWidth="2" fill="none"/>
+                    <path d="M14 14h4v4h-4v-4z" fill="white"/>
+                  </svg>
+                </div>
+                <div className="sc-agentInfo">
+                  <h3 className="sc-agentName">Opencode</h3>
+                  <p className="sc-agentDesc">Terminal-first AI coding assistant</p>
+                </div>
+              </div>
+
+              <div className="sc-agentCard">
+                <div className="sc-agentLogo">
+                  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="32" height="32" rx="6" fill="#171717"/>
+                    <path d="M8 16a8 8 0 1 1 16 0" stroke="#F7B500" strokeWidth="2.5" strokeLinecap="round"/>
+                    <circle cx="16" cy="16" r="3" fill="#F7B500"/>
+                    <path d="M16 19v5" stroke="#F7B500" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                </div>
+                <div className="sc-agentInfo">
+                  <h3 className="sc-agentName">Cursor</h3>
+                  <p className="sc-agentDesc">AI-first code editor (cursor-agent)</p>
+                </div>
               </div>
             </div>
+
+            <p className="sc-agentsNote">
+              Each agent stores session data in its own format. Sidecar normalizes and displays them in a unified interface.
+            </p>
           </div>
         </section>
       </main>
