@@ -121,12 +121,12 @@ func (p *Plugin) renderSidebar(visibleHeight int) string {
 	currentY := 3
 
 	// Header with branch name (truncated to fit sidebar)
-	header := styles.Title.Render("Files")
+	header := styles.Title.Render("Git")
 	if p.pushStatus != nil {
 		if p.pushStatus.CurrentBranch != "" {
 			branch := p.pushStatus.CurrentBranch
-			// "Files " = 6 chars, leave 4 for padding = max branch length is sidebarWidth - 10
-			maxLen := p.sidebarWidth - 10
+			// "Git " = 4 chars, leave 4 for padding = max branch length is sidebarWidth - 8
+			maxLen := p.sidebarWidth - 8
 			if maxLen > 0 && len(branch) > maxLen {
 				branch = branch[:maxLen-1] + "…"
 			}

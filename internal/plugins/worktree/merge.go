@@ -503,13 +503,14 @@ func (p *Plugin) performDirectMerge(wt *Worktree) tea.Cmd {
 	}
 }
 
-// pullAfterMerge pulls the merged changes to the specified branch.
+// pullAfterMerge updates the local base branch to match remote after merge.
+// Uses git update-ref to update the local branch without requiring checkout.
 func (p *Plugin) pullAfterMerge(wt *Worktree, branch string) tea.Cmd {
 	return func() tea.Msg {
 		workDir := p.ctx.WorkDir
 
-		// 1. Fetch latest
-		fetchCmd := exec.Command("git", "fetch", "origin")
+		// 1. Fetch latest for the specific branch
+		fetchCmd := exec.Command("git", "fetch", "origin", branch)
 		fetchCmd.Dir = workDir
 		if output, err := fetchCmd.CombinedOutput(); err != nil {
 			return PullAfterMergeMsg{
@@ -520,15 +521,15 @@ func (p *Plugin) pullAfterMerge(wt *Worktree, branch string) tea.Cmd {
 			}
 		}
 
-		// 2. Pull the branch
-		pullCmd := exec.Command("git", "pull", "origin", branch)
-		pullCmd.Dir = workDir
-		if output, err := pullCmd.CombinedOutput(); err != nil {
+		// 2. Update local branch ref to match remote (without checkout)
+		updateCmd := exec.Command("git", "update-ref", "refs/heads/"+branch, "origin/"+branch)
+		updateCmd.Dir = workDir
+		if output, err := updateCmd.CombinedOutput(); err != nil {
 			return PullAfterMergeMsg{
 				WorktreeName: wt.Name,
 				Branch:       branch,
 				Success:      false,
-				Err:          fmt.Errorf("pull: %s: %w", strings.TrimSpace(string(output)), err),
+				Err:          fmt.Errorf("update-ref: %s: %w", strings.TrimSpace(string(output)), err),
 			}
 		}
 

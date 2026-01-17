@@ -76,6 +76,7 @@ func DefaultBindings() []Binding {
 		{Key: "Y", Command: "yank-id", Context: "git-commit-preview"},
 		{Key: "\\", Command: "toggle-sidebar", Context: "git-commit-preview"},
 		{Key: "o", Command: "open-in-github", Context: "git-commit-preview"},
+		{Key: "b", Command: "open-in-file-browser", Context: "git-commit-preview"},
 
 		// Git Diff context
 		{Key: "esc", Command: "close-diff", Context: "git-diff"},

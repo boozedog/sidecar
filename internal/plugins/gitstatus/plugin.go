@@ -682,6 +682,7 @@ func (p *Plugin) Commands() []plugin.Command {
 		{ID: "yank-commit", Name: "Yank", Description: "Copy commit as markdown", Category: plugin.CategoryActions, Context: "git-commit-preview", Priority: 3},
 		{ID: "yank-id", Name: "YankID", Description: "Copy commit ID", Category: plugin.CategoryActions, Context: "git-commit-preview", Priority: 3},
 		{ID: "open-in-github", Name: "GitHub", Description: "Open commit in GitHub", Category: plugin.CategoryActions, Context: "git-commit-preview", Priority: 3},
+		{ID: "open-in-file-browser", Name: "Browse", Description: "Open file in file browser", Category: plugin.CategoryNavigation, Context: "git-commit-preview", Priority: 3},
 		{ID: "toggle-sidebar", Name: "Panel", Description: "Toggle sidebar visibility", Category: plugin.CategoryView, Context: "git-commit-preview", Priority: 4},
 		// git-status-diff context (inline diff pane)
 		{ID: "toggle-diff-view", Name: "View", Description: "Toggle unified/split diff view", Category: plugin.CategoryView, Context: "git-status-diff", Priority: 2},

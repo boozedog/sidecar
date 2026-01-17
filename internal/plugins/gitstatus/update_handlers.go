@@ -548,6 +548,13 @@ func (p *Plugin) updateCommitPreviewPane(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd
 	case "o":
 		// Open commit in GitHub
 		return p, p.openCommitInGitHub()
+
+	case "b":
+		// Open selected file in file browser
+		if p.previewCommitCursor < len(c.Files) {
+			file := c.Files[p.previewCommitCursor]
+			return p, p.openInFileBrowser(file.Path)
+		}
 	}
 
 	return p, nil
