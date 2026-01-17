@@ -101,6 +101,8 @@ func DefaultBindings() []Binding {
 		{Key: "/", Command: "search", Context: "conversations"},
 		{Key: "r", Command: "refresh", Context: "conversations"},
 		{Key: "U", Command: "analytics", Context: "conversations"},
+		{Key: "y", Command: "yank-details", Context: "conversations"},
+		{Key: "Y", Command: "yank-resume", Context: "conversations"},
 
 		// Conversations search context
 		{Key: "enter", Command: "select", Context: "conversations-search"},
@@ -117,6 +119,8 @@ func DefaultBindings() []Binding {
 		{Key: "k", Command: "scroll", Context: "conversation-detail"},
 		{Key: "g", Command: "cursor-top", Context: "conversation-detail"},
 		{Key: "G", Command: "cursor-bottom", Context: "conversation-detail"},
+		{Key: "y", Command: "yank-details", Context: "conversation-detail"},
+		{Key: "Y", Command: "yank-resume", Context: "conversation-detail"},
 
 		// Message detail context (single turn detail view - single-pane mode)
 		{Key: "esc", Command: "back", Context: "message-detail"},
@@ -127,6 +131,8 @@ func DefaultBindings() []Binding {
 		{Key: "G", Command: "cursor-bottom", Context: "message-detail"},
 		{Key: "ctrl+d", Command: "page-down", Context: "message-detail"},
 		{Key: "ctrl+u", Command: "page-up", Context: "message-detail"},
+		{Key: "y", Command: "yank-details", Context: "message-detail"},
+		{Key: "Y", Command: "yank-resume", Context: "message-detail"},
 
 		// Turn detail context (two-pane mode, detail in right pane)
 		{Key: "esc", Command: "back", Context: "turn-detail"},
@@ -159,6 +165,8 @@ func DefaultBindings() []Binding {
 		{Key: "l", Command: "focus-right", Context: "conversations-sidebar"},
 		{Key: "right", Command: "focus-right", Context: "conversations-sidebar"},
 		{Key: "\\", Command: "toggle-sidebar", Context: "conversations-sidebar"},
+		{Key: "y", Command: "yank-details", Context: "conversations-sidebar"},
+		{Key: "Y", Command: "yank-resume", Context: "conversations-sidebar"},
 
 		// Conversations main context (two-pane mode, right pane focused)
 		{Key: "tab", Command: "switch-pane", Context: "conversations-main"},
@@ -174,6 +182,8 @@ func DefaultBindings() []Binding {
 		{Key: "e", Command: "expand", Context: "conversations-main"},
 		{Key: "enter", Command: "detail", Context: "conversations-main"},
 		{Key: "\\", Command: "toggle-sidebar", Context: "conversations-main"},
+		{Key: "y", Command: "yank-details", Context: "conversations-main"},
+		{Key: "Y", Command: "yank-resume", Context: "conversations-main"},
 
 		// File browser tree context
 		{Key: "tab", Command: "switch-pane", Context: "file-browser-tree"},
