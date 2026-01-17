@@ -103,16 +103,31 @@ func (p *Plugin) renderWelcomeGuide(width, height int) string {
 }
 
 // truncateAllLines ensures every line in the content is truncated to maxWidth.
+// Optimized to use strings.Builder for reduced allocations.
 func truncateAllLines(content string, maxWidth int) string {
-	lines := strings.Split(content, "\n")
-	for i, line := range lines {
-		line = expandTabs(line, tabStopWidth)
-		if lipgloss.Width(line) > maxWidth {
-			line = ansi.Truncate(line, maxWidth, "")
-		}
-		lines[i] = line
+	if maxWidth <= 0 {
+		return content
 	}
-	return strings.Join(lines, "\n")
+
+	var sb strings.Builder
+	sb.Grow(len(content)) // Pre-allocate approximate size
+
+	start := 0
+	for i := 0; i <= len(content); i++ {
+		if i == len(content) || content[i] == '\n' {
+			line := content[start:i]
+			line = expandTabs(line, tabStopWidth)
+			if lipgloss.Width(line) > maxWidth {
+				line = ansi.Truncate(line, maxWidth, "")
+			}
+			if start > 0 {
+				sb.WriteByte('\n')
+			}
+			sb.WriteString(line)
+			start = i + 1
+		}
+	}
+	return sb.String()
 }
 
 // renderTabs renders the preview pane tab header.
@@ -150,35 +165,42 @@ func (p *Plugin) renderOutputContent(width, height int) string {
 		return hint + "\n" + dimText("No output yet")
 	}
 
-	lines := wt.Agent.OutputBuf.Lines()
-	if len(lines) == 0 {
+	lineCount := wt.Agent.OutputBuf.LineCount()
+	if lineCount == 0 {
 		return hint + "\n" + dimText("No output yet")
 	}
 
 	var start, end int
 	if p.autoScrollOutput {
 		// Auto-scroll: show newest content (last height lines)
-		start = len(lines) - height
+		start = lineCount - height
 		if start < 0 {
 			start = 0
 		}
-		end = len(lines)
+		end = lineCount
 	} else {
 		// Manual scroll: previewOffset is lines from bottom
 		// offset=0 means bottom, offset=N means N lines up from bottom
-		start = len(lines) - height - p.previewOffset
+		start = lineCount - height - p.previewOffset
 		if start < 0 {
 			start = 0
 		}
 		end = start + height
-		if end > len(lines) {
-			end = len(lines)
+		if end > lineCount {
+			end = lineCount
 		}
 	}
 
+	// Get only the lines we need (avoids copying entire 500-line buffer)
+	lines := wt.Agent.OutputBuf.LinesRange(start, end)
+	if len(lines) == 0 {
+		return hint + "\n" + dimText("No output yet")
+	}
+
 	// Apply horizontal offset and truncate each line
-	var displayLines []string
-	for _, line := range lines[start:end] {
+	// Pre-allocate with exact capacity to avoid slice growth
+	displayLines := make([]string, 0, len(lines))
+	for _, line := range lines {
 		displayLine := expandTabs(line, tabStopWidth)
 		// Apply horizontal offset using ANSI-aware truncation
 		if p.previewHorizOffset > 0 {

@@ -282,6 +282,32 @@ func (b *OutputBuffer) Lines() []string {
 	return result
 }
 
+// LinesRange returns a copy of lines in the specified range [start, end).
+// This is more efficient than Lines() when only a portion is needed.
+func (b *OutputBuffer) LinesRange(start, end int) []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if start < 0 {
+		start = 0
+	}
+	if end > len(b.lines) {
+		end = len(b.lines)
+	}
+	if start >= end {
+		return nil
+	}
+	result := make([]string, end-start)
+	copy(result, b.lines[start:end])
+	return result
+}
+
+// LineCount returns the number of lines without copying.
+func (b *OutputBuffer) LineCount() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.lines)
+}
+
 // String returns the buffer contents as a single string.
 func (b *OutputBuffer) String() string {
 	return strings.Join(b.Lines(), "\n")

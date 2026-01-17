@@ -43,18 +43,31 @@ func (c *paneCache) get(session string) (string, bool) {
 		if time.Since(entry.timestamp) < c.ttl {
 			return entry.output, true
 		}
+		// Entry expired - delete it to prevent unbounded growth
+		delete(c.entries, session)
 	}
 	return "", false
 }
 
-// setAll stores multiple session outputs at once
+// setAll stores multiple session outputs at once, replacing old entries
 func (c *paneCache) setAll(outputs map[string]string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	now := time.Now()
+	// Clear old entries to prevent memory growth from stale sessions
+	for k := range c.entries {
+		delete(c.entries, k)
+	}
 	for session, output := range outputs {
 		c.entries[session] = paneCacheEntry{output: output, timestamp: now}
 	}
+}
+
+// remove deletes a session from the cache (called when session ends)
+func (c *paneCache) remove(session string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.entries, session)
 }
 
 const (
@@ -591,16 +604,15 @@ done
 }
 
 // detectStatus determines agent status from captured output.
+// Optimized to avoid unnecessary string allocations.
 func detectStatus(output string) WorktreeStatus {
-	lines := strings.Split(output, "\n")
-
-	// Check last ~10 lines for patterns
-	checkLines := lines
-	if len(lines) > 10 {
-		checkLines = lines[len(lines)-10:]
+	// Find the last ~1500 chars (approx 10 lines of 150 chars each)
+	// This avoids splitting the entire output string.
+	checkText := output
+	if len(output) > 1500 {
+		checkText = output[len(output)-1500:]
 	}
-	text := strings.Join(checkLines, "\n")
-	textLower := strings.ToLower(text)
+	textLower := strings.ToLower(checkText)
 
 	// Waiting patterns (agent needs user input) - highest priority
 	waitingPatterns := []string{
@@ -660,14 +672,27 @@ func detectStatus(output string) WorktreeStatus {
 }
 
 // extractPrompt finds the prompt text from output.
+// Optimized to search backwards without splitting the entire string.
 func extractPrompt(output string) string {
-	lines := strings.Split(output, "\n")
+	// Search the last ~2000 chars for prompts (approx 10-15 lines)
+	checkText := output
+	if len(output) > 2000 {
+		checkText = output[len(output)-2000:]
+	}
 
-	// Find line containing prompt (search from end)
-	for i := len(lines) - 1; i >= 0 && i > len(lines)-10; i-- {
-		line := lines[i]
+	// Find last newline and work backwards line by line
+	for linesChecked := 0; linesChecked < 10 && len(checkText) > 0; linesChecked++ {
+		lastNL := strings.LastIndex(checkText, "\n")
+		var line string
+		if lastNL == -1 {
+			line = checkText
+			checkText = ""
+		} else {
+			line = checkText[lastNL+1:]
+			checkText = checkText[:lastNL]
+		}
+
 		lineLower := strings.ToLower(line)
-
 		if strings.Contains(lineLower, "[y/n]") ||
 			strings.Contains(lineLower, "(y/n)") ||
 			strings.Contains(lineLower, "allow edit") ||
