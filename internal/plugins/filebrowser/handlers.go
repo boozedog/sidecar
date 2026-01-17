@@ -870,7 +870,7 @@ func (p *Plugin) handleProjectSearchKey(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd)
 			}
 		}
 
-	case "tab", " ":
+	case "tab":
 		// Toggle file collapse
 		if state != nil {
 			state.ToggleFileCollapse()
