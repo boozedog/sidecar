@@ -1,16 +1,17 @@
 package worktree
 
 // kanbanColumnOrder defines the order of columns in kanban view.
-var kanbanColumnOrder = []WorktreeStatus{StatusActive, StatusWaiting, StatusDone, StatusPaused}
+var kanbanColumnOrder = []WorktreeStatus{StatusActive, StatusThinking, StatusWaiting, StatusDone, StatusPaused}
 
 // getKanbanColumns returns worktrees grouped by status for kanban view.
 // StatusError worktrees are grouped with StatusPaused since they require user intervention.
 func (p *Plugin) getKanbanColumns() map[WorktreeStatus][]*Worktree {
 	columns := map[WorktreeStatus][]*Worktree{
-		StatusActive:  {},
-		StatusWaiting: {},
-		StatusDone:    {},
-		StatusPaused:  {},
+		StatusActive:   {},
+		StatusThinking: {},
+		StatusWaiting:  {},
+		StatusDone:     {},
+		StatusPaused:   {},
 	}
 	for _, wt := range p.worktrees {
 		status := wt.Status

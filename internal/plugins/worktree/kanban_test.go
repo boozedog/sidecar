@@ -60,8 +60,8 @@ func TestSyncListToKanban(t *testing.T) {
 
 	p.syncListToKanban()
 
-	if p.kanbanCol != 2 { // Done column
-		t.Errorf("expected kanbanCol=2 (Done), got %d", p.kanbanCol)
+	if p.kanbanCol != 3 { // Done column (after Active, Thinking, Waiting)
+		t.Errorf("expected kanbanCol=3 (Done), got %d", p.kanbanCol)
 	}
 	if p.kanbanRow != 0 { // First item in Done column
 		t.Errorf("expected kanbanRow=0, got %d", p.kanbanRow)
@@ -79,8 +79,8 @@ func TestSyncListToKanbanWithErrorStatus(t *testing.T) {
 
 	p.syncListToKanban()
 
-	if p.kanbanCol != 3 { // Paused column (index 3)
-		t.Errorf("expected kanbanCol=3 (Paused), got %d", p.kanbanCol)
+	if p.kanbanCol != 4 { // Paused column (index 4, after Active, Thinking, Waiting, Done)
+		t.Errorf("expected kanbanCol=4 (Paused), got %d", p.kanbanCol)
 	}
 	if p.kanbanRow != 0 {
 		t.Errorf("expected kanbanRow=0, got %d", p.kanbanRow)
@@ -113,7 +113,7 @@ func TestSyncKanbanToList(t *testing.T) {
 			{Name: "wt3", Status: StatusDone},
 			{Name: "wt4", Status: StatusPaused},
 		},
-		kanbanCol:   1, // Waiting column
+		kanbanCol:   2, // Waiting column (after Active, Thinking)
 		kanbanRow:   0, // First item (wt2)
 		selectedIdx: 0,
 	}
@@ -130,7 +130,7 @@ func TestSyncKanbanToListEmptyColumn(t *testing.T) {
 		worktrees: []*Worktree{
 			{Name: "wt1", Status: StatusActive},
 		},
-		kanbanCol:   1, // Waiting column (empty)
+		kanbanCol:   2, // Waiting column (empty, after Active, Thinking)
 		kanbanRow:   0,
 		selectedIdx: 0,
 	}
@@ -244,7 +244,7 @@ func TestSelectedKanbanWorktree(t *testing.T) {
 			{Name: "wt1", Status: StatusActive},
 			{Name: "wt2", Status: StatusWaiting},
 		},
-		kanbanCol: 1, // Waiting column
+		kanbanCol: 2, // Waiting column (after Active, Thinking)
 		kanbanRow: 0,
 	}
 
@@ -262,7 +262,7 @@ func TestSelectedKanbanWorktreeEmptyColumn(t *testing.T) {
 		worktrees: []*Worktree{
 			{Name: "wt1", Status: StatusActive},
 		},
-		kanbanCol: 1, // Waiting column (empty)
+		kanbanCol: 2, // Waiting column (empty, after Active, Thinking)
 		kanbanRow: 0,
 	}
 

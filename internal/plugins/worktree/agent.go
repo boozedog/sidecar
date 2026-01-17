@@ -478,7 +478,7 @@ func detectStatus(output string) WorktreeStatus {
 	text := strings.Join(checkLines, "\n")
 	textLower := strings.ToLower(text)
 
-	// Waiting patterns (agent needs user input) - highest priority
+	// Waiting patterns (agent needs user input) - check first as these are definitive
 	waitingPatterns := []string{
 		"[y/n]",       // Claude Code permission prompt
 		"(y/n)",       // Aider style
@@ -528,6 +528,22 @@ func detectStatus(output string) WorktreeStatus {
 	for _, pattern := range errorPatterns {
 		if strings.Contains(textLower, pattern) {
 			return StatusError
+		}
+	}
+
+	// Thinking patterns (agent actively reasoning)
+	// Check after waiting/done/error since those are more definitive signals
+	thinkingPatterns := []string{
+		"<thinking>",           // Claude extended thinking block
+		"</thinking>",          // Claude extended thinking end (still processing)
+		"<internal_monologue>", // Alternative thinking format
+		"thinking...",          // Generic thinking indicator
+		"reasoning about",      // Aider-style reasoning
+	}
+
+	for _, pattern := range thinkingPatterns {
+		if strings.Contains(textLower, pattern) {
+			return StatusThinking
 		}
 	}
 
