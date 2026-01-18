@@ -197,18 +197,14 @@ func (p *Plugin) renderOutputContent(width, height int) string {
 	}
 
 	// Apply horizontal offset and truncate each line
-	// Pre-allocate with exact capacity to avoid slice growth
+	// Use TruncateLeftRight for horizontal scrolling to reduce cache thrashing
+	// and avoid cellbuf allocation churn from varying offsets.
 	displayLines := make([]string, 0, len(lines))
 	for _, line := range lines {
 		displayLine := expandTabs(line, tabStopWidth)
-		// Apply horizontal offset using ANSI-aware truncation
-		if p.previewHorizOffset > 0 {
-			displayLine = p.truncateCache.TruncateLeft(displayLine, p.previewHorizOffset, "")
-		}
-		// Truncate to width if needed
-		if lipgloss.Width(displayLine) > width {
-			displayLine = p.truncateCache.Truncate(displayLine, width, "")
-		}
+		// Apply horizontal offset and truncate to width in a single cached operation
+		// This prevents allocation churn from repeated parsing with varying offsets
+		displayLine = p.truncateCache.TruncateLeftRight(displayLine, p.previewHorizOffset, width)
 		displayLines = append(displayLines, displayLine)
 	}
 
