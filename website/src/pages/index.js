@@ -642,6 +642,68 @@ function FeatureListItem({ icon, title, description, color }) {
   );
 }
 
+function WorkflowSection() {
+  return (
+    <section className="sc-workflow">
+      <div className="container">
+        <h2 className="sc-showcaseTitle" style={{ textAlign: 'center', marginBottom: '48px' }}>The Workflow</h2>
+        
+        <div className="sc-workflowGrid">
+          
+          <div className="sc-workflowStep sc-step-green">
+            <div className="sc-workflowIconBox">
+              <i className="icon-list sc-workflowIcon" />
+            </div>
+            <div>
+              <h3 className="sc-workflowTitle">1. Plan</h3>
+              <p className="sc-workflowDesc">
+                Create tasks in Sidecar to give agents clear objectives and context.
+              </p>
+            </div>
+          </div>
+
+          <div className="sc-workflowStep sc-step-blue">
+            <div className="sc-workflowIconBox">
+              <i className="icon-terminal sc-workflowIcon" />
+            </div>
+            <div>
+              <h3 className="sc-workflowTitle">2. Act</h3>
+              <p className="sc-workflowDesc">
+                Your agent (Claude, Cursor, etc.) reads the task and writes code.
+              </p>
+            </div>
+          </div>
+
+          <div className="sc-workflowStep sc-step-purple">
+            <div className="sc-workflowIconBox">
+              <i className="icon-eye sc-workflowIcon" />
+            </div>
+            <div>
+              <h3 className="sc-workflowTitle">3. Monitor</h3>
+              <p className="sc-workflowDesc">
+                Watch the agent's progress, diffs, and logs in Sidecar's TUI.
+              </p>
+            </div>
+          </div>
+
+          <div className="sc-workflowStep sc-step-pink">
+            <div className="sc-workflowIconBox">
+              <i className="icon-check sc-workflowIcon" />
+            </div>
+            <div>
+              <h3 className="sc-workflowTitle">4. Review</h3>
+              <p className="sc-workflowDesc">
+                Verify the changes, commit, and mark the task as done.
+              </p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Home() {
   const { siteConfig } = useDocusaurusContext();
   const [activeTab, setActiveTab] = useState('td');
@@ -776,6 +838,8 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        <WorkflowSection />
 
         {/* Component Showcase Sections */}
         <section className="sc-showcase">

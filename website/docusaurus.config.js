@@ -139,19 +139,35 @@ const config = {
                 label: 'Getting Started',
                 to: '/docs/intro',
               },
+              {
+                label: 'Task Management',
+                to: '/docs/td',
+              },
+              {
+                label: 'Git Workflow',
+                to: '/docs/git-plugin',
+              },
             ],
           },
           {
-            title: 'More',
+            title: 'Community',
             items: [
               {
                 label: 'GitHub',
                 href: 'https://github.com/marcus/sidecar',
               },
+              {
+                label: 'Issues',
+                href: 'https://github.com/marcus/sidecar/issues',
+              },
+              {
+                label: 'Releases',
+                href: 'https://github.com/marcus/sidecar/releases',
+              },
             ],
           },
         ],
-        copyright: `Copyright © ${new Date().getFullYear()} Sidecar. Built with Docusaurus.`,
+        copyright: `Copyright © ${new Date().getFullYear()} Sidecar.`,
       },
       prism: {
         theme: prismThemes.github,
