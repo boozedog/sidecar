@@ -12,6 +12,7 @@
 #   -k, --keep            Keep session alive after keys sent
 #   -c, --capture         Capture and print final pane state
 #   -o, --output-dir DIR  Output directory for file captures (default: ./captures)
+#   -f, --keys-file FILE  Read keys from file (one per line, # for comments)
 #
 # Key syntax (tmux send-keys format):
 #   Letters/numbers:  a, b, 1, 2, etc.
@@ -59,6 +60,17 @@
 #
 #   # Wait for specific UI states between actions
 #   ./scripts/tui-send-keys.sh "./myapp" -- @wait:Ready Tab @wait:Menu Enter
+#
+#   # Use a keys file for reusable sequences
+#   ./scripts/tui-send-keys.sh "sidecar" -w Sidecar -f scripts/sequences/git-screenshot.keys
+#
+# Keys file format (one key per line):
+#   # Comments start with #
+#   g                       # Navigate to git plugin
+#   @sleep:200              # Wait for plugin to load
+#   @capture:git-plugin.png # Take screenshot
+#   q                       # Quit
+#   y                       # Confirm
 
 set -e
 
@@ -70,6 +82,7 @@ TIMEOUT=30
 KEEP=false
 CAPTURE=false
 OUTPUT_DIR="./captures"
+KEYS_FILE=""
 COMMAND=""
 KEYS=()
 
@@ -104,13 +117,17 @@ while [[ $# -gt 0 ]]; do
       OUTPUT_DIR="$2"
       shift 2
       ;;
+    -f|--keys-file)
+      KEYS_FILE="$2"
+      shift 2
+      ;;
     --)
       shift
       KEYS=("$@")
       break
       ;;
     -h|--help)
-      head -61 "$0" | tail -60
+      head -73 "$0" | tail -72
       exit 0
       ;;
     *)
@@ -129,6 +146,24 @@ if [[ -z "$COMMAND" ]]; then
   echo "Error: No command specified" >&2
   echo "Usage: $0 [options] <command> -- <key1> <key2> ..." >&2
   exit 1
+fi
+
+# Load keys from file if specified
+if [[ -n "$KEYS_FILE" ]]; then
+  if [[ ! -f "$KEYS_FILE" ]]; then
+    echo "Error: Keys file not found: $KEYS_FILE" >&2
+    exit 1
+  fi
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    # Strip inline comments (but preserve # in quoted strings would need more complex parsing)
+    line="${line%%#*}"
+    # Trim whitespace
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    # Skip empty lines
+    [[ -z "$line" ]] && continue
+    KEYS+=("$line")
+  done < "$KEYS_FILE"
 fi
 
 # Convert ms to seconds for sleep

@@ -1,0 +1,8 @@
+# Capture screenshot of sidecar's td (task) pane
+# Usage: ./scripts/tui-send-keys.sh "sidecar" -w Sidecar -o ./screenshots -f scripts/sequences/capture-sidecar-td-screenshot.keys
+
+1                         # Switch to td pane
+@sleep:300                # Wait for pane to render
+@capture:sidecar-td.png   # Take screenshot
+q                         # Quit
+y                         # Confirm quit
