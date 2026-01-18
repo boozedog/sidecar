@@ -1,6 +1,7 @@
 package worktree
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -30,11 +31,49 @@ type paneCache struct {
 	ttl     time.Duration
 }
 
+type captureCoordinator struct {
+	mu       sync.Mutex
+	inFlight bool
+	cond     *sync.Cond
+}
+
+func newCaptureCoordinator() *captureCoordinator {
+	cc := &captureCoordinator{}
+	cc.cond = sync.NewCond(&cc.mu)
+	return cc
+}
+
+// runBatch executes fn if no batch is currently running. If a batch is in-flight,
+// it waits for completion and returns ran=false so callers can re-check cache.
+func (c *captureCoordinator) runBatch(fn func() (map[string]string, error)) (outputs map[string]string, err error, ran bool) {
+	c.mu.Lock()
+	if c.inFlight {
+		for c.inFlight {
+			c.cond.Wait()
+		}
+		c.mu.Unlock()
+		return nil, nil, false
+	}
+	c.inFlight = true
+	c.mu.Unlock()
+
+	outputs, err = fn()
+
+	c.mu.Lock()
+	c.inFlight = false
+	c.cond.Broadcast()
+	c.mu.Unlock()
+
+	return outputs, err, true
+}
+
 // Global cache instance for pane captures
 var globalPaneCache = &paneCache{
 	entries: make(map[string]paneCacheEntry),
 	ttl:     300 * time.Millisecond, // Cache valid for 300ms
 }
+
+var globalCaptureCoordinator = newCaptureCoordinator()
 
 // get returns cached output if valid, or empty string if expired/missing
 func (c *paneCache) get(session string) (string, bool) {
@@ -83,6 +122,10 @@ const (
 	// Lines to capture from tmux (slightly > outputBufferCap for margin)
 	// We only need recent output for status detection and display
 	captureLineCount = 600
+
+	// Timeout for tmux capture commands to avoid blocking on hung sessions
+	tmuxCaptureTimeout      = 2 * time.Second
+	tmuxBatchCaptureTimeout = 3 * time.Second
 
 	// Polling intervals - adaptive based on agent status
 	// Conservative values to reduce CPU with multiple worktrees while maintaining responsiveness
@@ -570,14 +613,21 @@ func capturePane(sessionName string) (string, error) {
 		return output, nil
 	}
 
-	// Cache miss - batch capture all sidecar sessions
-	outputs, err := batchCaptureAllSessions()
+	// Cache miss - batch capture all sidecar sessions (singleflight)
+	outputs, err, ran := globalCaptureCoordinator.runBatch(batchCaptureAllSessions)
+	if !ran {
+		// Another goroutine captured; re-check cache
+		if output, ok := globalPaneCache.get(sessionName); ok {
+			return output, nil
+		}
+		return capturePaneDirect(sessionName)
+	}
 	if err != nil {
 		// Fall back to single capture on batch error
 		return capturePaneDirect(sessionName)
 	}
 
-	// Cache all results
+	// Cache all results from batch
 	globalPaneCache.setAll(outputs)
 
 	// Return requested session's output
@@ -592,8 +642,13 @@ func capturePane(sessionName string) (string, error) {
 // capturePaneDirect captures a single pane without caching.
 func capturePaneDirect(sessionName string) (string, error) {
 	startLine := fmt.Sprintf("-%d", captureLineCount)
-	cmd := exec.Command("tmux", "capture-pane", "-p", "-e", "-J", "-S", startLine, "-t", sessionName)
+	ctx, cancel := context.WithTimeout(context.Background(), tmuxCaptureTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "tmux", "capture-pane", "-p", "-e", "-J", "-S", startLine, "-t", sessionName)
 	output, err := cmd.Output()
+	if ctx.Err() == context.DeadlineExceeded {
+		return "", fmt.Errorf("capture-pane: timeout after %s", tmuxCaptureTimeout)
+	}
 	if err != nil {
 		return "", fmt.Errorf("capture-pane: %w", err)
 	}
@@ -612,8 +667,13 @@ for session in $(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^%s
 done
 `, tmuxSessionPrefix, captureLineCount)
 
-	cmd := exec.Command("bash", "-c", script)
+	ctx, cancel := context.WithTimeout(context.Background(), tmuxBatchCaptureTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "bash", "-c", script)
 	output, err := cmd.Output()
+	if ctx.Err() == context.DeadlineExceeded {
+		return nil, fmt.Errorf("batch capture: timeout after %s", tmuxBatchCaptureTimeout)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("batch capture: %w", err)
 	}
