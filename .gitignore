@@ -57,3 +57,6 @@ config.local.json
 website/node_modules/
 website/.docusaurus/
 website/build/
+
+# Sidecar worktree state files
+.sidecar-start.sh
