@@ -1,0 +1,62 @@
+# Capture screenshots of all 5 sidecar plugins
+# Usage: betamax "sidecar" -w Sidecar -f scripts/sequences/capture-all-plugins.keys
+
+# VHS-inspired settings (self-describing, reproducible)
+@set:cols:200
+@set:rows:50
+@set:delay:100
+@set:output:./screenshots
+@set:shell:/bin/bash
+@require:termshot
+
+@sleep:500                # Wait for sidecar to be ready
+
+# 1. TD plugin - wait for unique footer hint
+Escape
+Escape
+@sleep:100
+1
+@wait:Handoffs
+@sleep:200
+@capture:sidecar-td.png
+
+# 2. Git plugin - wait for unique footer hint
+Escape
+Escape
+@sleep:100
+2
+@wait:Stage
+@sleep:200
+@capture:sidecar-git.png
+
+# 3. Files plugin - wait for unique footer hint
+Escape
+Escape
+@sleep:100
+3
+@wait:Blame
+@sleep:200
+@capture:sidecar-files.png
+
+# 4. Conversations plugin - wait for unique footer hint
+Escape
+Escape
+@sleep:100
+4
+@wait:Resume
+@sleep:200
+@capture:sidecar-conversations.png
+
+# 5. Worktrees plugin - wait for unique footer hint
+Escape
+Escape
+@sleep:100
+5
+@wait:Kanban
+@sleep:200
+@capture:sidecar-worktrees.png
+
+# Quit
+Escape
+q
+y
