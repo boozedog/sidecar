@@ -1077,7 +1077,7 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 				summaryLines = append(summaryLines, fmt.Sprintf("... (%d more lines)", len(strings.Split(p.mergeState.DiffSummary, "\n"))-maxLines))
 			}
 			for _, line := range summaryLines {
-				sb.WriteString(colorDiffLine(line, modalW-4))
+				sb.WriteString(p.colorDiffLine(line, modalW-4))
 				sb.WriteString("\n")
 			}
 		} else {

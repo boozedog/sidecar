@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/marcus/sidecar/internal/styles"
 )
 
@@ -865,14 +864,7 @@ func truncateStr(s string, maxLen int) string {
 
 // truncateStyledLine truncates a line that may contain ANSI codes to a visual width.
 func truncateStyledLine(s string, maxWidth int) string {
-	if maxWidth <= 0 {
-		return ""
-	}
-	if lipgloss.Width(s) <= maxWidth {
-		return s
-	}
-	// Use ANSI-aware truncation (not MaxWidth which wraps)
-	return ansi.Truncate(s, maxWidth, "")
+	return truncateStyledLineCached(s, maxWidth)
 }
 
 // truncateDiffPath shortens a path to fit width (rune-based for Unicode safety).

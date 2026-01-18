@@ -12,6 +12,7 @@ import (
 	"github.com/marcus/sidecar/internal/mouse"
 	"github.com/marcus/sidecar/internal/plugin"
 	"github.com/marcus/sidecar/internal/state"
+	"github.com/marcus/sidecar/internal/ui"
 )
 
 const (
@@ -108,6 +109,9 @@ type Plugin struct {
 	// Agent state
 	attachedSession     string // Name of worktree we're attached to (pauses polling)
 	tmuxCaptureMaxBytes int    // Cap for tmux capture output (bytes)
+
+	// Truncation cache to eliminate ANSI parser allocation churn
+	truncateCache *ui.TruncateCache
 
 	// Mouse support
 	mouseHandler *mouse.Handler
@@ -224,6 +228,7 @@ func New() *Plugin {
 		sidebarVisible:      true, // Sidebar visible by default
 		autoScrollOutput:    true, // Auto-scroll to follow agent output
 		tmuxCaptureMaxBytes: defaultTmuxCaptureMaxBytes,
+		truncateCache:       ui.NewTruncateCache(1000), // Cache up to 1000 truncations
 		markdownRenderer:    mdRenderer,
 		taskMarkdownMode:    true, // Default to rendered mode
 	}

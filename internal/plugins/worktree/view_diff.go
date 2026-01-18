@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/marcus/sidecar/internal/plugins/gitstatus"
 	"github.com/marcus/sidecar/internal/styles"
 )
@@ -112,10 +111,10 @@ func (p *Plugin) renderDiffContentBasicWithHeight(width, height int) string {
 		}
 
 		if p.previewHorizOffset > 0 {
-			styledLine = ansi.TruncateLeft(styledLine, p.previewHorizOffset, "")
+			styledLine = p.truncateCache.TruncateLeft(styledLine, p.previewHorizOffset, "")
 		}
 		if lipgloss.Width(styledLine) > width {
-			styledLine = ansi.Truncate(styledLine, width, "")
+			styledLine = p.truncateCache.Truncate(styledLine, width, "")
 		}
 		rendered = append(rendered, styledLine)
 	}
@@ -124,7 +123,7 @@ func (p *Plugin) renderDiffContentBasicWithHeight(width, height int) string {
 }
 
 // colorDiffLine applies basic diff coloring using theme styles.
-func colorDiffLine(line string, width int) string {
+func (p *Plugin) colorDiffLine(line string, width int) string {
 	line = expandTabs(line, tabStopWidth)
 	if len(line) == 0 {
 		return line
@@ -132,7 +131,7 @@ func colorDiffLine(line string, width int) string {
 
 	// Truncate if needed
 	if lipgloss.Width(line) > width {
-		line = ansi.Truncate(line, width, "")
+		line = p.truncateCache.Truncate(line, width, "")
 	}
 
 	switch {

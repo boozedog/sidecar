@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/marcus/sidecar/internal/styles"
 )
 
@@ -16,7 +15,7 @@ func (p *Plugin) renderPreviewContent(width, height int) string {
 	// Hide tabs when no worktree is selected - show welcome guide instead
 	wt := p.selectedWorktree()
 	if wt == nil {
-		return truncateAllLines(p.renderWelcomeGuide(width, height), width)
+		return p.truncateAllLines(p.renderWelcomeGuide(width, height), width)
 	}
 
 	// Tab header
@@ -42,7 +41,7 @@ func (p *Plugin) renderPreviewContent(width, height int) string {
 	// Final safety: ensure ALL lines are truncated to width
 	// This catches any content that wasn't properly truncated
 	result := strings.Join(lines, "\n")
-	return truncateAllLines(result, width)
+	return p.truncateAllLines(result, width)
 }
 
 // renderWelcomeGuide renders a helpful guide when no worktree is selected.
@@ -104,7 +103,7 @@ func (p *Plugin) renderWelcomeGuide(width, height int) string {
 
 // truncateAllLines ensures every line in the content is truncated to maxWidth.
 // Optimized to use strings.Builder for reduced allocations.
-func truncateAllLines(content string, maxWidth int) string {
+func (p *Plugin) truncateAllLines(content string, maxWidth int) string {
 	if maxWidth <= 0 {
 		return content
 	}
@@ -118,7 +117,7 @@ func truncateAllLines(content string, maxWidth int) string {
 			line := content[start:i]
 			line = expandTabs(line, tabStopWidth)
 			if lipgloss.Width(line) > maxWidth {
-				line = ansi.Truncate(line, maxWidth, "")
+				line = p.truncateCache.Truncate(line, maxWidth, "")
 			}
 			if start > 0 {
 				sb.WriteByte('\n')
@@ -204,11 +203,11 @@ func (p *Plugin) renderOutputContent(width, height int) string {
 		displayLine := expandTabs(line, tabStopWidth)
 		// Apply horizontal offset using ANSI-aware truncation
 		if p.previewHorizOffset > 0 {
-			displayLine = ansi.TruncateLeft(displayLine, p.previewHorizOffset, "")
+			displayLine = p.truncateCache.TruncateLeft(displayLine, p.previewHorizOffset, "")
 		}
 		// Truncate to width if needed
 		if lipgloss.Width(displayLine) > width {
-			displayLine = ansi.Truncate(displayLine, width, "")
+			displayLine = p.truncateCache.Truncate(displayLine, width, "")
 		}
 		displayLines = append(displayLines, displayLine)
 	}

@@ -168,6 +168,9 @@ type Plugin struct {
 	// Commit graph display state
 	showCommitGraph  bool        // True when graph column is displayed
 	commitGraphLines []GraphLine // Cached graph computation
+
+	// Truncation cache to eliminate ANSI parser allocation churn
+	truncateCache *ui.TruncateCache
 }
 
 // New creates a new git status plugin.
@@ -177,6 +180,7 @@ func New() *Plugin {
 		activePane:     PaneSidebar,
 		sidebarRestore: PaneSidebar,
 		mouseHandler:   mouse.NewHandler(),
+		truncateCache:  ui.NewTruncateCache(1000), // Cache up to 1000 truncations
 	}
 }
 
@@ -597,6 +601,10 @@ func countParsedDiffLines(diff *ParsedDiff) int {
 
 // View renders the plugin.
 func (p *Plugin) View(width, height int) string {
+	// Clear truncation cache if dimensions changed
+	if p.width != width || p.height != height {
+		clearTruncCache()
+	}
 	p.width = width
 	p.height = height
 

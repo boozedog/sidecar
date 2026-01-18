@@ -31,6 +31,11 @@ const tabStopWidth = 8
 
 // View renders the plugin UI.
 func (p *Plugin) View(width, height int) string {
+	// Clear truncation cache if dimensions changed
+	if p.width != width || p.height != height {
+		p.truncateCache.Clear()
+	}
+
 	p.width = width
 	p.height = height
 

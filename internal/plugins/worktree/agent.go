@@ -572,17 +572,21 @@ func (p *Plugin) handlePollAgent(worktreeName string) tea.Cmd {
 
 		output = trimCapturedOutput(output, p.tmuxCaptureMaxBytes)
 
-		// Use hash-based change detection to skip processing if content unchanged
-		if wt.Agent.OutputBuf != nil && !wt.Agent.OutputBuf.Update(output) {
-			// Content unchanged - signal to schedule next poll with delay
-			// Include current status for adaptive polling interval selection
-			return AgentPollUnchangedMsg{
-				WorktreeName:  worktreeName,
-				CurrentStatus: wt.Status,
-			}
+	// Use hash-based change detection to skip processing if content unchanged
+	if wt.Agent.OutputBuf != nil && !wt.Agent.OutputBuf.Update(output) {
+		// Content unchanged - signal to schedule next poll with delay
+		// Include current status for adaptive polling interval selection
+		return AgentPollUnchangedMsg{
+			WorktreeName:  worktreeName,
+			CurrentStatus: wt.Status,
 		}
+	}
 
-		// Content changed - detect status and emit
+	// Content changed - don't clear cache. Cache is keyed by content hash,
+	// so different content automatically has different keys. Clearing would destroy
+	// cache hits for lines that haven't changed (e.g., prompt lines, earlier output).
+
+	// Content changed - detect status and emit
 		status := detectStatus(output)
 		waitingFor := ""
 		if status == StatusWaiting {

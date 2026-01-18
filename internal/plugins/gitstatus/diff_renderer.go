@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/marcus/sidecar/internal/styles"
 )
 
@@ -221,8 +220,9 @@ func RenderSideBySide(diff *ParsedDiff, width, startLine, maxLines, horizontalOf
 				}
 				// Highlight full content first to preserve syntax context, then apply offset
 				leftRendered = renderSideBySideContent(pair.left.Content, pair.left.Type, contentWidth+horizontalOffset, highlighter)
+				// Note: ansi.TruncateLeft used directly here - cache would need plugin access
 				if horizontalOffset > 0 {
-					leftRendered = ansi.TruncateLeft(leftRendered, horizontalOffset, "")
+					leftRendered = truncateLeftCached(leftRendered, horizontalOffset)
 				}
 			}
 			leftRendered = padToWidth(leftRendered, contentWidth)
@@ -236,8 +236,9 @@ func RenderSideBySide(diff *ParsedDiff, width, startLine, maxLines, horizontalOf
 				}
 				// Highlight full content first to preserve syntax context, then apply offset
 				rightRendered = renderSideBySideContent(pair.right.Content, pair.right.Type, contentWidth+horizontalOffset, highlighter)
+				// Note: ansi.TruncateLeft used directly here - cache would need plugin access
 				if horizontalOffset > 0 {
-					rightRendered = ansi.TruncateLeft(rightRendered, horizontalOffset, "")
+					rightRendered = truncateLeftCached(rightRendered, horizontalOffset)
 				}
 			}
 			rightRendered = padToWidth(rightRendered, contentWidth)
@@ -331,8 +332,9 @@ func renderDiffContentWithOffset(line DiffLine, maxWidth, horizontalOffset int, 
 	rendered := renderDiffContent(line, maxWidth+horizontalOffset, highlighter)
 
 	// Apply horizontal offset to already-styled output using ANSI-aware truncation
+	// Note: ansi.TruncateLeft used directly here - cache would need plugin access
 	if horizontalOffset > 0 {
-		rendered = ansi.TruncateLeft(rendered, horizontalOffset, "")
+		rendered = truncateLeftCached(rendered, horizontalOffset)
 	}
 	return rendered
 }
