@@ -124,14 +124,34 @@ func (p *Plugin) ensureShellAndAttach() tea.Cmd {
 	}
 
 	// No session exists, create one then attach
+	sessionName := p.shellSessionName
 	return tea.Sequence(
 		p.createShellSession(),
 		func() tea.Msg {
-			// Small delay to ensure session is ready
-			time.Sleep(100 * time.Millisecond)
+			// Wait for session to be ready with exponential backoff
+			waitForSession(sessionName)
 			return shellAttachAfterCreateMsg{}
 		},
 	)
+}
+
+// waitForSession waits for a tmux session to become available using exponential backoff.
+// Returns true if session exists, false if max attempts exceeded.
+func waitForSession(sessionName string) bool {
+	const maxAttempts = 10
+	delay := 10 * time.Millisecond
+
+	for range maxAttempts {
+		if sessionExists(sessionName) {
+			return true
+		}
+		time.Sleep(delay)
+		delay *= 2 // Exponential backoff: 10, 20, 40, 80, 160, 320, 640ms...
+		if delay > 200*time.Millisecond {
+			delay = 200 * time.Millisecond // Cap at 200ms per attempt
+		}
+	}
+	return false
 }
 
 // shellAttachAfterCreateMsg triggers attachment after shell creation.
