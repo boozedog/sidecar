@@ -35,33 +35,36 @@ function CopyButton({ text }) {
 function TdPane() {
   return (
     <>
-      <p className="sc-sectionTitle">Tasks</p>
-      <div className="sc-list">
+      <div className="sc-tdSection">
+        <p className="sc-sectionTitle">Current Work</p>
         <div className="sc-item sc-itemActive">
           <span className="sc-bullet sc-bulletGreen" />
           <span>td-a1b2c3 Implement auth flow</span>
         </div>
-        <div className="sc-item">
-          <span className="sc-bullet sc-bulletBlue" />
-          <span>td-d4e5f6 Add rate limiting</span>
-        </div>
-        <div className="sc-item">
-          <span className="sc-bullet sc-bulletPink" />
-          <span>td-g7h8i9 Fix memory leak</span>
+      </div>
+      <div className="sc-tdSection">
+        <p className="sc-sectionTitle">Board</p>
+        <div className="sc-list">
+          <div className="sc-item">
+            <span className="sc-bullet sc-bulletBlue" />
+            <span>td-d4e5f6 Add rate limiting</span>
+          </div>
+          <div className="sc-item">
+            <span className="sc-bullet sc-bulletPink" />
+            <span>td-g7h8i9 Fix memory leak</span>
+          </div>
+          <div className="sc-item">
+            <span className="sc-bullet sc-bulletBlue" />
+            <span>td-j0k1l2 Update API docs</span>
+          </div>
         </div>
       </div>
-      <div style={{ height: 12 }} />
-      <div className="sc-codeBlock">
-        <div className="sc-lineDim">td-a1b2c3 | in_progress</div>
-        <div style={{ height: 6 }} />
-        <div><span className="sc-lineGreen">Title:</span> Implement auth flow</div>
-        <div><span className="sc-lineBlue">Status:</span> in_progress</div>
-        <div><span className="sc-lineYellow">Created:</span> 2h ago</div>
-        <div style={{ height: 6 }} />
-        <div className="sc-lineDim">Subtasks:</div>
-        <div>  <span className="sc-lineGreen">[x]</span> Create auth middleware</div>
-        <div>  <span className="sc-lineGreen">[x]</span> Add JWT validation</div>
-        <div>  <span className="sc-linePink">[ ]</span> Write integration tests</div>
+      <div className="sc-tdSection">
+        <p className="sc-sectionTitle">Activity</p>
+        <div style={{ fontSize: 10 }}>
+          <div><span className="sc-lineYellow">00:39</span> <span className="sc-lineDim">td-a1b2c3</span> Started</div>
+          <div><span className="sc-lineYellow">00:15</span> <span className="sc-lineDim">td-d4e5f6</span> Created</div>
+        </div>
       </div>
     </>
   );
@@ -70,36 +73,44 @@ function TdPane() {
 function GitPane() {
   return (
     <>
-      <p className="sc-sectionTitle">Changes</p>
-      <div className="sc-list">
-        <div className="sc-item sc-itemActive">
-          <span className="sc-bullet sc-bulletGreen" />
-          <span>M internal/auth/middleware.go</span>
+      <div className="sc-paneSidebar">
+        <p className="sc-sectionTitle">Modified</p>
+        <div className="sc-list">
+          <div className="sc-item sc-itemActive">
+            <span className="sc-lineGreen">M</span>
+            <span>middleware.go</span>
+          </div>
+          <div className="sc-item">
+            <span className="sc-lineGreen">A</span>
+            <span>jwt.go</span>
+          </div>
+          <div className="sc-item">
+            <span className="sc-linePink">D</span>
+            <span>old_auth.go</span>
+          </div>
         </div>
-        <div className="sc-item">
-          <span className="sc-bullet sc-bulletGreen" />
-          <span>A internal/auth/jwt.go</span>
-        </div>
-        <div className="sc-item">
-          <span className="sc-bullet sc-bulletPink" />
-          <span>D internal/auth/old_auth.go</span>
+        <p className="sc-sectionTitle" style={{ marginTop: 10 }}>Commits</p>
+        <div className="sc-list">
+          <div className="sc-item">
+            <span className="sc-lineDim">736a844</span>
+            <span>Minor fixes</span>
+          </div>
         </div>
       </div>
-      <div style={{ height: 12 }} />
-      <div className="sc-codeBlock">
-        <div className="sc-lineDim">internal/auth/middleware.go</div>
-        <div style={{ height: 6 }} />
-        <div><span className="sc-lineBlue">@@ -42,6 +42,18 @@</span></div>
-        <div><span className="sc-lineGreen">+ func AuthMiddleware(next http.Handler) http.Handler {'{'}</span></div>
-        <div><span className="sc-lineGreen">+   return http.HandlerFunc(func(w, r) {'{'}</span></div>
-        <div><span className="sc-lineGreen">+     token := r.Header.Get("Authorization")</span></div>
-        <div><span className="sc-lineGreen">+     if !ValidateJWT(token) {'{'}</span></div>
-        <div><span className="sc-lineGreen">+       http.Error(w, "Unauthorized", 401)</span></div>
-        <div><span className="sc-lineGreen">+       return</span></div>
-        <div><span className="sc-lineGreen">+     {'}'}</span></div>
-        <div><span className="sc-lineGreen">+     next.ServeHTTP(w, r)</span></div>
-        <div><span className="sc-lineGreen">+   {'}'})</span></div>
-        <div><span className="sc-lineGreen">+ {'}'}</span></div>
+      <div className="sc-paneMain">
+        <div className="sc-codeBlock">
+          <div className="sc-lineDim">internal/auth/middleware.go</div>
+          <div style={{ height: 4 }} />
+          <div><span className="sc-lineBlue">@@ -42,6 +42,14 @@</span></div>
+          <div><span className="sc-lineGreen">+func AuthMiddleware(next) {'{'}</span></div>
+          <div><span className="sc-lineGreen">+  return http.HandlerFunc(w, r) {'{'}</span></div>
+          <div><span className="sc-lineGreen">+    token := r.Header.Get("Auth")</span></div>
+          <div><span className="sc-lineGreen">+    if !ValidateJWT(token) {'{'}</span></div>
+          <div><span className="sc-lineGreen">+      http.Error(w, "Unauth", 401)</span></div>
+          <div><span className="sc-lineGreen">+    {'}'}</span></div>
+          <div><span className="sc-lineGreen">+  {'}'})</span></div>
+          <div><span className="sc-lineGreen">+{'}'}</span></div>
+        </div>
       </div>
     </>
   );
@@ -108,42 +119,49 @@ function GitPane() {
 function FilesPane() {
   return (
     <>
-      <p className="sc-sectionTitle">Project Files</p>
-      <div className="sc-list">
-        <div className="sc-item">
-          <span className="sc-lineDim">[v]</span>
-          <span>internal/</span>
-        </div>
-        <div className="sc-item" style={{ paddingLeft: 20 }}>
-          <span className="sc-lineDim">[v]</span>
-          <span>auth/</span>
-        </div>
-        <div className="sc-item sc-itemActive" style={{ paddingLeft: 36 }}>
-          <span className="sc-bullet sc-bulletBlue" />
-          <span>middleware.go</span>
-        </div>
-        <div className="sc-item" style={{ paddingLeft: 36 }}>
-          <span className="sc-bullet sc-bulletBlue" />
-          <span>jwt.go</span>
-        </div>
-        <div className="sc-item" style={{ paddingLeft: 20 }}>
-          <span className="sc-lineDim">[&gt;]</span>
-          <span>plugins/</span>
+      <div className="sc-paneSidebar">
+        <p className="sc-sectionTitle">Files</p>
+        <div className="sc-list">
+          <div className="sc-item">
+            <span className="sc-lineDim">[v]</span>
+            <span>internal/</span>
+          </div>
+          <div className="sc-item" style={{ paddingLeft: 12 }}>
+            <span className="sc-lineDim">[v]</span>
+            <span>auth/</span>
+          </div>
+          <div className="sc-item sc-itemActive" style={{ paddingLeft: 20 }}>
+            <span className="sc-bullet sc-bulletBlue" />
+            <span>middleware.go</span>
+          </div>
+          <div className="sc-item" style={{ paddingLeft: 20 }}>
+            <span className="sc-bullet sc-bulletBlue" />
+            <span>jwt.go</span>
+          </div>
+          <div className="sc-item" style={{ paddingLeft: 12 }}>
+            <span className="sc-lineDim">[&gt;]</span>
+            <span>plugins/</span>
+          </div>
+          <div className="sc-item" style={{ paddingLeft: 12 }}>
+            <span className="sc-lineDim">[&gt;]</span>
+            <span>app/</span>
+          </div>
         </div>
       </div>
-      <div style={{ height: 12 }} />
-      <div className="sc-codeBlock">
-        <div className="sc-lineDim">middleware.go | 156 lines</div>
-        <div style={{ height: 6 }} />
-        <div><span className="sc-lineBlue">package</span> auth</div>
-        <div style={{ height: 4 }} />
-        <div><span className="sc-lineBlue">import</span> (</div>
-        <div>  <span className="sc-lineYellow">"net/http"</span></div>
-        <div>  <span className="sc-lineYellow">"strings"</span></div>
-        <div>)</div>
-        <div style={{ height: 4 }} />
-        <div><span className="sc-linePink">// AuthMiddleware validates JWT tokens</span></div>
-        <div><span className="sc-lineBlue">func</span> <span className="sc-lineGreen">AuthMiddleware</span>(next http.Handler)...</div>
+      <div className="sc-paneMain">
+        <div className="sc-codeBlock">
+          <div className="sc-lineDim">middleware.go | 156 lines</div>
+          <div style={{ height: 4 }} />
+          <div><span className="sc-lineBlue">package</span> auth</div>
+          <div style={{ height: 2 }} />
+          <div><span className="sc-lineBlue">import</span> (</div>
+          <div>  <span className="sc-lineYellow">"net/http"</span></div>
+          <div>  <span className="sc-lineYellow">"strings"</span></div>
+          <div>)</div>
+          <div style={{ height: 2 }} />
+          <div><span className="sc-linePink">// AuthMiddleware validates requests</span></div>
+          <div><span className="sc-lineBlue">func</span> AuthMiddleware(next)...</div>
+        </div>
       </div>
     </>
   );
@@ -152,34 +170,41 @@ function FilesPane() {
 function ConversationsPane() {
   return (
     <>
-      <p className="sc-sectionTitle">All Sessions <span className="sc-lineDim">chronological</span></p>
-      <div className="sc-list">
-        <div className="sc-item sc-itemActive">
-          <span className="sc-bullet sc-bulletGreen" />
-          <span>auth-flow | <span className="sc-lineYellow">Claude</span> | 24m</span>
-        </div>
-        <div className="sc-item">
-          <span className="sc-bullet sc-bulletBlue" />
-          <span>rate-limit | <span className="sc-linePink">Cursor</span> | 2h</span>
-        </div>
-        <div className="sc-item">
-          <span className="sc-bullet sc-bulletPink" />
-          <span>refactor | <span className="sc-lineBlue">Gemini</span> | 1d</span>
+      <div className="sc-paneSidebar">
+        <p className="sc-sectionTitle">Sessions</p>
+        <div className="sc-list">
+          <div className="sc-item sc-itemActive">
+            <span className="sc-bullet sc-bulletGreen" />
+            <span>auth-flow <span className="sc-lineYellow" style={{ fontSize: 9 }}>Claude</span></span>
+          </div>
+          <div className="sc-item">
+            <span className="sc-bullet sc-bulletBlue" />
+            <span>rate-limit <span className="sc-linePink" style={{ fontSize: 9 }}>Cursor</span></span>
+          </div>
+          <div className="sc-item">
+            <span className="sc-bullet sc-bulletPink" />
+            <span>refactor <span className="sc-lineBlue" style={{ fontSize: 9 }}>Gemini</span></span>
+          </div>
+          <div className="sc-item">
+            <span className="sc-bullet sc-bulletBlue" />
+            <span>api-docs <span className="sc-lineYellow" style={{ fontSize: 9 }}>Claude</span></span>
+          </div>
         </div>
       </div>
-      <div style={{ height: 12 }} />
-      <div className="sc-codeBlock">
-        <div className="sc-lineDim">auth-flow | <span className="sc-lineYellow">Claude Code</span></div>
-        <div style={{ height: 6 }} />
-        <div><span className="sc-lineBlue">User:</span> Add JWT auth to the API</div>
-        <div style={{ height: 4 }} />
-        <div><span className="sc-lineGreen">Claude:</span> I'll implement JWT authentication.</div>
-        <div className="sc-lineDim">First, let me check the existing auth...</div>
-        <div style={{ height: 4 }} />
-        <div><span className="sc-lineYellow">-&gt;</span> Read internal/auth/middleware.go</div>
-        <div><span className="sc-lineYellow">-&gt;</span> Edit internal/auth/jwt.go</div>
-        <div style={{ height: 4 }} />
-        <div className="sc-lineDim">12.4k tokens | 24 minutes</div>
+      <div className="sc-paneMain">
+        <div className="sc-codeBlock">
+          <div className="sc-lineDim">auth-flow | <span className="sc-lineYellow">Claude Code</span></div>
+          <div style={{ height: 4 }} />
+          <div><span className="sc-lineBlue">User:</span> Add JWT auth to the API</div>
+          <div style={{ height: 2 }} />
+          <div><span className="sc-lineGreen">Claude:</span> I'll implement JWT auth.</div>
+          <div className="sc-lineDim">Let me check the existing auth...</div>
+          <div style={{ height: 2 }} />
+          <div><span className="sc-lineYellow">-&gt;</span> Read middleware.go</div>
+          <div><span className="sc-lineYellow">-&gt;</span> Edit jwt.go</div>
+          <div style={{ height: 2 }} />
+          <div className="sc-lineDim">12.4k tokens | 24m</div>
+        </div>
       </div>
     </>
   );
@@ -188,34 +213,41 @@ function ConversationsPane() {
 function WorktreesPane() {
   return (
     <>
-      <p className="sc-sectionTitle">Worktrees <span className="sc-lineDim">zero commands</span></p>
-      <div className="sc-list">
-        <div className="sc-item">
-          <span className="sc-bullet sc-bulletGreen" />
-          main
-        </div>
-        <div className="sc-item sc-itemActive">
-          <span className="sc-bullet sc-bulletBlue" />
-          feature/auth <span className="sc-lineDim">PR #47</span>
-        </div>
-        <div className="sc-item">
-          <span className="sc-bullet sc-bulletPink" />
-          fix/memory <span className="sc-lineDim">PR #52</span>
+      <div className="sc-paneSidebar">
+        <p className="sc-sectionTitle">Worktrees</p>
+        <div className="sc-list">
+          <div className="sc-item">
+            <span className="sc-bullet sc-bulletGreen" />
+            <span>main</span>
+          </div>
+          <div className="sc-item sc-itemActive">
+            <span className="sc-bullet sc-bulletBlue" />
+            <span>feature/auth <span className="sc-lineDim" style={{ fontSize: 9 }}>#47</span></span>
+          </div>
+          <div className="sc-item">
+            <span className="sc-bullet sc-bulletPink" />
+            <span>fix/memory <span className="sc-lineDim" style={{ fontSize: 9 }}>#52</span></span>
+          </div>
+          <div className="sc-item">
+            <span className="sc-bullet sc-bulletBlue" />
+            <span>docs/update</span>
+          </div>
         </div>
       </div>
-      <div style={{ height: 12 }} />
-      <div className="sc-codeBlock" role="img" aria-label="Sidecar output pane preview">
-        <div className="sc-lineDim">feature/auth | <span className="sc-lineGreen">Ready to merge</span></div>
-        <div style={{ height: 6 }} />
-        <div><span className="sc-lineBlue">Task:</span> td-a1b2c3 <span className="sc-lineDim">from td</span></div>
-        <div><span className="sc-lineYellow">Prompts:</span> 3 configured</div>
-        <div style={{ height: 6 }} />
-        <div className="sc-lineDim">Actions:</div>
-        <div>  <span className="sc-lineGreen">[n]</span> New worktree + agent</div>
-        <div>  <span className="sc-lineGreen">[s]</span> Send task from td</div>
-        <div>  <span className="sc-lineGreen">[p]</span> Run prompt sequence</div>
-        <div style={{ height: 6 }} />
-        <div className="sc-lineDim">* 3 commits ahead | checks passing</div>
+      <div className="sc-paneMain">
+        <div className="sc-codeBlock" role="img" aria-label="Sidecar output pane preview">
+          <div className="sc-lineDim">feature/auth | <span className="sc-lineGreen">Ready</span></div>
+          <div style={{ height: 3 }} />
+          <div><span className="sc-lineBlue">Task:</span> td-a1b2c3 <span className="sc-lineDim">from td</span></div>
+          <div><span className="sc-lineYellow">Prompts:</span> 3 configured</div>
+          <div style={{ height: 3 }} />
+          <div className="sc-lineDim">Actions:</div>
+          <div>  <span className="sc-lineGreen">[n]</span> New worktree + agent</div>
+          <div>  <span className="sc-lineGreen">[s]</span> Send task from td</div>
+          <div>  <span className="sc-lineGreen">[p]</span> Run prompt sequence</div>
+          <div style={{ height: 3 }} />
+          <div className="sc-lineDim">3 commits ahead | checks pass</div>
+        </div>
       </div>
     </>
   );
@@ -274,10 +306,8 @@ function Frame({ activeTab, onTabChange }) {
         ))}
       </div>
 
-      <div className="sc-frameBodySingle">
-        <div className="sc-pane" key={activeTab}>
-          {renderPane()}
-        </div>
+      <div className={activeTab === 'td' ? 'sc-frameBodyStacked' : 'sc-frameBody'} key={activeTab}>
+        {renderPane()}
       </div>
 
       <div className="sc-frameFooter">
@@ -320,47 +350,41 @@ function TdMockup() {
         <span className="sc-mockupTitle">Task Management</span>
         <span className="sc-lineDim">3 tasks | 1 in progress</span>
       </div>
-      <div className="sc-mockupBody">
-        <div className="sc-mockupSidebar">
+      <div className="sc-mockupBodyStacked">
+        <div className="sc-mockupSection">
+          <div className="sc-lineDim" style={{ fontSize: 9, marginBottom: 4, textTransform: 'uppercase' }}>Current Work</div>
           <div className="sc-mockupItem sc-mockupItemActive">
             <span className="sc-bullet sc-bulletGreen" />
-            <div>
-              <div>td-a1b2c3</div>
-              <div className="sc-lineDim" style={{ fontSize: 11 }}>Implement auth</div>
-            </div>
+            <span>td-a1b2c3</span>
+            <span className="sc-lineYellow">in_progress</span>
+            <span className="sc-lineDim">Implement auth flow</span>
           </div>
-          <div className="sc-mockupItem">
-            <span className="sc-bullet sc-bulletBlue" />
-            <div>
-              <div>td-d4e5f6</div>
-              <div className="sc-lineDim" style={{ fontSize: 11 }}>Rate limiting</div>
+        </div>
+        <div className="sc-mockupSection" style={{ flex: 2 }}>
+          <div className="sc-lineDim" style={{ fontSize: 9, marginBottom: 4, textTransform: 'uppercase' }}>Board</div>
+          <div style={{ display: 'grid', gap: 3 }}>
+            <div className="sc-mockupItem">
+              <span className="sc-linePink" style={{ fontSize: 9 }}>REV</span>
+              <span>td-d4e5f6</span>
+              <span className="sc-lineDim">Add rate limiting</span>
             </div>
-          </div>
-          <div className="sc-mockupItem">
-            <span className="sc-bullet sc-bulletPink" />
-            <div>
-              <div>td-g7h8i9</div>
-              <div className="sc-lineDim" style={{ fontSize: 11 }}>Memory leak</div>
+            <div className="sc-mockupItem">
+              <span className="sc-lineBlue" style={{ fontSize: 9 }}>RDY</span>
+              <span>td-g7h8i9</span>
+              <span className="sc-lineDim">Fix memory leak</span>
+            </div>
+            <div className="sc-mockupItem">
+              <span className="sc-lineBlue" style={{ fontSize: 9 }}>RDY</span>
+              <span>td-j0k1l2</span>
+              <span className="sc-lineDim">Update API docs</span>
             </div>
           </div>
         </div>
-        <div className="sc-mockupMain">
-          <div className="sc-mockupDetail">
-            <div className="sc-lineGreen" style={{ fontSize: 14, marginBottom: 8 }}>Implement auth flow</div>
-            <div style={{ display: 'grid', gap: 4, fontSize: 12 }}>
-              <div><span className="sc-lineDim">Status:</span> <span className="sc-lineYellow">in_progress</span></div>
-              <div><span className="sc-lineDim">Created:</span> 2h ago</div>
-              <div><span className="sc-lineDim">Epic:</span> td-epic-auth</div>
-            </div>
-            <div style={{ marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 12 }}>
-              <div className="sc-lineDim" style={{ marginBottom: 6 }}>Subtasks</div>
-              <div style={{ display: 'grid', gap: 4, fontSize: 12 }}>
-                <div><span className="sc-lineGreen">[x]</span> Create auth middleware</div>
-                <div><span className="sc-lineGreen">[x]</span> Add JWT validation</div>
-                <div><span className="sc-linePink">[ ]</span> Write integration tests</div>
-                <div><span className="sc-linePink">[ ]</span> Update API docs</div>
-              </div>
-            </div>
+        <div className="sc-mockupSection">
+          <div className="sc-lineDim" style={{ fontSize: 9, marginBottom: 4, textTransform: 'uppercase' }}>Activity</div>
+          <div style={{ fontSize: 9, display: 'grid', gap: 2 }}>
+            <div><span className="sc-lineYellow">00:39</span> <span className="sc-lineDim">td-a1b2c3</span> Started</div>
+            <div><span className="sc-lineYellow">00:15</span> <span className="sc-lineDim">td-d4e5f6</span> Submitted for review</div>
           </div>
         </div>
       </div>
@@ -379,11 +403,11 @@ function GitMockup() {
     <div className="sc-mockup sc-mockupGit">
       <div className="sc-mockupHeader">
         <span className="sc-mockupTitle">Git Status</span>
-        <span className="sc-lineDim">feature/auth-flow | 3 changed</span>
+        <span className="sc-lineDim">feature/auth | 3 changed</span>
       </div>
       <div className="sc-mockupBody">
         <div className="sc-mockupSidebar">
-          <div className="sc-lineDim" style={{ fontSize: 11, marginBottom: 6 }}>Staged</div>
+          <div className="sc-lineDim" style={{ fontSize: 9, marginBottom: 4, textTransform: 'uppercase' }}>Staged</div>
           <div className="sc-mockupItem sc-mockupItemActive">
             <span className="sc-lineGreen">M</span>
             <span>middleware.go</span>
@@ -392,7 +416,7 @@ function GitMockup() {
             <span className="sc-lineGreen">A</span>
             <span>jwt.go</span>
           </div>
-          <div className="sc-lineDim" style={{ fontSize: 11, marginBottom: 6, marginTop: 12 }}>Unstaged</div>
+          <div className="sc-lineDim" style={{ fontSize: 9, marginBottom: 4, marginTop: 8, textTransform: 'uppercase' }}>Unstaged</div>
           <div className="sc-mockupItem">
             <span className="sc-linePink">D</span>
             <span>old_auth.go</span>
@@ -400,11 +424,11 @@ function GitMockup() {
         </div>
         <div className="sc-mockupMain">
           <div className="sc-mockupDiff">
-            <div className="sc-lineDim" style={{ marginBottom: 8 }}>internal/auth/middleware.go</div>
-            <div style={{ fontSize: 12, lineHeight: 1.5 }}>
+            <div className="sc-lineDim" style={{ marginBottom: 6 }}>internal/auth/middleware.go</div>
+            <div style={{ fontSize: 10, lineHeight: 1.4 }}>
               <div><span className="sc-lineBlue">@@ -42,6 +42,14 @@</span></div>
-              <div><span className="sc-lineGreen">+func AuthMiddleware(next http.Handler) {'{'}</span></div>
-              <div><span className="sc-lineGreen">+  return http.HandlerFunc(func(w, r) {'{'}</span></div>
+              <div><span className="sc-lineGreen">+func AuthMiddleware(next) {'{'}</span></div>
+              <div><span className="sc-lineGreen">+  return http.HandlerFunc(w, r) {'{'}</span></div>
               <div><span className="sc-lineGreen">+    token := r.Header.Get("Auth")</span></div>
               <div><span className="sc-lineGreen">+    if !ValidateJWT(token) {'{'}</span></div>
               <div><span className="sc-lineGreen">+      http.Error(w, "Unauth", 401)</span></div>
@@ -438,38 +462,38 @@ function FilesMockup() {
             <span className="sc-lineDim">[v]</span>
             <span>internal/</span>
           </div>
-          <div className="sc-mockupItem" style={{ paddingLeft: 12 }}>
+          <div className="sc-mockupItem" style={{ paddingLeft: 10 }}>
             <span className="sc-lineDim">[v]</span>
             <span>auth/</span>
           </div>
-          <div className="sc-mockupItem sc-mockupItemActive" style={{ paddingLeft: 24 }}>
+          <div className="sc-mockupItem sc-mockupItemActive" style={{ paddingLeft: 18 }}>
             <span className="sc-bullet sc-bulletBlue" />
             <span>middleware.go</span>
           </div>
-          <div className="sc-mockupItem" style={{ paddingLeft: 24 }}>
+          <div className="sc-mockupItem" style={{ paddingLeft: 18 }}>
             <span className="sc-bullet sc-bulletBlue" />
             <span>jwt.go</span>
           </div>
-          <div className="sc-mockupItem" style={{ paddingLeft: 12 }}>
+          <div className="sc-mockupItem" style={{ paddingLeft: 10 }}>
             <span className="sc-lineDim">[&gt;]</span>
             <span>plugins/</span>
           </div>
-          <div className="sc-mockupItem" style={{ paddingLeft: 12 }}>
+          <div className="sc-mockupItem" style={{ paddingLeft: 10 }}>
             <span className="sc-lineDim">[&gt;]</span>
             <span>app/</span>
           </div>
         </div>
         <div className="sc-mockupMain">
           <div className="sc-mockupPreview">
-            <div className="sc-lineDim" style={{ marginBottom: 8 }}>middleware.go | 156 lines | Go</div>
-            <div style={{ fontSize: 12, lineHeight: 1.5 }}>
+            <div className="sc-lineDim" style={{ marginBottom: 6 }}>middleware.go | 156 lines | Go</div>
+            <div style={{ fontSize: 10, lineHeight: 1.4 }}>
               <div><span className="sc-lineBlue">package</span> auth</div>
-              <div style={{ height: 4 }} />
+              <div style={{ height: 3 }} />
               <div><span className="sc-lineBlue">import</span> (</div>
               <div>  <span className="sc-lineYellow">"net/http"</span></div>
               <div>  <span className="sc-lineYellow">"strings"</span></div>
               <div>)</div>
-              <div style={{ height: 4 }} />
+              <div style={{ height: 3 }} />
               <div><span className="sc-linePink">// AuthMiddleware validates requests</span></div>
               <div><span className="sc-lineBlue">func</span> AuthMiddleware(next)...</div>
             </div>
@@ -498,40 +522,40 @@ function ConversationsMockup() {
           <div className="sc-mockupItem sc-mockupItemActive">
             <span className="sc-bullet sc-bulletGreen" />
             <div>
-              <div>auth-flow <span className="sc-lineYellow" style={{ fontSize: 10 }}>Claude</span></div>
-              <div className="sc-lineDim" style={{ fontSize: 11 }}>24m ago | 12.4k</div>
+              <div>auth-flow <span className="sc-lineYellow" style={{ fontSize: 8 }}>Claude</span></div>
+              <div className="sc-lineDim" style={{ fontSize: 9 }}>24m | 12.4k</div>
             </div>
           </div>
           <div className="sc-mockupItem">
             <span className="sc-bullet sc-bulletBlue" />
             <div>
-              <div>rate-limit <span className="sc-linePink" style={{ fontSize: 10 }}>Cursor</span></div>
-              <div className="sc-lineDim" style={{ fontSize: 11 }}>2h ago | 8.2k</div>
+              <div>rate-limit <span className="sc-linePink" style={{ fontSize: 8 }}>Cursor</span></div>
+              <div className="sc-lineDim" style={{ fontSize: 9 }}>2h | 8.2k</div>
             </div>
           </div>
           <div className="sc-mockupItem">
             <span className="sc-bullet sc-bulletPink" />
             <div>
-              <div>refactor <span className="sc-lineBlue" style={{ fontSize: 10 }}>Gemini</span></div>
-              <div className="sc-lineDim" style={{ fontSize: 11 }}>1d ago | 24.1k</div>
+              <div>refactor <span className="sc-lineBlue" style={{ fontSize: 8 }}>Gemini</span></div>
+              <div className="sc-lineDim" style={{ fontSize: 9 }}>1d | 24.1k</div>
             </div>
           </div>
         </div>
         <div className="sc-mockupMain">
           <div className="sc-mockupConvo">
-            <div style={{ marginBottom: 12 }}>
-              <div className="sc-lineBlue" style={{ marginBottom: 4 }}>User</div>
-              <div style={{ fontSize: 12 }}>Add JWT authentication to the API endpoints</div>
+            <div style={{ marginBottom: 8 }}>
+              <div className="sc-lineBlue" style={{ marginBottom: 2 }}>User</div>
+              <div style={{ fontSize: 10 }}>Add JWT auth to the API endpoints</div>
             </div>
-            <div style={{ marginBottom: 12 }}>
-              <div className="sc-lineGreen" style={{ marginBottom: 4 }}>Claude</div>
-              <div style={{ fontSize: 12 }}>I'll implement JWT authentication for your API.</div>
-              <div className="sc-lineDim" style={{ fontSize: 11, marginTop: 4 }}>Let me check the existing auth setup...</div>
+            <div style={{ marginBottom: 8 }}>
+              <div className="sc-lineGreen" style={{ marginBottom: 2 }}>Claude</div>
+              <div style={{ fontSize: 10 }}>I'll implement JWT auth for your API.</div>
+              <div className="sc-lineDim" style={{ fontSize: 9, marginTop: 2 }}>Let me check the existing auth setup...</div>
             </div>
-            <div style={{ fontSize: 11, display: 'grid', gap: 2 }}>
+            <div style={{ fontSize: 9, display: 'grid', gap: 2 }}>
               <div><span className="sc-lineYellow">-&gt;</span> Read middleware.go</div>
               <div><span className="sc-lineYellow">-&gt;</span> Edit jwt.go</div>
-              <div><span className="sc-lineYellow">-&gt;</span> Write tests/auth_test.go</div>
+              <div><span className="sc-lineYellow">-&gt;</span> Write auth_test.go</div>
             </div>
           </div>
         </div>
@@ -551,7 +575,7 @@ function WorktreesMockup() {
     <div className="sc-mockup sc-mockupWorktrees">
       <div className="sc-mockupHeader">
         <span className="sc-mockupTitle">Worktrees</span>
-        <span className="sc-lineDim">zero commands | auto everything</span>
+        <span className="sc-lineDim">zero commands | auto</span>
       </div>
       <div className="sc-mockupBody">
         <div className="sc-mockupSidebar">
@@ -559,35 +583,35 @@ function WorktreesMockup() {
             <span className="sc-bullet sc-bulletGreen" />
             <div>
               <div>main</div>
-              <div className="sc-lineDim" style={{ fontSize: 11 }}>default</div>
+              <div className="sc-lineDim" style={{ fontSize: 9 }}>default</div>
             </div>
           </div>
           <div className="sc-mockupItem sc-mockupItemActive">
             <span className="sc-bullet sc-bulletBlue" />
             <div>
               <div>feature/auth</div>
-              <div className="sc-lineDim" style={{ fontSize: 11 }}>PR #47 | ready</div>
+              <div className="sc-lineDim" style={{ fontSize: 9 }}>PR #47 | ready</div>
             </div>
           </div>
           <div className="sc-mockupItem">
             <span className="sc-bullet sc-bulletPink" />
             <div>
               <div>fix/memory</div>
-              <div className="sc-lineDim" style={{ fontSize: 11 }}>td-g7h8i9</div>
+              <div className="sc-lineDim" style={{ fontSize: 9 }}>td-g7h8i9</div>
             </div>
           </div>
         </div>
         <div className="sc-mockupMain">
           <div className="sc-mockupWorktree">
-            <div className="sc-lineBlue" style={{ fontSize: 14, marginBottom: 8 }}>feature/auth</div>
-            <div style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+            <div className="sc-lineBlue" style={{ fontSize: 12, marginBottom: 6 }}>feature/auth</div>
+            <div style={{ display: 'grid', gap: 3, fontSize: 10 }}>
               <div><span className="sc-lineDim">PR:</span> <span className="sc-lineGreen">#47 Add JWT auth</span></div>
               <div><span className="sc-lineDim">Task:</span> <span className="sc-lineYellow">td-a1b2c3</span> <span className="sc-lineDim">from td</span></div>
               <div><span className="sc-lineDim">Status:</span> <span className="sc-lineGreen">Ready to merge</span></div>
             </div>
-            <div style={{ marginTop: 12, fontSize: 12 }}>
-              <div className="sc-lineDim" style={{ marginBottom: 4 }}>Quick actions</div>
-              <div><span className="sc-lineGreen">[n]</span> New worktree + start agent</div>
+            <div style={{ marginTop: 8, fontSize: 10 }}>
+              <div className="sc-lineDim" style={{ marginBottom: 3 }}>Quick actions</div>
+              <div><span className="sc-lineGreen">[n]</span> New worktree + agent</div>
               <div><span className="sc-lineGreen">[s]</span> Send task from td</div>
               <div><span className="sc-lineGreen">[p]</span> Run prompt sequence</div>
               <div><span className="sc-lineGreen">[m]</span> Merge & cleanup</div>

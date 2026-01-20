@@ -383,10 +383,11 @@ a:hover {
   background: rgba(102, 217, 239, 0.12);
 }
 
+/* Side-by-side layout for git/files/conversations/worktrees */
 .sc-frameBody {
   display: grid;
-  grid-template-columns: 220px 1fr;
-  min-height: 360px;
+  grid-template-columns: 28% 72%;
+  min-height: 340px;
 }
 
 @media (max-width: 996px) {
@@ -395,8 +396,44 @@ a:hover {
   }
 }
 
+/* Stacked layout for TD */
+.sc-frameBodyStacked {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  min-height: 340px;
+}
+
+.sc-frameBodyStacked .sc-tdSection {
+  border-radius: 8px;
+  border: 1px solid var(--sc-border);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 8px 10px;
+  flex: 1;
+}
+
+.sc-frameBodyStacked .sc-tdSection:first-child {
+  flex: 0 0 auto;
+}
+
+/* Pane sidebar (left side) */
+.sc-paneSidebar {
+  border-right: 1px solid var(--sc-border);
+  background: rgba(18, 20, 23, 0.30);
+  padding: 10px;
+  overflow: hidden;
+}
+
+/* Pane main (right side) */
+.sc-paneMain {
+  padding: 10px;
+  overflow: hidden;
+}
+
+/* Deprecated single pane - keep for fallback */
 .sc-frameBodySingle {
-  height: 380px;
+  height: 340px;
   overflow: hidden;
 }
 
@@ -429,27 +466,28 @@ a:hover {
 }
 
 .sc-sectionTitle {
-  font-size: 12px;
+  font-size: 10px;
   color: rgba(232,232,227,0.68);
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   letter-spacing: 0.35px;
+  text-transform: uppercase;
 }
 
 .sc-list {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .sc-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   border: 1px solid transparent;
-  border-radius: 10px;
-  padding: 8px 8px;
+  border-radius: 6px;
+  padding: 5px 6px;
   color: rgba(232,232,227,0.78);
   background: rgba(0,0,0,0.12);
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .sc-itemActive {
@@ -471,13 +509,13 @@ a:hover {
 .sc-bulletBlue { background: rgba(102, 217, 239, 0.45); }
 
 .sc-codeBlock {
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid var(--sc-border);
   background: rgba(0,0,0,0.28);
-  padding: 10px 12px;
+  padding: 8px 10px;
   overflow: auto;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 10px;
+  line-height: 1.4;
   color: rgba(232,232,227,0.88);
   box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset;
 }
@@ -754,8 +792,8 @@ a:hover {
 
 .sc-componentContent {
   display: grid;
-  grid-template-columns: 1fr 1.5fr;
-  gap: 32px;
+  grid-template-columns: 1fr 2fr;
+  gap: 28px;
   align-items: start;
 }
 
@@ -811,11 +849,11 @@ a:hover {
 /* ---------- Mockup styles ---------- */
 
 .sc-mockup {
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid var(--sc-border);
   background: rgba(0, 0, 0, 0.4);
   overflow: hidden;
-  font-size: 13px;
+  font-size: 11px;
   font-family: var(--ifm-font-family-monospace);
 }
 
@@ -823,20 +861,22 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--sc-border);
   background: rgba(18, 20, 23, 0.6);
 }
 
 .sc-mockupTitle {
   font-weight: 600;
+  font-size: 12px;
   color: rgba(232,232,227,0.9);
 }
 
+/* Side-by-side mockup body (default for most plugins) */
 .sc-mockupBody {
   display: grid;
-  grid-template-columns: 180px 1fr;
-  min-height: 280px;
+  grid-template-columns: 30% 70%;
+  min-height: 260px;
 }
 
 @media (max-width: 768px) {
@@ -845,28 +885,44 @@ a:hover {
   }
 }
 
+/* Stacked mockup body for TD */
+.sc-mockupBodyStacked {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  min-height: 260px;
+}
+
+.sc-mockupBodyStacked .sc-mockupSection {
+  border-radius: 6px;
+  border: 1px solid var(--sc-border);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 8px;
+}
+
 .sc-mockupSidebar {
-  padding: 12px;
+  padding: 10px;
   border-right: 1px solid var(--sc-border);
   background: rgba(18, 20, 23, 0.3);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .sc-mockupMain {
-  padding: 12px;
+  padding: 10px;
 }
 
 .sc-mockupItem {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 8px;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
   background: rgba(0,0,0,0.2);
   border: 1px solid transparent;
-  font-size: 12px;
+  font-size: 10px;
   color: rgba(232,232,227,0.78);
 }
 
@@ -876,10 +932,10 @@ a:hover {
 }
 
 .sc-mockupFooter {
-  padding: 8px 14px;
+  padding: 6px 12px;
   border-top: 1px solid var(--sc-border);
   background: rgba(18, 20, 23, 0.6);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .sc-mockupDetail,
@@ -888,9 +944,9 @@ a:hover {
 .sc-mockupConvo,
 .sc-mockupWorktree {
   background: rgba(0, 0, 0, 0.25);
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid var(--sc-border);
-  padding: 12px;
+  padding: 10px;
 }
 
 .sc-bulletYellow { background: rgba(230, 219, 116, 0.45); }
