@@ -719,7 +719,7 @@ export default function Home() {
   return (
     <Layout
       title="You might never open your editor again"
-      description="AI agents write your code. Sidecar gives you the rest: plan tasks, review diffs, stage commits, and manage worktrees—all from the terminal."
+      description="AI agents write your code. Sidecar keeps you in the terminal for everything else: planning tasks, reviewing diffs, staging commits, managing worktrees."
     >
       <header className="sc-hero">
         <div className="container">
@@ -731,9 +731,8 @@ export default function Home() {
               </h1>
 
               <p className="sc-subtitle">
-                AI agents write your code. <a href="https://github.com/marcus/td" className="sc-inlineLink">td</a> lets you plan tasks, review diffs, stage commits,
-                and manage git worktrees without leaving your terminal. The entire development loop
-                happens here while agents write the code.
+                AI agents write your code. Sidecar keeps you in the terminal for everything else:
+                planning tasks with <a href="https://github.com/marcus/td" className="sc-inlineLink">td</a>, reviewing diffs, staging commits, managing worktrees. The whole development loop, one interface.
               </p>
 
               <div style={{ height: 32 }} />
@@ -779,6 +778,7 @@ export default function Home() {
         {/* Feature Cards */}
         <section className="sc-grid">
           <div className="container">
+            <p className="sc-gridHint">Click a card to see it in action above</p>
             <div className="sc-gridInner sc-gridFeatures">
               {/* TD Hero Card - double wide */}
               <FeatureCard
@@ -802,7 +802,7 @@ export default function Home() {
                 isHighlighted={activeTab === 'git'}
                 onClick={() => handleCardClick('git')}
               >
-                Split-pane diffs, commit context, and a fast loop for staging/review--without bouncing to an IDE.
+                Split-pane diffs, commit context, fast staging—all without bouncing to an IDE.
               </FeatureCard>
 
               <FeatureCard
@@ -822,8 +822,7 @@ export default function Home() {
                 isHighlighted={activeTab === 'conversations'}
                 onClick={() => handleCardClick('conversations')}
               >
-                Chronological view across Claude, Cursor, Gemini, and all adapters. See every session in one place,
-                search across agents, and pick up exactly where any agent left off.
+                All your agents in one timeline—Claude, Cursor, Gemini, and more. Search across sessions, pick up where any agent left off.
               </FeatureCard>
 
               <FeatureCard
@@ -833,8 +832,7 @@ export default function Home() {
                 isHighlighted={activeTab === 'worktrees'}
                 onClick={() => handleCardClick('worktrees')}
               >
-                Create worktrees, pass tasks from td, or kick off with configured prompts--all without typing git commands.
-                Everything is automatic: create, switch, merge, delete.
+                Create worktrees, pass tasks from td, kick off with configured prompts—no git commands needed. Everything is automatic.
               </FeatureCard>
             </div>
           </div>
@@ -845,8 +843,8 @@ export default function Home() {
         {/* Component Showcase Sections */}
         <section className="sc-showcase">
           <div className="container">
-            <h2 className="sc-showcaseTitle">Component Deep Dive</h2>
-            <p className="sc-showcaseSubtitle">Each plugin is designed for the AI-assisted development workflow</p>
+            <h2 className="sc-showcaseTitle">The Plugins</h2>
+            <p className="sc-showcaseSubtitle">Each one built for AI-assisted development</p>
           </div>
 
           <div className="sc-showcaseFullWidth">
@@ -1017,7 +1015,7 @@ export default function Home() {
         {/* Supported Agents */}
         <section className="sc-agents">
           <div className="container">
-            <h2 className="sc-agentsTitle">Works with your favorite coding agents</h2>
+            <h2 className="sc-agentsTitle">Supported Agents</h2>
             <p className="sc-agentsSubtitle">
               Sidecar reads session data from multiple AI coding tools, giving you a unified view of agent activity
             </p>
@@ -1098,6 +1096,35 @@ export default function Home() {
             <p className="sc-agentsNote">
               Each agent stores session data in its own format. Sidecar normalizes and displays them in a unified interface.
             </p>
+          </div>
+        </section>
+
+        {/* Bottom CTA */}
+        <section className="sc-bottomCta">
+          <div className="container">
+            <h2 className="sc-bottomCtaTitle">Get started in seconds</h2>
+            <div className="sc-codeBlock sc-installBlock sc-bottomInstall">
+              <div className="sc-installHeader">
+                <span className="sc-lineDim">Quick install</span>
+                <CopyButton text={INSTALL_COMMAND} />
+              </div>
+              <div className="sc-installCommand">
+                <span className="sc-lineBlue">$ </span>
+                <span>{INSTALL_COMMAND}</span>
+              </div>
+              <div>
+                <span className="sc-lineBlue">$ </span>
+                <span>sidecar</span>
+              </div>
+            </div>
+            <div className="sc-bottomCtaLinks">
+              <Link className="sc-btn sc-btnPrimary" to="/docs/intro">
+                Read the docs
+              </Link>
+              <a className="sc-btn" href="https://github.com/marcus/sidecar">
+                View on GitHub
+              </a>
+            </div>
           </div>
         </section>
       </main>
