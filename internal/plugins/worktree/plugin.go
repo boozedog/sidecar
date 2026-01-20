@@ -396,9 +396,9 @@ func (p *Plugin) Start() tea.Cmd {
 	cmds = append(cmds, p.refreshWorktrees())
 
 	// Start shell polling for all existing shells (so preview shows content right away)
-	for i, shell := range p.shells {
+	for _, shell := range p.shells {
 		if shell.Agent != nil {
-			cmds = append(cmds, p.pollShellSessionByIndex(i))
+			cmds = append(cmds, p.pollShellSessionByName(shell.TmuxName))
 		}
 	}
 
@@ -719,11 +719,8 @@ func (p *Plugin) loadSelectedContent() tea.Cmd {
 	var cmds []tea.Cmd
 
 	// If shell is selected, poll shell output immediately
-	if p.shellSelected && p.selectedShellIdx >= 0 && p.selectedShellIdx < len(p.shells) {
-		shell := p.shells[p.selectedShellIdx]
-		if shell.Agent != nil && p.previewTab == PreviewTabOutput {
-			cmds = append(cmds, p.pollShellSessionByIndex(p.selectedShellIdx))
-		}
+	if shell := p.getSelectedShell(); shell != nil && shell.Agent != nil && p.previewTab == PreviewTabOutput {
+		cmds = append(cmds, p.pollShellSessionByName(shell.TmuxName))
 	}
 
 	switch p.previewTab {

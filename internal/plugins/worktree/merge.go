@@ -549,16 +549,18 @@ func (p *Plugin) pullAfterMerge(wt *Worktree, branch string, currentBranch strin
 
 // cleanupAfterMerge removes the worktree and branch after a successful merge.
 func (p *Plugin) cleanupAfterMerge(wt *Worktree) tea.Cmd {
+	// Compute session name before entering closure (consistent with executeDelete)
+	sessionName := tmuxSessionPrefix + sanitizeName(wt.Name)
+
 	return func() tea.Msg {
 		name := wt.Name
 		path := wt.Path
 		branch := wt.Branch
 
-		// Stop agent if running
-		if wt.Agent != nil {
-			sessionName := wt.Agent.TmuxSession
-			exec.Command("tmux", "kill-session", "-t", sessionName).Run()
-		}
+		// Stop agent if running and clean up tracking
+		exec.Command("tmux", "kill-session", "-t", sessionName).Run()
+		delete(p.managedSessions, sessionName)
+		globalPaneCache.remove(sessionName)
 
 		// Remove worktree
 		if err := doDeleteWorktree(path); err != nil {
@@ -631,17 +633,19 @@ func (p *Plugin) deleteRemoteBranch(wt *Worktree) tea.Cmd {
 
 // performSelectedCleanup executes only the user-selected cleanup actions.
 func (p *Plugin) performSelectedCleanup(wt *Worktree, state *MergeWorkflowState) tea.Cmd {
+	// Compute session name before entering closure (consistent with executeDelete)
+	sessionName := tmuxSessionPrefix + sanitizeName(wt.Name)
+
 	return func() tea.Msg {
 		results := &CleanupResults{}
 		name := wt.Name
 		path := wt.Path
 		branch := wt.Branch
 
-		// Stop agent if running (always do this)
-		if wt.Agent != nil {
-			sessionName := wt.Agent.TmuxSession
-			exec.Command("tmux", "kill-session", "-t", sessionName).Run()
-		}
+		// Stop agent if running and clean up tracking (always do this)
+		exec.Command("tmux", "kill-session", "-t", sessionName).Run()
+		delete(p.managedSessions, sessionName)
+		globalPaneCache.remove(sessionName)
 
 		// Delete local worktree if selected
 		if state.DeleteLocalWorktree {

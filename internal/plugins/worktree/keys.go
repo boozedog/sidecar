@@ -2,6 +2,7 @@ package worktree
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -214,6 +215,14 @@ func (p *Plugin) executeDelete() tea.Cmd {
 	deleteLocal := p.deleteLocalBranchOpt
 	deleteRemote := p.deleteRemoteBranchOpt && p.deleteHasRemote
 	workDir := p.ctx.WorkDir
+
+	// Kill tmux session if it exists (before deleting worktree)
+	sessionName := tmuxSessionPrefix + sanitizeName(name)
+	if sessionExists(sessionName) {
+		exec.Command("tmux", "kill-session", "-t", sessionName).Run()
+	}
+	delete(p.managedSessions, sessionName)
+	globalPaneCache.remove(sessionName)
 
 	// Clear modal state
 	p.viewMode = ViewModeList
