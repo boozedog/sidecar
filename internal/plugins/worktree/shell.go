@@ -70,20 +70,19 @@ type (
 	// ShellSessionDeadMsg signals shell session was externally terminated
 	// (e.g., user typed 'exit' in the shell)
 	ShellSessionDeadMsg struct {
-		Index    int    // Index of the dead shell in p.shells
-		TmuxName string // Session name for cleanup
+		TmuxName string // Session name for cleanup (stable identifier)
 	}
 
 	// ShellOutputMsg signals shell output was captured (for polling)
 	ShellOutputMsg struct {
-		Index   int    // Index of the shell in p.shells
-		Output  string
-		Changed bool
+		TmuxName string // Session name (stable identifier)
+		Output   string
+		Changed  bool
 	}
 
-	// pollShellByIdxMsg triggers a poll for a specific shell's output
-	pollShellByIdxMsg struct {
-		Index int
+	// pollShellByNameMsg triggers a poll for a specific shell's output by name
+	pollShellByNameMsg struct {
+		TmuxName string
 	}
 
 	// shellAttachAfterCreateMsg triggers attachment after shell creation
@@ -324,29 +323,31 @@ func (p *Plugin) killShellSessionByName(sessionName string) tea.Cmd {
 	}
 }
 
-// pollShellSessionByIndex captures output from a specific shell session.
-func (p *Plugin) pollShellSessionByIndex(idx int) tea.Cmd {
-	if idx < 0 || idx >= len(p.shells) {
+// pollShellSessionByName captures output from a specific shell session by name.
+func (p *Plugin) pollShellSessionByName(tmuxName string) tea.Cmd {
+	// Find the shell by TmuxName
+	var shell *ShellSession
+	for _, s := range p.shells {
+		if s.TmuxName == tmuxName {
+			shell = s
+			break
+		}
+	}
+	if shell == nil || shell.Agent == nil {
 		return nil
 	}
 
-	shell := p.shells[idx]
-	if shell.Agent == nil {
-		return nil
-	}
-
-	sessionName := shell.TmuxName
 	outputBuf := shell.Agent.OutputBuf
 	maxBytes := p.tmuxCaptureMaxBytes
 
 	return func() tea.Msg {
-		output, err := capturePaneDirect(sessionName)
+		output, err := capturePaneDirect(tmuxName)
 		if err != nil {
 			// Check if session is dead (not just a capture error)
-			if !sessionExists(sessionName) {
-				return ShellSessionDeadMsg{Index: idx, TmuxName: sessionName}
+			if !sessionExists(tmuxName) {
+				return ShellSessionDeadMsg{TmuxName: tmuxName}
 			}
-			return ShellOutputMsg{Index: idx, Output: "", Changed: false}
+			return ShellOutputMsg{TmuxName: tmuxName, Output: "", Changed: false}
 		}
 
 		// Trim to max bytes
@@ -355,15 +356,25 @@ func (p *Plugin) pollShellSessionByIndex(idx int) tea.Cmd {
 		// Update buffer and check if content changed
 		changed := outputBuf.Update(output)
 
-		return ShellOutputMsg{Index: idx, Output: output, Changed: changed}
+		return ShellOutputMsg{TmuxName: tmuxName, Output: output, Changed: changed}
 	}
 }
 
-// scheduleShellPollByIndex schedules a poll for a specific shell's output.
-func (p *Plugin) scheduleShellPollByIndex(idx int, delay time.Duration) tea.Cmd {
+// scheduleShellPollByName schedules a poll for a specific shell's output by name.
+func (p *Plugin) scheduleShellPollByName(tmuxName string, delay time.Duration) tea.Cmd {
 	return tea.Tick(delay, func(t time.Time) tea.Msg {
-		return pollShellByIdxMsg{Index: idx}
+		return pollShellByNameMsg{TmuxName: tmuxName}
 	})
+}
+
+// findShellByName returns the shell with the given TmuxName, or nil if not found.
+func (p *Plugin) findShellByName(tmuxName string) *ShellSession {
+	for _, s := range p.shells {
+		if s.TmuxName == tmuxName {
+			return s
+		}
+	}
+	return nil
 }
 
 // getSelectedShell returns the currently selected shell, or nil if none.

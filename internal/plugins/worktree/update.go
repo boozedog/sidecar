@@ -18,8 +18,8 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 	case app.PluginFocusedMsg:
 		if p.focused {
 			// Poll shell or selected agent when plugin gains focus
-			if p.shellSelected && p.selectedShellIdx >= 0 && p.selectedShellIdx < len(p.shells) {
-				return p, p.pollShellSessionByIndex(p.selectedShellIdx)
+			if shell := p.getSelectedShell(); shell != nil {
+				return p, p.pollShellSessionByName(shell.TmuxName)
 			}
 			return p, p.pollSelectedAgentNowIfVisible()
 		}
@@ -307,14 +307,14 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		p.activePane = PaneSidebar
 		p.autoScrollOutput = true
 
-		// Start polling for output
-		cmds = append(cmds, p.scheduleShellPollByIndex(len(p.shells)-1, 500*time.Millisecond))
+		// Start polling for output using stable TmuxName
+		cmds = append(cmds, p.scheduleShellPollByName(shell.TmuxName, 500*time.Millisecond))
 
 	case ShellDetachedMsg:
 		// User detached from shell session - re-enable mouse and resume polling
 		cmds = append(cmds, func() tea.Msg { return tea.EnableMouseAllMotion() })
-		if p.shellSelected && p.selectedShellIdx >= 0 && p.selectedShellIdx < len(p.shells) {
-			cmds = append(cmds, p.scheduleShellPollByIndex(p.selectedShellIdx, 0)) // Immediate poll
+		if shell := p.getSelectedShell(); shell != nil {
+			cmds = append(cmds, p.scheduleShellPollByName(shell.TmuxName, 0)) // Immediate poll
 		}
 
 	case shellAttachAfterCreateMsg:
@@ -323,8 +323,10 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 
 	case ShellKilledMsg:
 		// Shell session killed, remove from list
+		removedIdx := -1
 		for i, shell := range p.shells {
 			if shell.TmuxName == msg.SessionName {
+				removedIdx = i
 				// Clean up Agent resources
 				if shell.Agent != nil {
 					shell.Agent.OutputBuf = nil
@@ -338,8 +340,12 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			}
 		}
 		// Adjust selection if needed
-		if p.shellSelected {
-			if p.selectedShellIdx >= len(p.shells) {
+		if p.shellSelected && removedIdx >= 0 {
+			if removedIdx < p.selectedShellIdx {
+				// Shell before selected one was removed, decrement to stay on same shell
+				p.selectedShellIdx--
+			} else if p.selectedShellIdx >= len(p.shells) {
+				// Selected shell was removed or index is now out of bounds
 				if len(p.shells) > 0 {
 					p.selectedShellIdx = len(p.shells) - 1
 				} else if len(p.worktrees) > 0 {
@@ -391,11 +397,9 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 
 	case ShellOutputMsg:
 		// Update last output time if content changed
-		if msg.Index >= 0 && msg.Index < len(p.shells) {
-			shell := p.shells[msg.Index]
-			if msg.Changed && shell.Agent != nil {
-				shell.Agent.LastOutput = time.Now()
-			}
+		shell := p.findShellByName(msg.TmuxName)
+		if shell != nil && msg.Changed && shell.Agent != nil {
+			shell.Agent.LastOutput = time.Now()
 		}
 		// Schedule next poll with adaptive interval
 		interval := pollIntervalActive
@@ -403,26 +407,27 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			interval = pollIntervalIdle
 		}
 		// Use longer interval if this shell's output isn't visible
-		isVisible := p.shellSelected && p.selectedShellIdx == msg.Index && p.focused && p.previewTab == PreviewTabOutput
+		selectedShell := p.getSelectedShell()
+		isVisible := selectedShell != nil && selectedShell.TmuxName == msg.TmuxName && p.focused && p.previewTab == PreviewTabOutput
 		if !isVisible {
 			background := p.backgroundPollInterval()
 			if background > interval {
 				interval = background
 			}
 		}
-		return p, p.scheduleShellPollByIndex(msg.Index, interval)
+		return p, p.scheduleShellPollByName(msg.TmuxName, interval)
 
-	case pollShellByIdxMsg:
-		// Poll specific shell session for output
-		if msg.Index >= 0 && msg.Index < len(p.shells) {
-			return p, p.pollShellSessionByIndex(msg.Index)
+	case pollShellByNameMsg:
+		// Poll specific shell session for output by name
+		if p.findShellByName(msg.TmuxName) != nil {
+			return p, p.pollShellSessionByName(msg.TmuxName)
 		}
 		return p, nil
 
 	case pollShellMsg:
 		// Legacy: poll selected shell session for output
-		if p.shellSelected && p.selectedShellIdx >= 0 && p.selectedShellIdx < len(p.shells) {
-			return p, p.pollShellSessionByIndex(p.selectedShellIdx)
+		if shell := p.getSelectedShell(); shell != nil {
+			return p, p.pollShellSessionByName(shell.TmuxName)
 		}
 		return p, nil
 
