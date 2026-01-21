@@ -9,7 +9,7 @@ import (
 
 // State holds persistent user preferences.
 type State struct {
-	GitDiffMode      string `json:"gitDiffMode"`               // "unified" or "side-by-side"
+	GitDiffMode      string `json:"gitDiffMode"`                // "unified" or "side-by-side"
 	WorktreeDiffMode string `json:"worktreeDiffMode,omitempty"` // "unified" or "side-by-side"
 	GitGraphEnabled  bool   `json:"gitGraphEnabled,omitempty"`  // Show commit graph in sidebar
 
@@ -27,20 +27,21 @@ type State struct {
 
 // FileBrowserState holds persistent file browser state.
 type FileBrowserState struct {
-	SelectedFile   string   `json:"selectedFile,omitempty"`   // Currently selected file path (relative)
-	TreeScroll     int      `json:"treeScroll,omitempty"`     // Tree pane scroll offset
-	PreviewScroll  int      `json:"previewScroll,omitempty"`  // Preview pane scroll offset
-	ExpandedDirs   []string `json:"expandedDirs,omitempty"`   // List of expanded directory paths
-	ActivePane     string   `json:"activePane,omitempty"`     // "tree" or "preview"
-	PreviewFile    string   `json:"previewFile,omitempty"`    // File being previewed (relative)
-	TreeCursor     int      `json:"treeCursor,omitempty"`     // Tree cursor position
-	ShowIgnored    *bool    `json:"showIgnored,omitempty"`    // Whether to show git-ignored files (nil = default true)
+	SelectedFile  string   `json:"selectedFile,omitempty"`  // Currently selected file path (relative)
+	TreeScroll    int      `json:"treeScroll,omitempty"`    // Tree pane scroll offset
+	PreviewScroll int      `json:"previewScroll,omitempty"` // Preview pane scroll offset
+	ExpandedDirs  []string `json:"expandedDirs,omitempty"`  // List of expanded directory paths
+	ActivePane    string   `json:"activePane,omitempty"`    // "tree" or "preview"
+	PreviewFile   string   `json:"previewFile,omitempty"`   // File being previewed (relative)
+	TreeCursor    int      `json:"treeCursor,omitempty"`    // Tree cursor position
+	ShowIgnored   *bool    `json:"showIgnored,omitempty"`   // Whether to show git-ignored files (nil = default true)
 }
 
 // WorktreeState holds persistent worktree plugin state.
 type WorktreeState struct {
-	WorktreeName  string `json:"worktreeName,omitempty"`  // Name of selected worktree
-	ShellTmuxName string `json:"shellTmuxName,omitempty"` // TmuxName of selected shell (empty = worktree selected)
+	WorktreeName      string            `json:"worktreeName,omitempty"`      // Name of selected worktree
+	ShellTmuxName     string            `json:"shellTmuxName,omitempty"`     // TmuxName of selected shell (empty = worktree selected)
+	ShellDisplayNames map[string]string `json:"shellDisplayNames,omitempty"` // TmuxName -> display name
 }
 
 var (

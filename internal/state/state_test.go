@@ -402,7 +402,7 @@ func TestGetWorktreeState_Default(t *testing.T) {
 
 	current = nil
 	state := GetWorktreeState("/path/to/project")
-	if state.WorktreeName != "" || state.ShellTmuxName != "" {
+	if state.WorktreeName != "" || state.ShellTmuxName != "" || len(state.ShellDisplayNames) > 0 {
 		t.Errorf("GetWorktreeState() with nil current should return empty state")
 	}
 }
@@ -413,7 +413,7 @@ func TestGetWorktreeState_EmptyMap(t *testing.T) {
 
 	current = &State{Worktree: nil}
 	state := GetWorktreeState("/path/to/project")
-	if state.WorktreeName != "" || state.ShellTmuxName != "" {
+	if state.WorktreeName != "" || state.ShellTmuxName != "" || len(state.ShellDisplayNames) > 0 {
 		t.Errorf("GetWorktreeState() with nil map should return empty state")
 	}
 }
@@ -427,6 +427,9 @@ func TestGetWorktreeState_Found(t *testing.T) {
 			"/path/to/project": {
 				WorktreeName:  "feature-branch",
 				ShellTmuxName: "sidecar-sh-project-1",
+				ShellDisplayNames: map[string]string{
+					"sidecar-sh-project-1": "Backend",
+				},
 			},
 		},
 	}
@@ -436,6 +439,9 @@ func TestGetWorktreeState_Found(t *testing.T) {
 	}
 	if state.ShellTmuxName != "sidecar-sh-project-1" {
 		t.Errorf("ShellTmuxName = %q, want sidecar-sh-project-1", state.ShellTmuxName)
+	}
+	if state.ShellDisplayNames["sidecar-sh-project-1"] != "Backend" {
+		t.Errorf("ShellDisplayNames[sidecar-sh-project-1] = %q, want Backend", state.ShellDisplayNames["sidecar-sh-project-1"])
 	}
 }
 
@@ -455,6 +461,9 @@ func TestSetWorktreeState(t *testing.T) {
 	wtState := WorktreeState{
 		WorktreeName:  "my-worktree",
 		ShellTmuxName: "",
+		ShellDisplayNames: map[string]string{
+			"sidecar-sh-project-1": "Backend",
+		},
 	}
 
 	err := SetWorktreeState("/projects/sidecar", wtState)
@@ -467,6 +476,9 @@ func TestSetWorktreeState(t *testing.T) {
 	if stored.WorktreeName != "my-worktree" {
 		t.Errorf("stored WorktreeName = %q, want my-worktree", stored.WorktreeName)
 	}
+	if stored.ShellDisplayNames["sidecar-sh-project-1"] != "Backend" {
+		t.Errorf("stored ShellDisplayNames[sidecar-sh-project-1] = %q, want Backend", stored.ShellDisplayNames["sidecar-sh-project-1"])
+	}
 
 	// Verify saved to disk
 	data, _ := os.ReadFile(stateFile)
@@ -474,6 +486,9 @@ func TestSetWorktreeState(t *testing.T) {
 	_ = json.Unmarshal(data, &loaded)
 	if loaded.Worktree["/projects/sidecar"].WorktreeName != "my-worktree" {
 		t.Errorf("persisted WorktreeName = %q, want my-worktree", loaded.Worktree["/projects/sidecar"].WorktreeName)
+	}
+	if loaded.Worktree["/projects/sidecar"].ShellDisplayNames["sidecar-sh-project-1"] != "Backend" {
+		t.Errorf("persisted ShellDisplayNames[sidecar-sh-project-1] = %q, want Backend", loaded.Worktree["/projects/sidecar"].ShellDisplayNames["sidecar-sh-project-1"])
 	}
 }
 

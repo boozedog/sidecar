@@ -71,9 +71,9 @@ const (
 	regionPromptFilter = "prompt-filter"
 
 	// Sidebar header regions
-	regionCreateWorktreeButton   = "create-worktree-button"
-	regionShellsPlusButton       = "shells-plus-button"
-	regionWorktreesPlusButton    = "worktrees-plus-button"
+	regionCreateWorktreeButton = "create-worktree-button"
+	regionShellsPlusButton     = "shells-plus-button"
+	regionWorktreesPlusButton  = "worktrees-plus-button"
 
 	// Type selector modal regions
 	regionTypeSelectorOption = "type-selector-option"
@@ -224,11 +224,11 @@ type Plugin struct {
 	deleteShellConfirmButtonHover int           // 0=none, 1=delete, 2=cancel (for mouse hover)
 
 	// Rename shell modal state
-	renameShellSession     *ShellSession    // Shell being renamed
-	renameShellInput       textinput.Model  // Text input for new name
-	renameShellFocus       int              // 0=input, 1=confirm, 2=cancel
-	renameShellButtonHover int              // 0=none, 1=confirm, 2=cancel (for mouse hover)
-	renameShellError       string           // Validation error message
+	renameShellSession     *ShellSession   // Shell being renamed
+	renameShellInput       textinput.Model // Text input for new name
+	renameShellFocus       int             // 0=input, 1=confirm, 2=cancel
+	renameShellButtonHover int             // 0=none, 1=confirm, 2=cancel (for mouse hover)
+	renameShellError       string          // Validation error message
 
 	// Initial reconnection tracking
 	initialReconnectDone bool
@@ -237,9 +237,9 @@ type Plugin struct {
 	stateRestored bool
 
 	// Sidebar header hover state
-	hoverNewButton            bool
-	hoverShellsPlusButton     bool
-	hoverWorktreesPlusButton  bool
+	hoverNewButton           bool
+	hoverShellsPlusButton    bool
+	hoverWorktreesPlusButton bool
 
 	// Multiple shell sessions (not tied to git worktrees)
 	shells           []*ShellSession // All shell sessions for this project
@@ -434,7 +434,9 @@ func (p *Plugin) saveSelectionState() {
 		return
 	}
 
-	wtState := state.WorktreeState{}
+	wtState := state.GetWorktreeState(p.ctx.WorkDir)
+	wtState.WorktreeName = ""
+	wtState.ShellTmuxName = ""
 
 	if p.shellSelected {
 		// Shell is selected - save shell TmuxName
@@ -448,8 +450,23 @@ func (p *Plugin) saveSelectionState() {
 		}
 	}
 
-	// Only save if we have something selected
-	if wtState.WorktreeName != "" || wtState.ShellTmuxName != "" {
+	if len(p.shells) > 0 {
+		shellNames := make(map[string]string, len(p.shells))
+		for _, shell := range p.shells {
+			if shell == nil || shell.TmuxName == "" || shell.Name == "" {
+				continue
+			}
+			shellNames[shell.TmuxName] = shell.Name
+		}
+		if len(shellNames) > 0 {
+			wtState.ShellDisplayNames = shellNames
+		} else {
+			wtState.ShellDisplayNames = nil
+		}
+	}
+
+	// Only save if we have something selected or display names
+	if wtState.WorktreeName != "" || wtState.ShellTmuxName != "" || len(wtState.ShellDisplayNames) > 0 {
 		_ = state.SetWorktreeState(p.ctx.WorkDir, wtState)
 	}
 }
