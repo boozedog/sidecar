@@ -10,7 +10,7 @@ func (p *Plugin) Commands() []plugin.Command {
 	switch p.viewMode {
 	case ViewModeInteractive:
 		return []plugin.Command{
-			{ID: "exit-interactive", Name: "Exit", Description: "Exit interactive mode (Ctrl+\\)", Context: "worktree-interactive", Priority: 1},
+			{ID: "exit-interactive", Name: "Exit", Description: "Exit interactive mode (" + p.getInteractiveExitKey() + ")", Context: "worktree-interactive", Priority: 1},
 		}
 	case ViewModeCreate:
 		return []plugin.Command{

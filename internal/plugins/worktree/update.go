@@ -265,6 +265,12 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			wt.Agent.WaitingFor = msg.WaitingFor
 			wt.Status = msg.Status
 		}
+		// Update bracketed paste mode if in interactive mode for this worktree (td-79ab6163)
+		if p.viewMode == ViewModeInteractive && !p.shellSelected {
+			if wt := p.selectedWorktree(); wt != nil && wt.Name == msg.WorktreeName {
+				p.updateBracketedPasteMode(msg.Output)
+			}
+		}
 		// Schedule next poll with adaptive interval based on status
 		interval := pollIntervalActive
 		switch msg.Status {
@@ -423,6 +429,12 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		shell := p.findShellByName(msg.TmuxName)
 		if shell != nil && msg.Changed && shell.Agent != nil {
 			shell.Agent.LastOutput = time.Now()
+		}
+		// Update bracketed paste mode if in interactive mode for this shell (td-79ab6163)
+		if p.viewMode == ViewModeInteractive && p.shellSelected {
+			if selectedShell := p.getSelectedShell(); selectedShell != nil && selectedShell.TmuxName == msg.TmuxName {
+				p.updateBracketedPasteMode(msg.Output)
+			}
 		}
 		// Schedule next poll with adaptive interval
 		interval := pollIntervalActive
@@ -782,6 +794,12 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 		}
+
+	case InteractiveSessionDeadMsg:
+		// Session ended externally - show notification (td-a1c8456f)
+		p.exitInteractiveMode()
+		p.toastMessage = "Session ended"
+		p.toastTime = time.Now()
 
 	case tea.KeyMsg:
 		cmd := p.handleKeyPress(msg)

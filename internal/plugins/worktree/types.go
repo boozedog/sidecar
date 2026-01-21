@@ -236,6 +236,10 @@ type InteractiveState struct {
 	// CursorRow and CursorCol track the cursor position for overlay rendering.
 	CursorRow int
 	CursorCol int
+
+	// BracketedPasteEnabled tracks whether the target app has enabled
+	// bracketed paste mode (ESC[?2004h). Updated from captured output.
+	BracketedPasteEnabled bool
 }
 
 // AgentStatus represents the current status of an agent.

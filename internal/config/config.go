@@ -63,6 +63,9 @@ type WorktreePluginConfig struct {
 	DirPrefix bool `json:"dirPrefix"`
 	// TmuxCaptureMaxBytes caps tmux pane capture size for the preview pane. Default: 2MB.
 	TmuxCaptureMaxBytes int `json:"tmuxCaptureMaxBytes"`
+	// InteractiveExitKey is the keybinding to exit interactive mode. Default: "ctrl+\".
+	// Examples: "ctrl+]", "ctrl+\\", "ctrl+x"
+	InteractiveExitKey string `json:"interactiveExitKey,omitempty"`
 }
 
 // KeymapConfig holds key binding overrides.

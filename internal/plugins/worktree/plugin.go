@@ -121,6 +121,8 @@ type Plugin struct {
 	sidebarWidth       int       // Persisted sidebar width
 	sidebarVisible     bool      // Whether sidebar is visible (toggled with \)
 	flashPreviewTime   time.Time // When preview flash was triggered
+	toastMessage       string    // Temporary toast message to display
+	toastTime          time.Time // When toast was triggered
 
 	// Kanban view state
 	kanbanCol int // Current column index (0=Active, 1=Waiting, 2=Done, 3=Paused)

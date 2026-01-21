@@ -223,6 +223,16 @@ func (p *Plugin) renderSidebarContent(width, height int) string {
 		}
 	}
 
+	// Show toast message if active (td-a1c8456f: session disconnect notification)
+	if p.toastMessage != "" && !p.toastTime.IsZero() && time.Since(p.toastTime) < flashDuration {
+		toastStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true) // Orange bold
+		msg := p.toastMessage
+		if len(msg) > width-4 {
+			msg = msg[:width-7] + "..."
+		}
+		lines = append(lines, toastStyle.Render("⚠ "+msg))
+	}
+
 	lines = append(lines, "") // Empty line after header/warnings
 
 	// Track Y position for hit regions (add 3 for border + header + empty line)

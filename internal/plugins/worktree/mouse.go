@@ -570,6 +570,21 @@ func (p *Plugin) handleMouseScroll(action mouse.MouseAction) tea.Cmd {
 		delta = 1
 	}
 
+	// In interactive mode, forward scroll events to tmux (td-be4d89b4)
+	if p.viewMode == ViewModeInteractive {
+		regionID := ""
+		if action.Region != nil {
+			regionID = action.Region.ID
+		}
+		// Only forward if scrolling in preview pane
+		if regionID == regionPreviewPane {
+			return p.forwardScrollToTmux(delta)
+		}
+		// Scrolling outside preview pane in interactive mode exits interactive mode
+		p.exitInteractiveMode()
+		// Fall through to normal handling
+	}
+
 	// Determine which pane based on region or position
 	regionID := ""
 	if action.Region != nil {

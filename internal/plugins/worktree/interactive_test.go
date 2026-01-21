@@ -1,10 +1,13 @@
 package worktree
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/marcus/sidecar/internal/config"
+	"github.com/marcus/sidecar/internal/plugin"
 )
 
 // TestMapKeyToTmux_Printable tests regular character input
@@ -680,6 +683,41 @@ func TestClickOutsidePreviewExitsInteractiveMode(t *testing.T) {
 	}
 }
 
+// ============================================================================
+// Session Disconnect Tests (td-a1c8456f)
+// ============================================================================
+
+// TestIsSessionDeadError_TrueForPaneNotFound tests detection of "can't find pane" error
+func TestIsSessionDeadError_TrueForPaneNotFound(t *testing.T) {
+	err := fmt.Errorf("can't find pane: %%5")
+	if !isSessionDeadError(err) {
+		t.Error("expected true for 'can't find pane' error")
+	}
+}
+
+// TestIsSessionDeadError_TrueForNoSuchSession tests detection of "no such session" error
+func TestIsSessionDeadError_TrueForNoSuchSession(t *testing.T) {
+	err := fmt.Errorf("no such session: test-session")
+	if !isSessionDeadError(err) {
+		t.Error("expected true for 'no such session' error")
+	}
+}
+
+// TestIsSessionDeadError_FalseForOtherErrors tests that other errors return false
+func TestIsSessionDeadError_FalseForOtherErrors(t *testing.T) {
+	err := fmt.Errorf("some random error")
+	if isSessionDeadError(err) {
+		t.Error("expected false for unrelated error")
+	}
+}
+
+// TestIsSessionDeadError_FalseForNil tests nil error handling
+func TestIsSessionDeadError_FalseForNil(t *testing.T) {
+	if isSessionDeadError(nil) {
+		t.Error("expected false for nil error")
+	}
+}
+
 // TestViewModeInteractiveAllowsDoubleClick tests that double-click is handled in interactive mode
 func TestViewModeInteractiveAllowsDoubleClick(t *testing.T) {
 	// Verify that ViewModeInteractive is included in double-click handling
@@ -711,5 +749,172 @@ func TestViewModeInteractiveAllowsDoubleClick(t *testing.T) {
 	}
 	if !found {
 		t.Error("ViewModeInteractive not found in modes slice")
+	}
+}
+
+// TestGetInteractiveExitKey_Default tests default exit key when no config is set
+func TestGetInteractiveExitKey_Default(t *testing.T) {
+	p := &Plugin{ctx: nil}
+	key := p.getInteractiveExitKey()
+	if key != defaultExitKey {
+		t.Errorf("expected default key '%s', got '%s'", defaultExitKey, key)
+	}
+}
+
+// TestGetInteractiveExitKey_NilConfig tests default exit key with nil config
+func TestGetInteractiveExitKey_NilConfig(t *testing.T) {
+	p := &Plugin{ctx: &plugin.Context{}}
+	key := p.getInteractiveExitKey()
+	if key != defaultExitKey {
+		t.Errorf("expected default key '%s' with nil config, got '%s'", defaultExitKey, key)
+	}
+}
+
+// TestGetInteractiveExitKey_EmptyConfigKey tests default exit key when config key is empty
+func TestGetInteractiveExitKey_EmptyConfigKey(t *testing.T) {
+	cfg := config.Default()
+	cfg.Plugins.Worktree.InteractiveExitKey = ""
+	p := &Plugin{ctx: &plugin.Context{Config: cfg}}
+	key := p.getInteractiveExitKey()
+	if key != defaultExitKey {
+		t.Errorf("expected default key '%s' with empty config, got '%s'", defaultExitKey, key)
+	}
+}
+
+// TestGetInteractiveExitKey_CustomKey tests custom exit key from config
+func TestGetInteractiveExitKey_CustomKey(t *testing.T) {
+	customKey := "ctrl+]"
+	cfg := config.Default()
+	cfg.Plugins.Worktree.InteractiveExitKey = customKey
+	p := &Plugin{ctx: &plugin.Context{Config: cfg}}
+	key := p.getInteractiveExitKey()
+	if key != customKey {
+		t.Errorf("expected custom key '%s', got '%s'", customKey, key)
+	}
+}
+
+// TestGetInteractiveExitKey_VariousKeys tests various custom exit key configurations
+func TestGetInteractiveExitKey_VariousKeys(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      string
+		expected string
+	}{
+		{"ctrl+]", "ctrl+]", "ctrl+]"},
+		{"ctrl+x", "ctrl+x", "ctrl+x"},
+		{"ctrl+`", "ctrl+`", "ctrl+`"},
+		{"escape", "escape", "escape"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := config.Default()
+			cfg.Plugins.Worktree.InteractiveExitKey = tt.key
+			p := &Plugin{ctx: &plugin.Context{Config: cfg}}
+			key := p.getInteractiveExitKey()
+			if key != tt.expected {
+				t.Errorf("expected '%s', got '%s'", tt.expected, key)
+			}
+		})
+	}
+}
+
+// TestForwardScrollToTmux_NilState tests that scroll forwarding handles nil state
+func TestForwardScrollToTmux_NilState(t *testing.T) {
+	p := &Plugin{interactiveState: nil}
+	cmd := p.forwardScrollToTmux(-1)
+	if cmd != nil {
+		t.Error("expected nil cmd when interactiveState is nil")
+	}
+}
+
+// TestForwardScrollToTmux_InactiveState tests that scroll forwarding handles inactive state
+func TestForwardScrollToTmux_InactiveState(t *testing.T) {
+	p := &Plugin{interactiveState: &InteractiveState{Active: false}}
+	cmd := p.forwardScrollToTmux(1)
+	if cmd != nil {
+		t.Error("expected nil cmd when interactive mode is inactive")
+	}
+}
+
+// TestForwardClickToTmux_Returns nil tests that click forwarding returns nil (placeholder)
+func TestForwardClickToTmux_ReturnsNil(t *testing.T) {
+	p := &Plugin{}
+	cmd := p.forwardClickToTmux(10, 20)
+	if cmd != nil {
+		t.Error("expected nil cmd from placeholder click forwarder")
+	}
+}
+
+// TestDetectBracketedPasteMode_EnabledOnly tests detection when only enable sequence is present
+func TestDetectBracketedPasteMode_EnabledOnly(t *testing.T) {
+	output := "some output\x1b[?2004hmore output"
+	if !detectBracketedPasteMode(output) {
+		t.Error("expected bracketed paste to be detected as enabled")
+	}
+}
+
+// TestDetectBracketedPasteMode_DisabledOnly tests detection when only disable sequence is present
+func TestDetectBracketedPasteMode_DisabledOnly(t *testing.T) {
+	output := "some output\x1b[?2004lmore output"
+	if detectBracketedPasteMode(output) {
+		t.Error("expected bracketed paste to be detected as disabled")
+	}
+}
+
+// TestDetectBracketedPasteMode_EnabledThenDisabled tests detection when enable followed by disable
+func TestDetectBracketedPasteMode_EnabledThenDisabled(t *testing.T) {
+	output := "some output\x1b[?2004henabled\x1b[?2004ldisabled"
+	if detectBracketedPasteMode(output) {
+		t.Error("expected bracketed paste to be disabled when disable comes after enable")
+	}
+}
+
+// TestDetectBracketedPasteMode_DisabledThenEnabled tests detection when disable followed by enable
+func TestDetectBracketedPasteMode_DisabledThenEnabled(t *testing.T) {
+	output := "some output\x1b[?2004ldisabled\x1b[?2004henabled"
+	if !detectBracketedPasteMode(output) {
+		t.Error("expected bracketed paste to be enabled when enable comes after disable")
+	}
+}
+
+// TestDetectBracketedPasteMode_NoSequences tests detection with no sequences
+func TestDetectBracketedPasteMode_NoSequences(t *testing.T) {
+	output := "some normal output without any sequences"
+	if detectBracketedPasteMode(output) {
+		t.Error("expected bracketed paste to be disabled when no sequences present")
+	}
+}
+
+// TestDetectBracketedPasteMode_EmptyOutput tests detection with empty output
+func TestDetectBracketedPasteMode_EmptyOutput(t *testing.T) {
+	if detectBracketedPasteMode("") {
+		t.Error("expected bracketed paste to be disabled for empty output")
+	}
+}
+
+// TestUpdateBracketedPasteMode_NilState tests that update handles nil state
+func TestUpdateBracketedPasteMode_NilState(t *testing.T) {
+	p := &Plugin{interactiveState: nil}
+	// Should not panic
+	p.updateBracketedPasteMode("some output\x1b[?2004h")
+}
+
+// TestUpdateBracketedPasteMode_InactiveState tests that update handles inactive state
+func TestUpdateBracketedPasteMode_InactiveState(t *testing.T) {
+	p := &Plugin{interactiveState: &InteractiveState{Active: false}}
+	p.updateBracketedPasteMode("some output\x1b[?2004h")
+	// Should not update when inactive
+	if p.interactiveState.BracketedPasteEnabled {
+		t.Error("expected BracketedPasteEnabled to remain false when inactive")
+	}
+}
+
+// TestUpdateBracketedPasteMode_ActiveState tests that update works for active state
+func TestUpdateBracketedPasteMode_ActiveState(t *testing.T) {
+	p := &Plugin{interactiveState: &InteractiveState{Active: true}}
+	p.updateBracketedPasteMode("some output\x1b[?2004h")
+	if !p.interactiveState.BracketedPasteEnabled {
+		t.Error("expected BracketedPasteEnabled to be true after update with enable sequence")
 	}
 }
