@@ -225,10 +225,31 @@ func (p *Plugin) renderOutputContent(width, height int) string {
 		return hint + "\n" + dimText("No output yet")
 	}
 
+	interactive := p.viewMode == ViewModeInteractive && p.interactiveState != nil && p.interactiveState.Active
+	var cursorRow, cursorCol, paneHeight, paneWidth int
+	var cursorVisible bool
+	if interactive {
+		var err error
+		cursorRow, cursorCol, paneHeight, paneWidth, cursorVisible, err = p.getCursorPosition()
+		if err != nil {
+			cursorVisible = false
+		}
+	}
+
+	visibleHeight := height
+	if interactive && paneHeight > 0 && paneHeight < visibleHeight {
+		visibleHeight = paneHeight
+	}
+
+	displayWidth := width
+	if interactive && paneWidth > 0 && paneWidth < displayWidth {
+		displayWidth = paneWidth
+	}
+
 	var start, end int
 	if p.autoScrollOutput {
-		// Auto-scroll: show newest content (last height lines)
-		start = lineCount - height
+		// Auto-scroll: show newest content (last visibleHeight lines)
+		start = lineCount - visibleHeight
 		if start < 0 {
 			start = 0
 		}
@@ -236,11 +257,11 @@ func (p *Plugin) renderOutputContent(width, height int) string {
 	} else {
 		// Manual scroll: previewOffset is lines from bottom
 		// offset=0 means bottom, offset=N means N lines up from bottom
-		start = lineCount - height - p.previewOffset
+		start = lineCount - visibleHeight - p.previewOffset
 		if start < 0 {
 			start = 0
 		}
-		end = start + height
+		end = start + visibleHeight
 		if end > lineCount {
 			end = lineCount
 		}
@@ -260,30 +281,38 @@ func (p *Plugin) renderOutputContent(width, height int) string {
 		displayLine := expandTabs(line, tabStopWidth)
 		// Apply horizontal offset and truncate to width in a single cached operation
 		// This prevents allocation churn from repeated parsing with varying offsets
-		displayLine = p.truncateCache.TruncateLeftRight(displayLine, p.previewHorizOffset, width)
+		displayLine = p.truncateCache.TruncateLeftRight(displayLine, p.previewHorizOffset, displayWidth)
 		displayLines = append(displayLines, displayLine)
+	}
+
+	if interactive && paneHeight > 0 {
+		targetHeight := visibleHeight
+		if targetHeight > height {
+			targetHeight = height
+		}
+		if targetHeight > 0 && len(displayLines) < targetHeight {
+			displayLines = padLinesToHeight(displayLines, targetHeight)
+		}
 	}
 
 	content := strings.Join(displayLines, "\n")
 
 	// Apply cursor overlay in interactive mode
-	if p.viewMode == ViewModeInteractive && p.interactiveState != nil && p.interactiveState.Active {
-		row, col, paneHeight, visible, err := p.getCursorPosition()
-		if err == nil && visible {
-			// cursor_y is relative to tmux pane (0 to paneHeight-1).
-			// Our display shows len(displayLines) lines.
-			// If paneHeight > displayLines, we need to offset the cursor.
-			displayHeight := len(displayLines)
-			relativeRow := row + 1 // +1 adjustment needed for correct positioning
-			if paneHeight > displayHeight {
-				relativeRow = (row + 1) - (paneHeight - displayHeight)
-			}
-			relativeCol := col - p.previewHorizOffset
+	if interactive && cursorVisible {
+		// cursor_y is relative to tmux pane (0 to paneHeight-1).
+		// Our display shows len(displayLines) lines.
+		displayHeight := len(displayLines)
+		relativeRow := cursorRow
+		if paneHeight > displayHeight {
+			relativeRow = cursorRow - (paneHeight - displayHeight)
+		} else if paneHeight > 0 && paneHeight < displayHeight {
+			relativeRow = cursorRow + (displayHeight - paneHeight)
+		}
+		relativeCol := cursorCol - p.previewHorizOffset
 
-			// Only render cursor if within visible area
-			if relativeRow >= 0 && relativeRow < displayHeight && relativeCol >= 0 && relativeCol < width {
-				content = renderWithCursor(content, relativeRow, relativeCol, visible)
-			}
+		// Only render cursor if within visible area
+		if relativeRow >= 0 && relativeRow < displayHeight && relativeCol >= 0 && relativeCol < displayWidth {
+			content = renderWithCursor(content, relativeRow, relativeCol, cursorVisible)
 		}
 	}
 
@@ -355,21 +384,42 @@ func (p *Plugin) renderShellOutput(width, height int) string {
 		return hint + "\n" + dimText("No output yet")
 	}
 
+	interactive := p.viewMode == ViewModeInteractive && p.interactiveState != nil && p.interactiveState.Active
+	var cursorRow, cursorCol, paneHeight, paneWidth int
+	var cursorVisible bool
+	if interactive {
+		var err error
+		cursorRow, cursorCol, paneHeight, paneWidth, cursorVisible, err = p.getCursorPosition()
+		if err != nil {
+			cursorVisible = false
+		}
+	}
+
+	visibleHeight := height
+	if interactive && paneHeight > 0 && paneHeight < visibleHeight {
+		visibleHeight = paneHeight
+	}
+
+	displayWidth := width
+	if interactive && paneWidth > 0 && paneWidth < displayWidth {
+		displayWidth = paneWidth
+	}
+
 	var start, end int
 	if p.autoScrollOutput {
-		// Auto-scroll: show newest content (last height lines)
-		start = lineCount - height
+		// Auto-scroll: show newest content (last visibleHeight lines)
+		start = lineCount - visibleHeight
 		if start < 0 {
 			start = 0
 		}
 		end = lineCount
 	} else {
 		// Manual scroll: previewOffset is lines from bottom
-		start = lineCount - height - p.previewOffset
+		start = lineCount - visibleHeight - p.previewOffset
 		if start < 0 {
 			start = 0
 		}
-		end = start + height
+		end = start + visibleHeight
 		if end > lineCount {
 			end = lineCount
 		}
@@ -385,34 +435,52 @@ func (p *Plugin) renderShellOutput(width, height int) string {
 	displayLines := make([]string, 0, len(lines))
 	for _, line := range lines {
 		displayLine := expandTabs(line, tabStopWidth)
-		displayLine = p.truncateCache.TruncateLeftRight(displayLine, p.previewHorizOffset, width)
+		displayLine = p.truncateCache.TruncateLeftRight(displayLine, p.previewHorizOffset, displayWidth)
 		displayLines = append(displayLines, displayLine)
+	}
+
+	if interactive && paneHeight > 0 {
+		targetHeight := visibleHeight
+		if targetHeight > height {
+			targetHeight = height
+		}
+		if targetHeight > 0 && len(displayLines) < targetHeight {
+			displayLines = padLinesToHeight(displayLines, targetHeight)
+		}
 	}
 
 	content := strings.Join(displayLines, "\n")
 
 	// Apply cursor overlay in interactive mode
-	if p.viewMode == ViewModeInteractive && p.interactiveState != nil && p.interactiveState.Active {
-		row, col, paneHeight, visible, err := p.getCursorPosition()
-		if err == nil && visible {
-			// cursor_y is relative to tmux pane (0 to paneHeight-1).
-			// Our display shows len(displayLines) lines.
-			// If paneHeight > displayLines, we need to offset the cursor.
-			displayHeight := len(displayLines)
-			relativeRow := row + 1 // +1 adjustment needed for correct positioning
-			if paneHeight > displayHeight {
-				relativeRow = (row + 1) - (paneHeight - displayHeight)
-			}
-			relativeCol := col - p.previewHorizOffset
+	if interactive && cursorVisible {
+		// cursor_y is relative to tmux pane (0 to paneHeight-1).
+		// Our display shows len(displayLines) lines.
+		displayHeight := len(displayLines)
+		relativeRow := cursorRow
+		if paneHeight > displayHeight {
+			relativeRow = cursorRow - (paneHeight - displayHeight)
+		} else if paneHeight > 0 && paneHeight < displayHeight {
+			relativeRow = cursorRow + (displayHeight - paneHeight)
+		}
+		relativeCol := cursorCol - p.previewHorizOffset
 
-			// Only render cursor if within visible area
-			if relativeRow >= 0 && relativeRow < displayHeight && relativeCol >= 0 && relativeCol < width {
-				content = renderWithCursor(content, relativeRow, relativeCol, visible)
-			}
+		// Only render cursor if within visible area
+		if relativeRow >= 0 && relativeRow < displayHeight && relativeCol >= 0 && relativeCol < displayWidth {
+			content = renderWithCursor(content, relativeRow, relativeCol, cursorVisible)
 		}
 	}
 
 	return hint + "\n" + content
+}
+
+func padLinesToHeight(lines []string, target int) []string {
+	if target <= 0 || len(lines) >= target {
+		return lines
+	}
+	for len(lines) < target {
+		lines = append(lines, "")
+	}
+	return lines
 }
 
 // renderShellPrimer renders a helpful guide when no shell session exists.

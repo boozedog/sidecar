@@ -11,6 +11,7 @@ import (
 // mouseEscapeRegex matches SGR mouse escape sequences like \x1b[<35;192;47M or \x1b[<0;50;20m
 // These can appear in captured tmux output when applications have mouse mode enabled.
 var mouseEscapeRegex = regexp.MustCompile(`\x1b\[<\d+;\d+;\d+[Mm]`)
+var terminalModeRegex = regexp.MustCompile(`\x1b\[\?(?:1000|1002|1003|1005|1006|1015|2004)[hl]`)
 
 // ViewMode represents the current view state.
 type ViewMode int
@@ -257,9 +258,16 @@ type InteractiveState struct {
 	// Used to adjust cursor_y when display height differs from pane height.
 	PaneHeight int
 
+	// PaneWidth tracks the tmux pane width for display width alignment.
+	PaneWidth int
+
 	// BracketedPasteEnabled tracks whether the target app has enabled
 	// bracketed paste mode (ESC[?2004h). Updated from captured output.
 	BracketedPasteEnabled bool
+
+	// MouseReportingEnabled tracks whether the target app has enabled
+	// mouse reporting (1000/1002/1003/1006/1015). Updated from captured output.
+	MouseReportingEnabled bool
 
 	// EscapeTimerPending tracks if an escape timer is already in flight.
 	// Prevents duplicate timers from accumulating (td-83dc22).
@@ -333,6 +341,9 @@ func (b *OutputBuffer) Update(content string) bool {
 	if strings.Contains(content, "\x1b[<") {
 		content = mouseEscapeRegex.ReplaceAllString(content, "")
 	}
+	if strings.Contains(content, "\x1b[?") {
+		content = terminalModeRegex.ReplaceAllString(content, "")
+	}
 
 	// Store cleaned content hash for future comparisons
 	cleanHash := maphash.String(b.hashSeed, content)
@@ -362,6 +373,9 @@ func (b *OutputBuffer) Write(content string) {
 	// Fast path: only run regex if mouse sequences are likely present (td-53e8a023)
 	if strings.Contains(content, "\x1b[<") {
 		content = mouseEscapeRegex.ReplaceAllString(content, "")
+	}
+	if strings.Contains(content, "\x1b[?") {
+		content = terminalModeRegex.ReplaceAllString(content, "")
 	}
 
 	// Replace instead of append to avoid duplication

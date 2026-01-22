@@ -86,6 +86,7 @@ type (
 		CursorVisible bool
 		HasCursor     bool // True if cursor position was captured
 		PaneHeight    int  // Tmux pane height for cursor offset calculation
+		PaneWidth     int  // Tmux pane width for display alignment
 	}
 
 	// RenameShellDoneMsg signals shell rename operation completed
@@ -431,10 +432,10 @@ func (p *Plugin) pollShellSessionByName(tmuxName string) tea.Cmd {
 		}
 
 		// Capture cursor position atomically with output when in interactive mode.
-		var cursorRow, cursorCol, paneHeight int
+		var cursorRow, cursorCol, paneHeight, paneWidth int
 		var cursorVisible, hasCursor bool
 		if interactiveCapture && cursorTarget != "" {
-			cursorRow, cursorCol, paneHeight, cursorVisible, hasCursor = queryCursorPositionSync(cursorTarget)
+			cursorRow, cursorCol, paneHeight, paneWidth, cursorVisible, hasCursor = queryCursorPositionSync(cursorTarget)
 		}
 
 		// Trim to max bytes
@@ -452,6 +453,7 @@ func (p *Plugin) pollShellSessionByName(tmuxName string) tea.Cmd {
 			CursorVisible: cursorVisible,
 			HasCursor:     hasCursor,
 			PaneHeight:    paneHeight,
+			PaneWidth:     paneWidth,
 		}
 	}
 }
