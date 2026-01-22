@@ -2,6 +2,13 @@
 
 All notable changes to sidecar are documented here.
 
+## [v0.39.0] - 2026-01-22
+
+### Performance
+- **Interactive Mode**: Three-state visibility polling (visible+focused, visible+unfocused, not visible)
+- **Interactive Mode**: Fixed duplicate poll chain bug causing 200% CPU usage
+- **Interactive Mode**: Correct generation map usage for shell vs worktree polling
+
 ## [v0.38.0] - 2026-01-22
 
 ### Features
