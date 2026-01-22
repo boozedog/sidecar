@@ -281,9 +281,11 @@ type reconnectedAgentsMsg struct {
 func (a *Agent) RecordPollTime() {
 	now := time.Now()
 	a.RecentPollTimes = append(a.RecentPollTimes, now)
-	// Keep only the last N poll times
+	// Keep only the last N poll times (use copy to avoid memory leak from reslicing, td-e04a5c)
 	if len(a.RecentPollTimes) > runawayPollCount {
-		a.RecentPollTimes = a.RecentPollTimes[len(a.RecentPollTimes)-runawayPollCount:]
+		newSlice := make([]time.Time, runawayPollCount)
+		copy(newSlice, a.RecentPollTimes[len(a.RecentPollTimes)-runawayPollCount:])
+		a.RecentPollTimes = newSlice
 	}
 	// Reset unchanged count since content changed
 	a.UnchangedPollCount = 0

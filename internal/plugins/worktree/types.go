@@ -293,12 +293,13 @@ type CommitStatusInfo struct {
 // OutputBuffer is a thread-safe bounded buffer for agent output.
 // Uses SHA256 hashing to detect content changes and avoid duplicate processing.
 type OutputBuffer struct {
-	mu       sync.Mutex
-	lines    []string
-	cap      int
-	lastHash uint64       // Hash of last content for change detection
-	lastLen  int          // Length of last content (collision guard)
-	hashSeed maphash.Seed // Seed for stable hashing
+	mu          sync.Mutex
+	lines       []string
+	cap         int
+	lastHash    uint64       // Hash of cleaned content (after mouse sequence stripping)
+	lastRawHash uint64       // Hash of raw content before processing (td-15cc29)
+	lastLen     int          // Length of last content (collision guard)
+	hashSeed    maphash.Seed // Seed for stable hashing
 }
 
 // NewOutputBuffer creates a new output buffer with the given capacity.
@@ -316,21 +317,23 @@ func (b *OutputBuffer) Update(content string) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	// Strip mouse escape sequences that can leak into captured tmux output
-	// when applications have mouse mode enabled.
+	// Check hash BEFORE expensive regex processing (td-15cc29)
+	// Compute hash of raw content first
+	rawHash := maphash.String(b.hashSeed, content)
+	if rawHash == b.lastRawHash && len(content) == b.lastLen {
+		return false // Content unchanged - skip ALL processing
+	}
+
+	// Content changed - now strip mouse escape sequences
 	// Fast path: only run regex if mouse sequences are likely present (td-53e8a023)
 	if strings.Contains(content, "\x1b[<") {
 		content = mouseEscapeRegex.ReplaceAllString(content, "")
 	}
 
-	// Compute hash of new content
-	hash := maphash.String(b.hashSeed, content)
-	if hash == b.lastHash && len(content) == b.lastLen {
-		return false // Content unchanged
-	}
-
-	// Content changed - update hash and replace lines
-	b.lastHash = hash
+	// Store cleaned content hash for future comparisons
+	cleanHash := maphash.String(b.hashSeed, content)
+	b.lastHash = cleanHash
+	b.lastRawHash = rawHash
 	b.lastLen = len(content)
 	// Trim trailing newline before split to avoid spurious empty element.
 	// tmux capture-pane output ends with \n, which would create an extra empty

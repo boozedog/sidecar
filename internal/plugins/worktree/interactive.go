@@ -27,6 +27,10 @@ const (
 	// pollingDecaySlow is the polling interval after extended inactivity.
 	pollingDecaySlow = 500 * time.Millisecond
 
+	// keystrokeDebounce delays polling after keystrokes to batch rapid typing (td-8a0978).
+	// Allows typing bursts to coalesce into fewer polls, reducing CPU usage.
+	keystrokeDebounce = 20 * time.Millisecond
+
 	// inactivityMediumThreshold triggers medium polling.
 	inactivityMediumThreshold = 2 * time.Second
 
@@ -580,8 +584,8 @@ func (p *Plugin) handleInteractiveKeys(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 
-	// Schedule fast poll to show updated output quickly
-	cmds = append(cmds, p.pollInteractivePane())
+	// Schedule debounced poll to batch rapid keystrokes (td-8a0978)
+	cmds = append(cmds, p.scheduleDebouncedPoll(keystrokeDebounce))
 	return tea.Batch(cmds...)
 }
 
@@ -701,6 +705,28 @@ func (p *Plugin) pollInteractivePane() tea.Cmd {
 	if wt := p.selectedWorktree(); wt != nil {
 		return p.scheduleAgentPoll(wt.Name, interval)
 	}
+	return nil
+}
+
+// scheduleDebouncedPoll schedules a poll with debounce delay to batch rapid keystrokes (td-8a0978).
+// Uses generation tracking to cancel stale timers, reducing subprocess spam during typing.
+func (p *Plugin) scheduleDebouncedPoll(delay time.Duration) tea.Cmd {
+	if p.interactiveState == nil || !p.interactiveState.Active {
+		return nil
+	}
+
+	// Use shell or worktree polling mechanism based on current selection
+	if p.shellSelected && p.selectedShellIdx >= 0 && p.selectedShellIdx < len(p.shells) {
+		shellName := p.shells[p.selectedShellIdx].TmuxName
+		if shellName != "" {
+			p.pollGeneration[shellName]++
+			return p.scheduleShellPollByName(shellName, delay)
+		}
+	} else if wt := p.selectedWorktree(); wt != nil {
+		p.pollGeneration[wt.Name]++
+		return p.scheduleAgentPoll(wt.Name, delay)
+	}
+
 	return nil
 }
 
