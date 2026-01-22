@@ -213,6 +213,10 @@ func (p *Plugin) handleMouseClick(action mouse.MouseAction) tea.Cmd {
 		p.exitInteractiveMode()
 		// Continue to handle the click normally
 	}
+	if p.viewMode == ViewModeInteractive && action.Region.ID == regionPreviewPane {
+		p.activePane = PanePreview
+		return tea.Batch(p.forwardClickToTmux(action.X, action.Y), p.pollInteractivePaneImmediate())
+	}
 
 	switch action.Region.ID {
 	case regionCreateWorktreeButton:
@@ -616,7 +620,7 @@ func (p *Plugin) handleMouseScroll(action mouse.MouseAction) tea.Cmd {
 		}
 		// Only forward if scrolling in preview pane
 		if regionID == regionPreviewPane {
-			return p.forwardScrollToTmux(delta)
+			return p.forwardScrollToTmux(delta, action.X, action.Y)
 		}
 		// Scrolling outside preview pane in interactive mode exits interactive mode
 		p.exitInteractiveMode()

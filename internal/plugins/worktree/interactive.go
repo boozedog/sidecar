@@ -1,6 +1,7 @@
 package worktree
 
 import (
+	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -91,6 +92,35 @@ func isSessionDeadError(err error) bool {
 // For modified keys and special keys, returns the tmux key name.
 // For literal characters, returns the character with useLiteral=true.
 func MapKeyToTmux(msg tea.KeyMsg) (key string, useLiteral bool) {
+	switch msg.String() {
+	case "shift+up":
+		return "\x1b[1;2A", true
+	case "shift+down":
+		return "\x1b[1;2B", true
+	case "shift+right":
+		return "\x1b[1;2C", true
+	case "shift+left":
+		return "\x1b[1;2D", true
+	case "ctrl+up":
+		return "\x1b[1;5A", true
+	case "ctrl+down":
+		return "\x1b[1;5B", true
+	case "ctrl+right":
+		return "\x1b[1;5C", true
+	case "ctrl+left":
+		return "\x1b[1;5D", true
+	case "alt+up":
+		return "\x1b[1;3A", true
+	case "alt+down":
+		return "\x1b[1;3B", true
+	case "alt+right":
+		return "\x1b[1;3C", true
+	case "alt+left":
+		return "\x1b[1;3D", true
+	case "shift+tab":
+		return "\x1b[Z", true
+	}
+
 	// Handle special keys
 	// Note: KeyCtrlI == KeyTab and KeyCtrlM == KeyEnter in BubbleTea,
 	// so we handle Tab and Enter first, then other Ctrl keys.
@@ -252,6 +282,16 @@ const (
 	bracketedPasteDisable = "\x1b[?2004l" // ESC[?2004l - app disables bracketed paste
 	bracketedPasteStart   = "\x1b[200~"   // ESC[200~ - start of pasted content
 	bracketedPasteEnd     = "\x1b[201~"   // ESC[201~ - end of pasted content
+	mouseModeEnable1000   = "\x1b[?1000h"
+	mouseModeEnable1002   = "\x1b[?1002h"
+	mouseModeEnable1003   = "\x1b[?1003h"
+	mouseModeEnable1006   = "\x1b[?1006h"
+	mouseModeEnable1015   = "\x1b[?1015h"
+	mouseModeDisable1000  = "\x1b[?1000l"
+	mouseModeDisable1002  = "\x1b[?1002l"
+	mouseModeDisable1003  = "\x1b[?1003l"
+	mouseModeDisable1006  = "\x1b[?1006l"
+	mouseModeDisable1015  = "\x1b[?1015l"
 )
 
 // detectBracketedPasteMode checks captured output to determine if the app has
@@ -279,6 +319,46 @@ func sendBracketedPasteToTmux(sessionName, text string) error {
 
 	// Send bracketed paste end sequence
 	return sendLiteralToTmux(sessionName, bracketedPasteEnd)
+}
+
+func detectMouseReportingMode(output string) bool {
+	enableSeqs := []string{
+		mouseModeEnable1000,
+		mouseModeEnable1002,
+		mouseModeEnable1003,
+		mouseModeEnable1006,
+		mouseModeEnable1015,
+	}
+	disableSeqs := []string{
+		mouseModeDisable1000,
+		mouseModeDisable1002,
+		mouseModeDisable1003,
+		mouseModeDisable1006,
+		mouseModeDisable1015,
+	}
+
+	latestEnable := -1
+	for _, seq := range enableSeqs {
+		if idx := strings.LastIndex(output, seq); idx > latestEnable {
+			latestEnable = idx
+		}
+	}
+
+	latestDisable := -1
+	for _, seq := range disableSeqs {
+		if idx := strings.LastIndex(output, seq); idx > latestDisable {
+			latestDisable = idx
+		}
+	}
+
+	return latestEnable > latestDisable
+}
+
+func (p *Plugin) updateMouseReportingMode(output string) {
+	if p.interactiveState == nil || !p.interactiveState.Active {
+		return
+	}
+	p.interactiveState.MouseReportingEnabled = detectMouseReportingMode(output)
 }
 
 // updateBracketedPasteMode updates the BracketedPasteEnabled state from captured output.
@@ -447,22 +527,51 @@ func (p *Plugin) resizeInteractivePaneCmd() tea.Cmd {
 	previewWidth, previewHeight := p.calculatePreviewDimensions()
 	return func() tea.Msg {
 		p.resizeTmuxPane(target, previewWidth, previewHeight)
+		if actualWidth, actualHeight, ok := queryPaneSize(target); ok {
+			if actualWidth != previewWidth || actualHeight != previewHeight {
+				p.resizeTmuxPane(target, previewWidth, previewHeight)
+			}
+		}
 		return nil
 	}
 }
 
 // resizeTmuxPane resizes a tmux pane to the specified dimensions.
 func (p *Plugin) resizeTmuxPane(paneID string, width, height int) {
-	// Resize width
+	if width <= 0 && height <= 0 {
+		return
+	}
+
+	args := []string{"resize-pane", "-t", paneID}
 	if width > 0 {
-		cmd := exec.Command("tmux", "resize-pane", "-t", paneID, "-x", strconv.Itoa(width))
-		_ = cmd.Run() // Ignore errors - pane may not support resize
+		args = append(args, "-x", strconv.Itoa(width))
 	}
-	// Resize height
 	if height > 0 {
-		cmd := exec.Command("tmux", "resize-pane", "-t", paneID, "-y", strconv.Itoa(height))
-		_ = cmd.Run() // Ignore errors - pane may not support resize
+		args = append(args, "-y", strconv.Itoa(height))
 	}
+	cmd := exec.Command("tmux", args...)
+	_ = cmd.Run() // Ignore errors - pane may not support resize
+}
+
+func queryPaneSize(target string) (width, height int, ok bool) {
+	if target == "" {
+		return 0, 0, false
+	}
+
+	cmd := exec.Command("tmux", "display-message", "-t", target, "-p", "#{pane_width},#{pane_height}")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, 0, false
+	}
+
+	parts := strings.Split(strings.TrimSpace(string(output)), ",")
+	if len(parts) < 2 {
+		return 0, 0, false
+	}
+
+	width, _ = strconv.Atoi(parts[0])
+	height, _ = strconv.Atoi(parts[1])
+	return width, height, true
 }
 
 // exitInteractiveMode exits interactive mode and returns to list view.
@@ -634,44 +743,59 @@ func (p *Plugin) handleEscapeTimer() tea.Cmd {
 // Returns a tea.Cmd for any async operations needed.
 // Scroll up (delta < 0) sends PPage (Page Up), scroll down (delta > 0) sends NPage (Page Down).
 // For smoother scrolling, smaller scroll increments use arrow keys.
-func (p *Plugin) forwardScrollToTmux(delta int) tea.Cmd {
+func (p *Plugin) forwardScrollToTmux(delta int, x, y int) tea.Cmd {
 	if p.interactiveState == nil || !p.interactiveState.Active {
 		return nil
 	}
 
 	sessionName := p.interactiveState.TargetSession
 
-	// Determine key based on scroll direction and magnitude
-	var key string
-	var count int
-	if delta < 0 {
-		// Scroll up
-		count = -delta
-		if count >= 3 {
-			key = "PPage" // Page up for larger scrolls
-			count = 1
-		} else {
-			key = "Up" // Arrow up for small scrolls
+	if p.interactiveState.MouseReportingEnabled {
+		col, row, ok := p.interactiveMouseCoords(x, y)
+		if !ok {
+			return nil
 		}
-	} else {
-		// Scroll down
-		count = delta
-		if count >= 3 {
-			key = "NPage" // Page down for larger scrolls
-			count = 1
-		} else {
-			key = "Down" // Arrow down for small scrolls
+		button := 64 // wheel up
+		if delta > 0 {
+			button = 65 // wheel down
 		}
-	}
-
-	// Send keys to tmux
-	for i := 0; i < count; i++ {
-		if err := sendKeyToTmux(sessionName, key); err != nil {
+		if err := sendSGRMouse(sessionName, button, col, row, false); err != nil {
 			p.exitInteractiveMode()
 			if isSessionDeadError(err) {
 				return func() tea.Msg { return InteractiveSessionDeadMsg{} }
 			}
 			return nil
+		}
+	} else {
+		// Fallback to key-based scrolling when mouse reporting is disabled.
+		var key string
+		var count int
+		if delta < 0 {
+			count = -delta
+			if count >= 3 {
+				key = "PPage"
+				count = 1
+			} else {
+				key = "Up"
+			}
+		} else {
+			count = delta
+			if count >= 3 {
+				key = "NPage"
+				count = 1
+			} else {
+				key = "Down"
+			}
+		}
+
+		for i := 0; i < count; i++ {
+			if err := sendKeyToTmux(sessionName, key); err != nil {
+				p.exitInteractiveMode()
+				if isSessionDeadError(err) {
+					return func() tea.Msg { return InteractiveSessionDeadMsg{} }
+				}
+				return nil
+			}
 		}
 	}
 
@@ -685,12 +809,114 @@ func (p *Plugin) forwardScrollToTmux(delta int) tea.Cmd {
 // Currently a no-op as full mouse support requires knowing the terminal's mouse mode.
 // This is provided for future extension.
 func (p *Plugin) forwardClickToTmux(x, y int) tea.Cmd {
-	// Full click forwarding requires:
-	// 1. Knowing if app has mouse mode enabled
-	// 2. Calculating position relative to pane
-	// 3. Generating correct escape sequences
-	// For M3, we skip this complexity and rely on keyboard navigation
-	return nil
+	if p.interactiveState == nil || !p.interactiveState.Active {
+		return nil
+	}
+	if !p.interactiveState.MouseReportingEnabled {
+		return nil
+	}
+	sessionName := p.interactiveState.TargetSession
+	col, row, ok := p.interactiveMouseCoords(x, y)
+	if !ok {
+		return nil
+	}
+
+	return func() tea.Msg {
+		if err := sendSGRMouse(sessionName, 0, col, row, false); err != nil {
+			p.exitInteractiveMode()
+			if isSessionDeadError(err) {
+				return InteractiveSessionDeadMsg{}
+			}
+			return nil
+		}
+		if err := sendSGRMouse(sessionName, 0, col, row, true); err != nil {
+			p.exitInteractiveMode()
+			if isSessionDeadError(err) {
+				return InteractiveSessionDeadMsg{}
+			}
+			return nil
+		}
+		p.interactiveState.LastKeyTime = time.Now()
+		return nil
+	}
+}
+
+func sendSGRMouse(sessionName string, button, col, row int, release bool) error {
+	if col <= 0 || row <= 0 {
+		return nil
+	}
+	suffix := "M"
+	if release {
+		suffix = "m"
+	}
+	seq := fmt.Sprintf("\x1b[<%d;%d;%d%s", button, col, row, suffix)
+	return sendLiteralToTmux(sessionName, seq)
+}
+
+func (p *Plugin) interactiveMouseCoords(x, y int) (col, row int, ok bool) {
+	if p.width <= 0 || p.height <= 0 {
+		return 0, 0, false
+	}
+	if !p.shellSelected && p.previewTab != PreviewTabOutput {
+		return 0, 0, false
+	}
+
+	previewX := 0
+	if p.sidebarVisible {
+		available := p.width - dividerWidth
+		sidebarW := (available * p.sidebarWidth) / 100
+		if sidebarW < 25 {
+			sidebarW = 25
+		}
+		if sidebarW > available-40 {
+			sidebarW = available - 40
+		}
+		previewX = sidebarW + dividerWidth
+	}
+
+	contentX := previewX + panelOverhead/2
+	contentY := 1
+	if !p.shellSelected {
+		contentY += 2
+	}
+	if !p.flashPreviewTime.IsZero() && time.Since(p.flashPreviewTime) < flashDuration {
+		contentY++
+	}
+	contentY++ // hint line
+
+	relX := x - contentX
+	relY := y - contentY
+	if relX < 0 || relY < 0 {
+		return 0, 0, false
+	}
+
+	paneWidth, paneHeight := p.calculatePreviewDimensions()
+	if p.interactiveState != nil {
+		if p.interactiveState.PaneWidth > 0 && p.interactiveState.PaneWidth < paneWidth {
+			paneWidth = p.interactiveState.PaneWidth
+		}
+		if p.interactiveState.PaneHeight > 0 && p.interactiveState.PaneHeight < paneHeight {
+			paneHeight = p.interactiveState.PaneHeight
+		}
+	}
+
+	if paneWidth <= 0 || paneHeight <= 0 {
+		return 0, 0, false
+	}
+	if relX >= paneWidth || relY >= paneHeight {
+		return 0, 0, false
+	}
+
+	col = relX + 1 + p.previewHorizOffset
+	row = relY + 1
+	if col > paneWidth {
+		col = paneWidth
+	}
+	if row > paneHeight {
+		row = paneHeight
+	}
+
+	return col, row, true
 }
 
 // pollInteractivePane schedules a poll for interactive mode with adaptive timing.
@@ -777,13 +1003,13 @@ var cursorStyle = lipgloss.NewStyle().
 // This NEVER spawns subprocesses - it only returns cached state updated by
 // queryCursorPositionCmd() which runs asynchronously during polling.
 // Returns the cursor row, column (0-indexed), pane height, and whether the cursor is visible.
-func (p *Plugin) getCursorPosition() (row, col, paneHeight int, visible bool, err error) {
+func (p *Plugin) getCursorPosition() (row, col, paneHeight, paneWidth int, visible bool, err error) {
 	if p.interactiveState == nil || !p.interactiveState.Active {
-		return 0, 0, 0, false, nil
+		return 0, 0, 0, 0, false, nil
 	}
 
 	// Return cached values - never spawn subprocess from View()
-	return p.interactiveState.CursorRow, p.interactiveState.CursorCol, p.interactiveState.PaneHeight, p.interactiveState.CursorVisible, nil
+	return p.interactiveState.CursorRow, p.interactiveState.CursorCol, p.interactiveState.PaneHeight, p.interactiveState.PaneWidth, p.interactiveState.CursorVisible, nil
 }
 
 // queryCursorPositionCmd returns a tea.Cmd that queries tmux for cursor position (td-648af4).
@@ -827,21 +1053,21 @@ func (p *Plugin) queryCursorPositionCmd() tea.Cmd {
 // Used to capture cursor position atomically with output in poll goroutines.
 // Returns row, col (0-indexed), paneHeight, visible, and ok (false if query failed).
 // paneHeight is needed to calculate cursor offset when display height differs from pane height.
-func queryCursorPositionSync(target string) (row, col, paneHeight int, visible, ok bool) {
+func queryCursorPositionSync(target string) (row, col, paneHeight, paneWidth int, visible, ok bool) {
 	if target == "" {
-		return 0, 0, 0, false, false
+		return 0, 0, 0, 0, false, false
 	}
 
 	cmd := exec.Command("tmux", "display-message", "-t", target,
-		"-p", "#{cursor_x},#{cursor_y},#{cursor_flag},#{pane_height}")
+		"-p", "#{cursor_x},#{cursor_y},#{cursor_flag},#{pane_height},#{pane_width}")
 	output, err := cmd.Output()
 	if err != nil {
-		return 0, 0, 0, false, false
+		return 0, 0, 0, 0, false, false
 	}
 
 	parts := strings.Split(strings.TrimSpace(string(output)), ",")
 	if len(parts) < 2 {
-		return 0, 0, 0, false, false
+		return 0, 0, 0, 0, false, false
 	}
 
 	col, _ = strconv.Atoi(parts[0])
@@ -850,7 +1076,10 @@ func queryCursorPositionSync(target string) (row, col, paneHeight int, visible, 
 	if len(parts) >= 4 {
 		paneHeight, _ = strconv.Atoi(parts[3])
 	}
-	return row, col, paneHeight, visible, true
+	if len(parts) >= 5 {
+		paneWidth, _ = strconv.Atoi(parts[4])
+	}
+	return row, col, paneHeight, paneWidth, visible, true
 }
 
 // renderWithCursor overlays the cursor on content at the specified position.

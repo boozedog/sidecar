@@ -286,12 +286,14 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		if p.viewMode == ViewModeInteractive && !p.shellSelected {
 			if wt := p.selectedWorktree(); wt != nil && wt.Name == msg.WorktreeName {
 				p.updateBracketedPasteMode(msg.Output)
+				p.updateMouseReportingMode(msg.Output)
 				// Use cursor position captured atomically with output (no separate query needed)
 				if msg.HasCursor && p.interactiveState != nil && p.interactiveState.Active {
 					p.interactiveState.CursorRow = msg.CursorRow
 					p.interactiveState.CursorCol = msg.CursorCol
 					p.interactiveState.CursorVisible = msg.CursorVisible
 					p.interactiveState.PaneHeight = msg.PaneHeight
+					p.interactiveState.PaneWidth = msg.PaneWidth
 				}
 			}
 		}
@@ -374,6 +376,7 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 					p.interactiveState.CursorCol = msg.CursorCol
 					p.interactiveState.CursorVisible = msg.CursorVisible
 					p.interactiveState.PaneHeight = msg.PaneHeight
+					p.interactiveState.PaneWidth = msg.PaneWidth
 				}
 			}
 		}
@@ -517,12 +520,14 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		if p.viewMode == ViewModeInteractive && p.shellSelected {
 			if selectedShell := p.getSelectedShell(); selectedShell != nil && selectedShell.TmuxName == msg.TmuxName {
 				p.updateBracketedPasteMode(msg.Output)
+				p.updateMouseReportingMode(msg.Output)
 				// Use cursor position captured atomically with output (no separate query needed)
 				if msg.HasCursor && p.interactiveState != nil && p.interactiveState.Active {
 					p.interactiveState.CursorRow = msg.CursorRow
 					p.interactiveState.CursorCol = msg.CursorCol
 					p.interactiveState.CursorVisible = msg.CursorVisible
 					p.interactiveState.PaneHeight = msg.PaneHeight
+					p.interactiveState.PaneWidth = msg.PaneWidth
 				}
 			}
 		}

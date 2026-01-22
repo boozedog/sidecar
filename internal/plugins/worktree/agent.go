@@ -732,6 +732,7 @@ type AgentPollUnchangedMsg struct {
 	CursorVisible bool
 	HasCursor     bool
 	PaneHeight    int // Tmux pane height for cursor offset calculation
+	PaneWidth     int // Tmux pane width for display alignment
 }
 
 // handlePollAgent captures output from a tmux session asynchronously.
@@ -796,10 +797,10 @@ func (p *Plugin) handlePollAgent(worktreeName string) tea.Cmd {
 		// Capture cursor position atomically with output when in interactive mode.
 		// This prevents race conditions where cursor position changes between
 		// output capture and cursor query.
-		var cursorRow, cursorCol, paneHeight int
+		var cursorRow, cursorCol, paneHeight, paneWidth int
 		var cursorVisible, hasCursor bool
 		if interactiveCapture && cursorTarget != "" {
-			cursorRow, cursorCol, paneHeight, cursorVisible, hasCursor = queryCursorPositionSync(cursorTarget)
+			cursorRow, cursorCol, paneHeight, paneWidth, cursorVisible, hasCursor = queryCursorPositionSync(cursorTarget)
 		}
 
 		output = trimCapturedOutput(output, maxBytes)
@@ -816,6 +817,7 @@ func (p *Plugin) handlePollAgent(worktreeName string) tea.Cmd {
 				CursorVisible: cursorVisible,
 				HasCursor:     hasCursor,
 				PaneHeight:    paneHeight,
+				PaneWidth:     paneWidth,
 			}
 		}
 
@@ -847,6 +849,7 @@ func (p *Plugin) handlePollAgent(worktreeName string) tea.Cmd {
 			CursorVisible: cursorVisible,
 			HasCursor:     hasCursor,
 			PaneHeight:    paneHeight,
+			PaneWidth:     paneWidth,
 		}
 	}
 }

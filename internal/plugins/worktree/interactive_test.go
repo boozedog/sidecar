@@ -822,7 +822,7 @@ func TestGetInteractiveExitKey_VariousKeys(t *testing.T) {
 // TestForwardScrollToTmux_NilState tests that scroll forwarding handles nil state
 func TestForwardScrollToTmux_NilState(t *testing.T) {
 	p := &Plugin{interactiveState: nil}
-	cmd := p.forwardScrollToTmux(-1)
+	cmd := p.forwardScrollToTmux(-1, 0, 0)
 	if cmd != nil {
 		t.Error("expected nil cmd when interactiveState is nil")
 	}
@@ -831,18 +831,18 @@ func TestForwardScrollToTmux_NilState(t *testing.T) {
 // TestForwardScrollToTmux_InactiveState tests that scroll forwarding handles inactive state
 func TestForwardScrollToTmux_InactiveState(t *testing.T) {
 	p := &Plugin{interactiveState: &InteractiveState{Active: false}}
-	cmd := p.forwardScrollToTmux(1)
+	cmd := p.forwardScrollToTmux(1, 0, 0)
 	if cmd != nil {
 		t.Error("expected nil cmd when interactive mode is inactive")
 	}
 }
 
-// TestForwardClickToTmux_Returns nil tests that click forwarding returns nil (placeholder)
+// TestForwardClickToTmux_ReturnsNil tests that click forwarding returns nil when inactive
 func TestForwardClickToTmux_ReturnsNil(t *testing.T) {
-	p := &Plugin{}
+	p := &Plugin{interactiveState: nil}
 	cmd := p.forwardClickToTmux(10, 20)
 	if cmd != nil {
-		t.Error("expected nil cmd from placeholder click forwarder")
+		t.Error("expected nil cmd when interactiveState is nil")
 	}
 }
 
@@ -859,6 +859,20 @@ func TestDetectBracketedPasteMode_DisabledOnly(t *testing.T) {
 	output := "some output\x1b[?2004lmore output"
 	if detectBracketedPasteMode(output) {
 		t.Error("expected bracketed paste to be detected as disabled")
+	}
+}
+
+func TestDetectMouseReportingMode_EnabledOnly(t *testing.T) {
+	output := "some output" + mouseModeEnable1006 + "more output"
+	if !detectMouseReportingMode(output) {
+		t.Error("expected mouse reporting to be detected as enabled")
+	}
+}
+
+func TestDetectMouseReportingMode_DisabledOnly(t *testing.T) {
+	output := "some output" + mouseModeEnable1006 + mouseModeDisable1006
+	if detectMouseReportingMode(output) {
+		t.Error("expected mouse reporting to be detected as disabled")
 	}
 }
 
