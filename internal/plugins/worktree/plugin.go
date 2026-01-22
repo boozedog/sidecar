@@ -236,6 +236,7 @@ type Plugin struct {
 	deleteLocalBranchOpt     bool      // Checkbox: delete local branch
 	deleteRemoteBranchOpt    bool      // Checkbox: delete remote branch
 	deleteHasRemote          bool      // Whether remote branch exists
+	deleteIsMainBranch       bool      // Whether the worktree branch is the main branch (protected)
 	deleteConfirmFocus       int       // 0=local checkbox, 1=remote checkbox (if exists), then delete/cancel btns
 	deleteWarnings           []string  // Warnings from last delete operation (e.g., branch deletion failures)
 

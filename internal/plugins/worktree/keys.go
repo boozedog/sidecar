@@ -171,6 +171,31 @@ func (p *Plugin) executeAgentChoice() tea.Cmd {
 
 // handleConfirmDeleteKeys handles keys in delete confirmation modal.
 func (p *Plugin) handleConfirmDeleteKeys(msg tea.KeyMsg) tea.Cmd {
+	// When the branch is the main branch, no checkboxes are shown.
+	// Focus indices: 0=delete btn, 1=cancel btn
+	if p.deleteIsMainBranch {
+		switch msg.String() {
+		case "tab", "j", "down", "l", "right":
+			if p.deleteConfirmFocus == 0 {
+				p.deleteConfirmFocus = 1
+			}
+		case "shift+tab", "k", "up", "h", "left":
+			if p.deleteConfirmFocus == 1 {
+				p.deleteConfirmFocus = 0
+			}
+		case "enter":
+			if p.deleteConfirmFocus == 1 {
+				return p.cancelDelete()
+			}
+			return p.executeDelete()
+		case "D":
+			return p.executeDelete()
+		case "esc", "q":
+			return p.cancelDelete()
+		}
+		return nil
+	}
+
 	// Calculate max focus based on whether remote branch exists
 	// 0=local checkbox, 1=remote checkbox (if exists), 2 or 1=delete btn, 3 or 2=cancel btn
 	maxFocus := 2 // local checkbox + delete btn + cancel btn
@@ -267,6 +292,7 @@ func (p *Plugin) executeDelete() tea.Cmd {
 	p.deleteLocalBranchOpt = false
 	p.deleteRemoteBranchOpt = false
 	p.deleteHasRemote = false
+	p.deleteIsMainBranch = false
 	p.deleteConfirmFocus = 0
 
 	// Clear preview pane content
@@ -310,6 +336,7 @@ func (p *Plugin) cancelDelete() tea.Cmd {
 	p.deleteLocalBranchOpt = false
 	p.deleteRemoteBranchOpt = false
 	p.deleteHasRemote = false
+	p.deleteIsMainBranch = false
 	p.deleteConfirmFocus = 0
 	return nil
 }
@@ -469,6 +496,12 @@ func (p *Plugin) handleListKeys(msg tea.KeyMsg) tea.Cmd {
 		p.deleteLocalBranchOpt = false // Default: don't delete branches
 		p.deleteRemoteBranchOpt = false
 		p.deleteHasRemote = false
+		p.deleteIsMainBranch = isMainBranch(p.ctx.WorkDir, wt.Branch)
+		if p.deleteIsMainBranch {
+			// Main branch is protected: skip branch options, focus delete button directly
+			p.deleteConfirmFocus = 0 // Delete button is focus 0 when no checkboxes
+			return nil
+		}
 		p.deleteConfirmFocus = 1 // Focus delete button (index 1 when no remote)
 		// Check for remote branch existence asynchronously
 		return p.checkRemoteBranch(wt)

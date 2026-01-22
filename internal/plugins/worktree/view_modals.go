@@ -677,59 +677,64 @@ func (p *Plugin) renderConfirmDeleteModal(width, height int) string {
 	sb.WriteString(dimText("  • Uncommitted changes will be lost"))
 	sb.WriteString("\n\n")
 
-	// Branch deletion options
-	sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Branch Cleanup (Optional)"))
-	sb.WriteString("\n")
-
-	// Checkbox options
-	type checkboxOpt struct {
-		label   string
-		checked bool
-		hint    string
-		focusID int
-	}
-
-	opts := []checkboxOpt{
-		{"Delete local branch", p.deleteLocalBranchOpt,
-			"Removes '" + wt.Branch + "' locally", 0},
-	}
-
-	// Only show remote option if remote branch exists
-	if p.deleteHasRemote {
-		opts = append(opts, checkboxOpt{
-			"Delete remote branch", p.deleteRemoteBranchOpt,
-			"Removes 'origin/" + wt.Branch + "'", 1,
-		})
-	}
-
+	// Branch deletion options (hidden when worktree is on the main branch)
 	checkboxLines := 0
-	for _, opt := range opts {
-		checkbox := "[ ]"
-		if opt.checked {
-			checkbox = "[x]"
+	deleteBtnFocus := 0
+	cancelBtnFocus := 1
+
+	if !p.deleteIsMainBranch {
+		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Branch Cleanup (Optional)"))
+		sb.WriteString("\n")
+
+		// Checkbox options
+		type checkboxOpt struct {
+			label   string
+			checked bool
+			hint    string
+			focusID int
 		}
 
-		line := fmt.Sprintf("  %s %s", checkbox, opt.label)
-
-		if p.deleteConfirmFocus == opt.focusID {
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Bold(true).Render("> " + line[2:]))
-		} else {
-			sb.WriteString(line)
+		opts := []checkboxOpt{
+			{"Delete local branch", p.deleteLocalBranchOpt,
+				"Removes '" + wt.Branch + "' locally", 0},
 		}
-		sb.WriteString("\n")
-		sb.WriteString(dimText("      " + opt.hint))
-		sb.WriteString("\n")
-		checkboxLines += 2
-	}
 
-	sb.WriteString("\n")
+		// Only show remote option if remote branch exists
+		if p.deleteHasRemote {
+			opts = append(opts, checkboxOpt{
+				"Delete remote branch", p.deleteRemoteBranchOpt,
+				"Removes 'origin/" + wt.Branch + "'", 1,
+			})
+		}
 
-	// Determine button focus indices based on whether remote is shown
-	deleteBtnFocus := 1
-	cancelBtnFocus := 2
-	if p.deleteHasRemote {
-		deleteBtnFocus = 2
-		cancelBtnFocus = 3
+		for _, opt := range opts {
+			checkbox := "[ ]"
+			if opt.checked {
+				checkbox = "[x]"
+			}
+
+			line := fmt.Sprintf("  %s %s", checkbox, opt.label)
+
+			if p.deleteConfirmFocus == opt.focusID {
+				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Bold(true).Render("> " + line[2:]))
+			} else {
+				sb.WriteString(line)
+			}
+			sb.WriteString("\n")
+			sb.WriteString(dimText("      " + opt.hint))
+			sb.WriteString("\n")
+			checkboxLines += 2
+		}
+
+		sb.WriteString("\n")
+
+		// Determine button focus indices based on whether remote is shown
+		deleteBtnFocus = 1
+		cancelBtnFocus = 2
+		if p.deleteHasRemote {
+			deleteBtnFocus = 2
+			cancelBtnFocus = 3
+		}
 	}
 
 	// Render buttons with focus/hover states
@@ -807,22 +812,25 @@ func (p *Plugin) renderConfirmDeleteModal(width, height int) string {
 	// "This will:" + 2 bullets + blank
 	currentY += 4
 
-	// "Branch Cleanup (Optional)" header
-	currentY++
-
-	// Checkboxes start here
-	checkboxStartY := currentY
-
-	// Hit regions for checkboxes
 	hitX := modalStartX + 3 // border(1) + padding(2) = 3
 	hitW := modalW - 6      // width minus border+padding on both sides
-	p.mouseHandler.HitMap.AddRect(regionDeleteLocalBranchCheck, hitX, checkboxStartY, hitW, 1, 0)
-	if p.deleteHasRemote {
-		p.mouseHandler.HitMap.AddRect(regionDeleteRemoteBranchCheck, hitX, checkboxStartY+2, hitW, 1, 1)
+
+	if !p.deleteIsMainBranch {
+		// "Branch Cleanup (Optional)" header
+		currentY++
+
+		// Checkboxes start here
+		checkboxStartY := currentY
+
+		// Hit regions for checkboxes
+		p.mouseHandler.HitMap.AddRect(regionDeleteLocalBranchCheck, hitX, checkboxStartY, hitW, 1, 0)
+		if p.deleteHasRemote {
+			p.mouseHandler.HitMap.AddRect(regionDeleteRemoteBranchCheck, hitX, checkboxStartY+2, hitW, 1, 1)
+		}
 	}
 
 	// Hit regions for buttons (after checkboxes + blank line)
-	buttonY := checkboxStartY + checkboxLines + 1
+	buttonY := currentY + checkboxLines + 1
 	p.mouseHandler.HitMap.AddRect(regionDeleteConfirmDelete, hitX, buttonY, 12, 1, nil)
 	cancelX := hitX + 12 + 2
 	p.mouseHandler.HitMap.AddRect(regionDeleteConfirmCancel, cancelX, buttonY, 12, 1, nil)

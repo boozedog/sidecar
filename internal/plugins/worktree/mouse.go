@@ -317,12 +317,14 @@ func (p *Plugin) handleMouseClick(action mouse.MouseAction) tea.Cmd {
 		p.agentChoiceWorktree = nil
 		p.agentChoiceButtonFocus = 0
 	case regionDeleteLocalBranchCheck:
-		// Click on local branch checkbox
-		p.deleteLocalBranchOpt = !p.deleteLocalBranchOpt
-		p.deleteConfirmFocus = 0
+		// Click on local branch checkbox (disabled for main branch)
+		if !p.deleteIsMainBranch {
+			p.deleteLocalBranchOpt = !p.deleteLocalBranchOpt
+			p.deleteConfirmFocus = 0
+		}
 	case regionDeleteRemoteBranchCheck:
-		// Click on remote branch checkbox (only if remote exists)
-		if p.deleteHasRemote {
+		// Click on remote branch checkbox (only if remote exists, disabled for main branch)
+		if !p.deleteIsMainBranch && p.deleteHasRemote {
 			p.deleteRemoteBranchOpt = !p.deleteRemoteBranchOpt
 			p.deleteConfirmFocus = 1
 		}

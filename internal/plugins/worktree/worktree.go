@@ -279,8 +279,18 @@ func checkRemoteBranchExists(workdir, branch string) bool {
 	return len(strings.TrimSpace(string(output))) > 0
 }
 
+// isMainBranch returns true if the given branch is the repository's primary branch
+// (e.g., main, master). This is used as a universal guard to prevent accidental
+// deletion of the main branch.
+func isMainBranch(workdir, branch string) bool {
+	return branch == detectDefaultBranch(workdir)
+}
+
 // deleteBranch deletes a local branch, trying safe delete first then force.
 func deleteBranch(workdir, branch string) error {
+	if isMainBranch(workdir, branch) {
+		return fmt.Errorf("refusing to delete main branch %q", branch)
+	}
 	// Try safe delete first
 	cmd := exec.Command("git", "branch", "-d", branch)
 	cmd.Dir = workdir
@@ -299,6 +309,9 @@ func deleteBranch(workdir, branch string) error {
 
 // deleteRemoteBranchCmd deletes the remote branch from origin.
 func deleteRemoteBranchCmd(workdir, branch string) error {
+	if isMainBranch(workdir, branch) {
+		return fmt.Errorf("refusing to delete remote main branch %q", branch)
+	}
 	cmd := exec.Command("git", "push", "origin", "--delete", branch)
 	cmd.Dir = workdir
 	output, err := cmd.CombinedOutput()
