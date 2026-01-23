@@ -60,8 +60,8 @@ func TestSyncListToKanban(t *testing.T) {
 
 	p.syncListToKanban()
 
-	if p.kanbanCol != 3 { // Done column (Active=0, Thinking=1, Waiting=2, Done=3, Paused=4)
-		t.Errorf("expected kanbanCol=3 (Done), got %d", p.kanbanCol)
+	if p.kanbanCol != 4 { // Done column (Shells=0, Active=1, Thinking=2, Waiting=3, Done=4, Paused=5)
+		t.Errorf("expected kanbanCol=4 (Done), got %d", p.kanbanCol)
 	}
 	if p.kanbanRow != 0 { // First item in Done column
 		t.Errorf("expected kanbanRow=0, got %d", p.kanbanRow)
@@ -79,8 +79,8 @@ func TestSyncListToKanbanWithErrorStatus(t *testing.T) {
 
 	p.syncListToKanban()
 
-	if p.kanbanCol != 4 { // Paused column (Active=0, Thinking=1, Waiting=2, Done=3, Paused=4)
-		t.Errorf("expected kanbanCol=4 (Paused), got %d", p.kanbanCol)
+	if p.kanbanCol != 5 { // Paused column (Shells=0, Active=1, Thinking=2, Waiting=3, Done=4, Paused=5)
+		t.Errorf("expected kanbanCol=5 (Paused), got %d", p.kanbanCol)
 	}
 	if p.kanbanRow != 0 {
 		t.Errorf("expected kanbanRow=0, got %d", p.kanbanRow)
@@ -113,7 +113,7 @@ func TestSyncKanbanToList(t *testing.T) {
 			{Name: "wt3", Status: StatusDone},
 			{Name: "wt4", Status: StatusPaused},
 		},
-		kanbanCol:   2, // Waiting column (Active=0, Thinking=1, Waiting=2)
+		kanbanCol:   3, // Waiting column (Shells=0, Active=1, Thinking=2, Waiting=3)
 		kanbanRow:   0, // First item (wt2)
 		selectedIdx: 0,
 	}
@@ -130,7 +130,7 @@ func TestSyncKanbanToListEmptyColumn(t *testing.T) {
 		worktrees: []*Worktree{
 			{Name: "wt1", Status: StatusActive},
 		},
-		kanbanCol:   2, // Waiting column (empty) (Active=0, Thinking=1, Waiting=2)
+		kanbanCol:   3, // Waiting column (empty) (Shells=0, Active=1, Thinking=2, Waiting=3)
 		kanbanRow:   0,
 		selectedIdx: 0,
 	}
@@ -149,7 +149,7 @@ func TestMoveKanbanColumn(t *testing.T) {
 			{Name: "wt1", Status: StatusActive},
 			{Name: "wt2", Status: StatusWaiting},
 		},
-		kanbanCol: 0, // Start at Active
+		kanbanCol: 0, // Start at Shells
 		kanbanRow: 0,
 	}
 
@@ -172,10 +172,10 @@ func TestMoveKanbanColumn(t *testing.T) {
 	}
 
 	// Move to far right
-	p.kanbanCol = len(kanbanColumnOrder) - 1
+	p.kanbanCol = kanbanColumnCount() - 1
 	p.moveKanbanColumn(1)
-	if p.kanbanCol != len(kanbanColumnOrder)-1 {
-		t.Errorf("expected kanbanCol=%d at right boundary, got %d", len(kanbanColumnOrder)-1, p.kanbanCol)
+	if p.kanbanCol != kanbanColumnCount()-1 {
+		t.Errorf("expected kanbanCol=%d at right boundary, got %d", kanbanColumnCount()-1, p.kanbanCol)
 	}
 }
 
@@ -186,7 +186,7 @@ func TestMoveKanbanRow(t *testing.T) {
 			{Name: "wt2", Status: StatusActive},
 			{Name: "wt3", Status: StatusActive},
 		},
-		kanbanCol: 0, // Active column (has 3 items)
+		kanbanCol: 1, // Active column (has 3 items)
 		kanbanRow: 0,
 	}
 
@@ -227,7 +227,7 @@ func TestMoveKanbanRowEmptyColumn(t *testing.T) {
 		worktrees: []*Worktree{
 			{Name: "wt1", Status: StatusActive},
 		},
-		kanbanCol: 2, // Waiting column (empty) (Active=0, Thinking=1, Waiting=2)
+		kanbanCol: 3, // Waiting column (empty) (Shells=0, Active=1, Thinking=2, Waiting=3)
 		kanbanRow: 0,
 	}
 
@@ -244,7 +244,7 @@ func TestSelectedKanbanWorktree(t *testing.T) {
 			{Name: "wt1", Status: StatusActive},
 			{Name: "wt2", Status: StatusWaiting},
 		},
-		kanbanCol: 2, // Waiting column (Active=0, Thinking=1, Waiting=2)
+		kanbanCol: 3, // Waiting column (Shells=0, Active=1, Thinking=2, Waiting=3)
 		kanbanRow: 0,
 	}
 
@@ -262,7 +262,7 @@ func TestSelectedKanbanWorktreeEmptyColumn(t *testing.T) {
 		worktrees: []*Worktree{
 			{Name: "wt1", Status: StatusActive},
 		},
-		kanbanCol: 2, // Waiting column (empty) (Active=0, Thinking=1, Waiting=2)
+		kanbanCol: 3, // Waiting column (empty) (Shells=0, Active=1, Thinking=2, Waiting=3)
 		kanbanRow: 0,
 	}
 
@@ -299,20 +299,59 @@ func TestMoveKanbanColumnClampsRow(t *testing.T) {
 			{Name: "wt1", Status: StatusActive},
 			{Name: "wt2", Status: StatusActive},
 			{Name: "wt3", Status: StatusActive},
-			{Name: "wt4", Status: StatusWaiting}, // Only 1 item in Waiting
+			{Name: "wt4", Status: StatusThinking}, // Only 1 item in Thinking
 		},
-		kanbanCol: 0, // Active column (3 items)
+		kanbanCol: 1, // Active column (3 items)
 		kanbanRow: 2, // Last item
 	}
 
-	// Move to Waiting column (only 1 item)
+	// Move to Thinking column (only 1 item)
 	p.moveKanbanColumn(1)
 
-	if p.kanbanCol != 1 {
-		t.Errorf("expected kanbanCol=1, got %d", p.kanbanCol)
+	if p.kanbanCol != 2 {
+		t.Errorf("expected kanbanCol=2, got %d", p.kanbanCol)
 	}
-	// Row should be clamped to 0 since Waiting only has 1 item
+	// Row should be clamped to 0 since Thinking only has 1 item
 	if p.kanbanRow != 0 {
 		t.Errorf("expected kanbanRow=0 (clamped), got %d", p.kanbanRow)
+	}
+}
+
+func TestSyncListToKanbanShellSelected(t *testing.T) {
+	p := &Plugin{
+		shells: []*ShellSession{
+			{Name: "Shell 1"},
+			{Name: "Shell 2"},
+		},
+		shellSelected:    true,
+		selectedShellIdx: 1,
+	}
+
+	p.syncListToKanban()
+
+	if p.kanbanCol != 0 {
+		t.Errorf("expected kanbanCol=0 (Shells), got %d", p.kanbanCol)
+	}
+	if p.kanbanRow != 1 {
+		t.Errorf("expected kanbanRow=1, got %d", p.kanbanRow)
+	}
+}
+
+func TestSyncKanbanToListShells(t *testing.T) {
+	p := &Plugin{
+		shells: []*ShellSession{
+			{Name: "Shell 1"},
+		},
+		kanbanCol: 0,
+		kanbanRow: 0,
+	}
+
+	p.syncKanbanToList()
+
+	if !p.shellSelected {
+		t.Errorf("expected shellSelected=true, got false")
+	}
+	if p.selectedShellIdx != 0 {
+		t.Errorf("expected selectedShellIdx=0, got %d", p.selectedShellIdx)
 	}
 }

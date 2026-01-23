@@ -10,8 +10,10 @@ import (
 
 // renderKanbanView renders the kanban board view.
 func (p *Plugin) renderKanbanView(width, height int) string {
+	numCols := kanbanColumnCount()
+	minColWidth := 16
+	minKanbanWidth := (minColWidth * numCols) + (numCols - 1) + 4
 	// Check minimum width - auto-collapse to list view if too narrow
-	minKanbanWidth := 80
 	if width < minKanbanWidth {
 		// Fall back to list view when too narrow
 		return p.renderListView(width, height)
@@ -43,6 +45,7 @@ func (p *Plugin) renderKanbanView(width, height int) string {
 
 	// Group worktrees by status
 	columns := p.getKanbanColumns()
+	shellCount := len(p.shells)
 
 	// Column headers and colors
 	columnTitles := map[WorktreeStatus]string{
@@ -61,19 +64,26 @@ func (p *Plugin) renderKanbanView(width, height int) string {
 	}
 
 	// Calculate column widths (account for panel borders)
-	numCols := len(kanbanColumnOrder)
 	colWidth := (innerWidth - numCols - 1) / numCols // -1 for separators
-	if colWidth < 18 {
-		colWidth = 18
+	if colWidth < minColWidth {
+		colWidth = minColWidth
 	}
 
 	// Render column headers with colors and register hit regions
 	var colHeaders []string
 	colX := 2 // Start after panel border
-	for colIdx, status := range kanbanColumnOrder {
-		items := columns[status]
-		title := fmt.Sprintf("%s (%d)", columnTitles[status], len(items))
-		headerStyle := lipgloss.NewStyle().Bold(true).Foreground(columnColors[status]).Width(colWidth)
+	for colIdx := 0; colIdx < numCols; colIdx++ {
+		var title string
+		var headerStyle lipgloss.Style
+		if colIdx == kanbanShellColumnIndex {
+			title = fmt.Sprintf("Shells (%d)", shellCount)
+			headerStyle = lipgloss.NewStyle().Bold(true).Foreground(styles.Muted.GetForeground().(lipgloss.Color)).Width(colWidth)
+		} else {
+			status := kanbanColumnOrder[colIdx-1]
+			items := columns[status]
+			title = fmt.Sprintf("%s (%d)", columnTitles[status], len(items))
+			headerStyle = lipgloss.NewStyle().Bold(true).Foreground(columnColors[status]).Width(colWidth)
+		}
 		// Highlight selected column header
 		if colIdx == p.kanbanCol {
 			headerStyle = headerStyle.Underline(true)
@@ -98,6 +108,9 @@ func (p *Plugin) renderKanbanView(width, height int) string {
 
 	// Find the maximum number of cards in any column (for row rendering)
 	maxInColumn := 0
+	if shellCount > maxInColumn {
+		maxInColumn = shellCount
+	}
 	for _, status := range kanbanColumnOrder {
 		if len(columns[status]) > maxInColumn {
 			maxInColumn = len(columns[status])
@@ -113,11 +126,18 @@ func (p *Plugin) renderKanbanView(width, height int) string {
 	for cardIdx := 0; cardIdx < maxInColumn; cardIdx++ {
 		// Register hit regions for this row of cards (once per card, not per line)
 		cardColX := 2 // Start after panel border
-		for colIdx, status := range kanbanColumnOrder {
-			items := columns[status]
-			if cardIdx < len(items) {
-				cardY := cardStartY + (cardIdx * cardHeight)
-				p.mouseHandler.HitMap.AddRect(regionKanbanCard, cardColX, cardY, colWidth-1, cardHeight, kanbanCardData{col: colIdx, row: cardIdx})
+		for colIdx := 0; colIdx < numCols; colIdx++ {
+			cardY := cardStartY + (cardIdx * cardHeight)
+			if colIdx == kanbanShellColumnIndex {
+				if cardIdx < len(p.shells) {
+					p.mouseHandler.HitMap.AddRect(regionKanbanCard, cardColX, cardY, colWidth-1, cardHeight, kanbanCardData{col: colIdx, row: cardIdx})
+				}
+			} else {
+				status := kanbanColumnOrder[colIdx-1]
+				items := columns[status]
+				if cardIdx < len(items) {
+					p.mouseHandler.HitMap.AddRect(regionKanbanCard, cardColX, cardY, colWidth-1, cardHeight, kanbanCardData{col: colIdx, row: cardIdx})
+				}
 			}
 			cardColX += colWidth + 1 // +1 for separator
 		}
@@ -125,18 +145,26 @@ func (p *Plugin) renderKanbanView(width, height int) string {
 		// Each card has 4 lines
 		for lineIdx := 0; lineIdx < cardHeight; lineIdx++ {
 			var rowCells []string
-			for colIdx, status := range kanbanColumnOrder {
-				items := columns[status]
+			for colIdx := 0; colIdx < numCols; colIdx++ {
 				var cellContent string
-
-				if cardIdx < len(items) {
-					wt := items[cardIdx]
-					isSelected := colIdx == p.kanbanCol && cardIdx == p.kanbanRow
-					cellContent = p.renderKanbanCardLine(wt, lineIdx, colWidth-1, isSelected)
+				isSelected := colIdx == p.kanbanCol && cardIdx == p.kanbanRow
+				if colIdx == kanbanShellColumnIndex {
+					if cardIdx < len(p.shells) {
+						shell := p.shells[cardIdx]
+						cellContent = p.renderKanbanShellCardLine(shell, lineIdx, colWidth-1, isSelected)
+					} else {
+						cellContent = strings.Repeat(" ", colWidth-1)
+					}
 				} else {
-					cellContent = strings.Repeat(" ", colWidth-1)
+					status := kanbanColumnOrder[colIdx-1]
+					items := columns[status]
+					if cardIdx < len(items) {
+						wt := items[cardIdx]
+						cellContent = p.renderKanbanCardLine(wt, lineIdx, colWidth-1, isSelected)
+					} else {
+						cellContent = strings.Repeat(" ", colWidth-1)
+					}
 				}
-
 				rowCells = append(rowCells, cellContent)
 			}
 			lines = append(lines, strings.Join(rowCells, vertSep))
@@ -147,7 +175,7 @@ func (p *Plugin) renderKanbanView(width, height int) string {
 	renderedRows := maxInColumn * cardHeight
 	for i := renderedRows; i < contentHeight; i++ {
 		var emptyCells []string
-		for range kanbanColumnOrder {
+		for i := 0; i < numCols; i++ {
 			emptyCells = append(emptyCells, strings.Repeat(" ", colWidth-1))
 		}
 		lines = append(lines, strings.Join(emptyCells, vertSep))
@@ -158,6 +186,51 @@ func (p *Plugin) renderKanbanView(width, height int) string {
 
 	// Wrap in panel with gradient border (active since kanban is full-screen)
 	return styles.RenderPanel(content, width, height, true)
+}
+
+// renderKanbanShellCardLine renders a single line of a shell kanban card.
+// lineIdx: 0=name, 1=status, 2-3=empty
+func (p *Plugin) renderKanbanShellCardLine(shell *ShellSession, lineIdx, width int, isSelected bool) string {
+	var content string
+
+	switch lineIdx {
+	case 0:
+		statusIcon := "○"
+		if shell.Agent != nil {
+			statusIcon = "●"
+		}
+		name := shell.Name
+		maxNameLen := width - 3 // Account for icon and space
+		if runes := []rune(name); len(runes) > maxNameLen {
+			name = string(runes[:maxNameLen-3]) + "..."
+		}
+		content = fmt.Sprintf(" %s %s", statusIcon, name)
+	case 1:
+		statusText := "  shell · no session"
+		if shell.Agent != nil {
+			statusText = "  shell · running"
+		}
+		content = statusText
+	}
+
+	if lipgloss.Width(content) > width {
+		content = truncateString(content, width)
+	}
+
+	// Pad to width
+	contentWidth := lipgloss.Width(content)
+	if contentWidth < width {
+		content += strings.Repeat(" ", width-contentWidth)
+	}
+
+	// Apply styling
+	if isSelected {
+		return styles.ListItemSelected.Width(width).Render(content)
+	}
+	if lineIdx > 0 {
+		return styles.Muted.Width(width).Render(content)
+	}
+	return lipgloss.NewStyle().Width(width).Render(content)
 }
 
 // renderKanbanCardLine renders a single line of a kanban card.

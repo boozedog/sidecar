@@ -358,20 +358,27 @@ func (p *Plugin) handleMouseClick(action mouse.MouseAction) tea.Cmd {
 	case regionKanbanCard:
 		// Click on kanban card - select it
 		if data, ok := action.Region.Data.(kanbanCardData); ok {
+			oldShellSelected := p.shellSelected
+			oldShellIdx := p.selectedShellIdx
+			oldWorktreeIdx := p.selectedIdx
 			p.kanbanCol = data.col
 			p.kanbanRow = data.row
-			p.taskLoading = false // Reset task loading on selection change (td-3668584f)
-			// Exit interactive mode when switching selection (td-fc758e88)
-			p.exitInteractiveMode()
 			p.syncKanbanToList()
+			p.applyKanbanSelectionChange(oldShellSelected, oldShellIdx, oldWorktreeIdx)
 			return p.loadSelectedContent()
 		}
 	case regionKanbanColumn:
 		// Click on column header - focus that column
 		if colIdx, ok := action.Region.Data.(int); ok {
+			oldShellSelected := p.shellSelected
+			oldShellIdx := p.selectedShellIdx
+			oldWorktreeIdx := p.selectedIdx
 			p.kanbanCol = colIdx
 			p.kanbanRow = 0
 			p.syncKanbanToList()
+			if p.applyKanbanSelectionChange(oldShellSelected, oldShellIdx, oldWorktreeIdx) {
+				return p.loadSelectedContent()
+			}
 		}
 	case regionViewToggle:
 		// Click on view toggle - switch views
@@ -596,13 +603,23 @@ func (p *Plugin) handleMouseDoubleClick(action mouse.MouseAction) tea.Cmd {
 	case regionKanbanCard:
 		// Double-click on kanban card - attach to tmux session if agent running
 		if data, ok := action.Region.Data.(kanbanCardData); ok {
+			oldShellSelected := p.shellSelected
+			oldShellIdx := p.selectedShellIdx
+			oldWorktreeIdx := p.selectedIdx
 			p.kanbanCol = data.col
 			p.kanbanRow = data.row
 			p.syncKanbanToList()
-			wt := p.getKanbanWorktree(data.col, data.row)
-			if wt != nil && wt.Agent != nil {
-				p.attachedSession = wt.Name
-				return p.AttachToSession(wt)
+			p.applyKanbanSelectionChange(oldShellSelected, oldShellIdx, oldWorktreeIdx)
+			if data.col == kanbanShellColumnIndex {
+				if shell := p.kanbanShellAt(data.row); shell != nil {
+					return p.ensureShellAndAttachByIndex(data.row)
+				}
+			} else {
+				wt := p.getKanbanWorktree(data.col, data.row)
+				if wt != nil && wt.Agent != nil {
+					p.attachedSession = wt.Name
+					return p.AttachToSession(wt)
+				}
 			}
 		}
 	}
@@ -738,13 +755,12 @@ func (p *Plugin) scrollPreview(delta int) tea.Cmd {
 // scrollKanban scrolls within the current Kanban column.
 func (p *Plugin) scrollKanban(delta int) tea.Cmd {
 	columns := p.getKanbanColumns()
-	if p.kanbanCol < 0 || p.kanbanCol >= len(kanbanColumnOrder) {
+	if p.kanbanCol < 0 || p.kanbanCol >= kanbanColumnCount() {
 		return nil
 	}
-	status := kanbanColumnOrder[p.kanbanCol]
-	items := columns[status]
+	count := p.kanbanColumnItemCount(p.kanbanCol, columns)
 
-	if len(items) == 0 {
+	if count == 0 {
 		return nil
 	}
 
@@ -752,17 +768,18 @@ func (p *Plugin) scrollKanban(delta int) tea.Cmd {
 	if newRow < 0 {
 		newRow = 0
 	}
-	maxRow := len(items) - 1
+	maxRow := count - 1
 	if newRow > maxRow {
 		newRow = maxRow
 	}
 
 	if newRow != p.kanbanRow {
+		oldShellSelected := p.shellSelected
+		oldShellIdx := p.selectedShellIdx
+		oldWorktreeIdx := p.selectedIdx
 		p.kanbanRow = newRow
-		p.taskLoading = false // Reset task loading on selection change (td-3668584f)
-		// Exit interactive mode when switching selection (td-fc758e88)
-		p.exitInteractiveMode()
 		p.syncKanbanToList()
+		p.applyKanbanSelectionChange(oldShellSelected, oldShellIdx, oldWorktreeIdx)
 		return p.loadSelectedContent()
 	}
 	return nil

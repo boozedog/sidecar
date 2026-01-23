@@ -3,6 +3,41 @@ package worktree
 // kanbanColumnOrder defines the order of columns in kanban view.
 var kanbanColumnOrder = []WorktreeStatus{StatusActive, StatusThinking, StatusWaiting, StatusDone, StatusPaused}
 
+const kanbanShellColumnIndex = 0
+
+func kanbanColumnCount() int {
+	return len(kanbanColumnOrder) + 1 // Shells column + worktree columns
+}
+
+func kanbanStatusForColumn(col int) (WorktreeStatus, bool) {
+	if col <= kanbanShellColumnIndex {
+		return 0, false
+	}
+	idx := col - 1
+	if idx < 0 || idx >= len(kanbanColumnOrder) {
+		return 0, false
+	}
+	return kanbanColumnOrder[idx], true
+}
+
+func (p *Plugin) kanbanColumnItemCount(col int, columns map[WorktreeStatus][]*Worktree) int {
+	if col == kanbanShellColumnIndex {
+		return len(p.shells)
+	}
+	status, ok := kanbanStatusForColumn(col)
+	if !ok {
+		return 0
+	}
+	return len(columns[status])
+}
+
+func (p *Plugin) kanbanShellAt(row int) *ShellSession {
+	if row < 0 || row >= len(p.shells) {
+		return nil
+	}
+	return p.shells[row]
+}
+
 // getKanbanColumns returns worktrees grouped by status for kanban view.
 // StatusError worktrees are grouped with StatusPaused since they require user intervention.
 func (p *Plugin) getKanbanColumns() map[WorktreeStatus][]*Worktree {
@@ -27,10 +62,13 @@ func (p *Plugin) getKanbanColumns() map[WorktreeStatus][]*Worktree {
 // selectedKanbanWorktree returns the worktree at the current kanban position.
 func (p *Plugin) selectedKanbanWorktree() *Worktree {
 	columns := p.getKanbanColumns()
-	if p.kanbanCol < 0 || p.kanbanCol >= len(kanbanColumnOrder) {
+	if p.kanbanCol == kanbanShellColumnIndex {
 		return nil
 	}
-	status := kanbanColumnOrder[p.kanbanCol]
+	status, ok := kanbanStatusForColumn(p.kanbanCol)
+	if !ok {
+		return nil
+	}
 	items := columns[status]
 	if p.kanbanRow < 0 || p.kanbanRow >= len(items) {
 		return nil
@@ -40,20 +78,48 @@ func (p *Plugin) selectedKanbanWorktree() *Worktree {
 
 // syncKanbanToList syncs the kanban selection to the list selectedIdx.
 func (p *Plugin) syncKanbanToList() {
+	if p.kanbanCol == kanbanShellColumnIndex {
+		shell := p.kanbanShellAt(p.kanbanRow)
+		if shell == nil {
+			return
+		}
+		p.shellSelected = true
+		p.selectedShellIdx = p.kanbanRow
+		return
+	}
 	wt := p.selectedKanbanWorktree()
 	if wt == nil {
 		return
 	}
 	for i, w := range p.worktrees {
 		if w.Name == wt.Name {
+			p.shellSelected = false
 			p.selectedIdx = i
 			return
 		}
 	}
 }
 
+func (p *Plugin) applyKanbanSelectionChange(oldShellSelected bool, oldShellIdx, oldWorktreeIdx int) bool {
+	selectionChanged := p.shellSelected != oldShellSelected ||
+		(p.shellSelected && p.selectedShellIdx != oldShellIdx) ||
+		(!p.shellSelected && p.selectedIdx != oldWorktreeIdx)
+	if selectionChanged {
+		p.previewOffset = 0
+		p.previewHorizOffset = 0
+		p.autoScrollOutput = true
+		p.taskLoading = false
+		p.exitInteractiveMode()
+		p.saveSelectionState()
+	}
+	return selectionChanged
+}
+
 // moveKanbanColumn moves selection to an adjacent column.
 func (p *Plugin) moveKanbanColumn(delta int) {
+	oldShellSelected := p.shellSelected
+	oldShellIdx := p.selectedShellIdx
+	oldWorktreeIdx := p.selectedIdx
 	columns := p.getKanbanColumns()
 	newCol := p.kanbanCol + delta
 
@@ -61,31 +127,33 @@ func (p *Plugin) moveKanbanColumn(delta int) {
 	if newCol < 0 {
 		newCol = 0
 	}
-	if newCol >= len(kanbanColumnOrder) {
-		newCol = len(kanbanColumnOrder) - 1
+	if newCol >= kanbanColumnCount() {
+		newCol = kanbanColumnCount() - 1
 	}
 
 	if newCol != p.kanbanCol {
 		p.kanbanCol = newCol
 		// Try to preserve row position, but clamp to new column's item count
-		status := kanbanColumnOrder[p.kanbanCol]
-		items := columns[status]
-		if len(items) == 0 {
+		count := p.kanbanColumnItemCount(p.kanbanCol, columns)
+		if count == 0 {
 			p.kanbanRow = 0
-		} else if p.kanbanRow >= len(items) {
-			p.kanbanRow = len(items) - 1
+		} else if p.kanbanRow >= count {
+			p.kanbanRow = count - 1
 		}
 		p.syncKanbanToList()
+		p.applyKanbanSelectionChange(oldShellSelected, oldShellIdx, oldWorktreeIdx)
 	}
 }
 
 // moveKanbanRow moves selection within the current column.
 func (p *Plugin) moveKanbanRow(delta int) {
+	oldShellSelected := p.shellSelected
+	oldShellIdx := p.selectedShellIdx
+	oldWorktreeIdx := p.selectedIdx
 	columns := p.getKanbanColumns()
-	status := kanbanColumnOrder[p.kanbanCol]
-	items := columns[status]
+	count := p.kanbanColumnItemCount(p.kanbanCol, columns)
 
-	if len(items) == 0 {
+	if count == 0 {
 		return
 	}
 
@@ -93,23 +161,27 @@ func (p *Plugin) moveKanbanRow(delta int) {
 	if newRow < 0 {
 		newRow = 0
 	}
-	if newRow >= len(items) {
-		newRow = len(items) - 1
+	if newRow >= count {
+		newRow = count - 1
 	}
 
 	if newRow != p.kanbanRow {
 		p.kanbanRow = newRow
 		p.syncKanbanToList()
+		p.applyKanbanSelectionChange(oldShellSelected, oldShellIdx, oldWorktreeIdx)
 	}
 }
 
 // getKanbanWorktree returns the worktree at the given Kanban coordinates.
 func (p *Plugin) getKanbanWorktree(col, row int) *Worktree {
 	columns := p.getKanbanColumns()
-	if col < 0 || col >= len(kanbanColumnOrder) {
+	if col == kanbanShellColumnIndex {
 		return nil
 	}
-	status := kanbanColumnOrder[col]
+	status, ok := kanbanStatusForColumn(col)
+	if !ok {
+		return nil
+	}
 	items := columns[status]
 	if row >= 0 && row < len(items) {
 		return items[row]
@@ -120,6 +192,15 @@ func (p *Plugin) getKanbanWorktree(col, row int) *Worktree {
 // syncListToKanban syncs the list selectedIdx to kanban position.
 // Called when switching from list to kanban view.
 func (p *Plugin) syncListToKanban() {
+	if p.shellSelected {
+		p.kanbanCol = kanbanShellColumnIndex
+		if p.selectedShellIdx >= 0 && p.selectedShellIdx < len(p.shells) {
+			p.kanbanRow = p.selectedShellIdx
+		} else {
+			p.kanbanRow = 0
+		}
+		return
+	}
 	wt := p.selectedWorktree()
 	if wt == nil {
 		p.kanbanCol = 0
@@ -132,7 +213,7 @@ func (p *Plugin) syncListToKanban() {
 		items := columns[status]
 		for rowIdx, item := range items {
 			if item.Name == wt.Name {
-				p.kanbanCol = colIdx
+				p.kanbanCol = colIdx + 1
 				p.kanbanRow = rowIdx
 				return
 			}

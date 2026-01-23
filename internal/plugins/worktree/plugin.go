@@ -83,7 +83,7 @@ const (
 	regionWorktreesPlusButton  = "worktrees-plus-button"
 
 	// Type selector modal regions
-	regionTypeSelectorOption = "type-selector-option"
+	regionTypeSelectorOption  = "type-selector-option"
 	regionTypeSelectorConfirm = "type-selector-confirm"
 	regionTypeSelectorCancel  = "type-selector-cancel"
 
@@ -120,8 +120,8 @@ type Plugin struct {
 	scrollOffset       int // Sidebar list scroll offset
 	visibleCount       int // Number of visible list items
 	previewOffset      int
-	previewHorizOffset int  // Horizontal scroll offset for preview pane
-	autoScrollOutput   bool // Auto-scroll output to follow agent (paused when user scrolls up)
+	previewHorizOffset int       // Horizontal scroll offset for preview pane
+	autoScrollOutput   bool      // Auto-scroll output to follow agent (paused when user scrolls up)
 	sidebarWidth       int       // Persisted sidebar width
 	sidebarVisible     bool      // Whether sidebar is visible (toggled with \)
 	flashPreviewTime   time.Time // When preview flash was triggered
@@ -129,7 +129,7 @@ type Plugin struct {
 	toastTime          time.Time // When toast was triggered
 
 	// Kanban view state
-	kanbanCol int // Current column index (0=Active, 1=Waiting, 2=Done, 3=Paused)
+	kanbanCol int // Current column index (0=Shells, 1=Active, 2=Thinking, 3=Waiting, 4=Done, 5=Paused)
 	kanbanRow int // Current row within the column
 
 	// Agent state
@@ -155,8 +155,8 @@ type Plugin struct {
 	// Diff state
 	diffContent   string
 	diffRaw       string
-	diffViewMode  DiffViewMode              // Unified or side-by-side
-	multiFileDiff *gitstatus.MultiFileDiff  // Parsed multi-file diff with positions
+	diffViewMode  DiffViewMode             // Unified or side-by-side
+	multiFileDiff *gitstatus.MultiFileDiff // Parsed multi-file diff with positions
 
 	// File picker modal state (gf command)
 	filePickerIdx int // Selected file index in picker
