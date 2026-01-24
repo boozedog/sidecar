@@ -310,7 +310,16 @@ var DimStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
    pathLineCount := (pathWidth + contentWidth - 1) / contentWidth
    ```
 
-8. **Background region clicks leak through modals** - When `renderListView()` is called to generate background text for `ui.OverlayModal()`, it registers full-screen hit regions (sidebar, preview, divider, etc.) as a side effect. Modal-specific regions only cover interactive elements, so clicks on empty modal space match background regions. The fix: `mouse.go` has guards at the top of `handleMouseClick`, `handleMouseHover`, `handleMouseScroll`, `handleMouseDrag`, `handleMouseDragEnd`, and `handleMouseDoubleClick` that use `isModalViewMode()` + `isBackgroundRegion()` to absorb these events. New modals automatically benefit from these guards—no backdrop/body regions needed.
+8. **Bordered inputs take 2 lines, not 1** - Text inputs with `Border(lipgloss.NormalBorder())` render as 2 lines (top border + content, bottom border). When calculating button Y positions, count bordered inputs as 2 lines each:
+   ```go
+   // Line 0: "Name:"
+   // Lines 1-2: bordered input (2 lines)  ← not just line 1!
+   // Line 3: blank
+   // Line 4: buttons
+   buttonRow := 4  // Not 3!
+   ```
+
+9. **Background region clicks leak through modals** - When `renderListView()` is called to generate background text for `ui.OverlayModal()`, it registers full-screen hit regions (sidebar, preview, divider, etc.) as a side effect. Modal-specific regions only cover interactive elements, so clicks on empty modal space match background regions. The fix: `mouse.go` has guards at the top of `handleMouseClick`, `handleMouseHover`, `handleMouseScroll`, `handleMouseDrag`, `handleMouseDragEnd`, and `handleMouseDoubleClick` that use `isModalViewMode()` + `isBackgroundRegion()` to absorb these events. New modals automatically benefit from these guards—no backdrop/body regions needed.
 
 ## Hit Region Calculation for Modal Buttons
 
