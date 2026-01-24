@@ -179,26 +179,19 @@ func getBlameAgeColor(commitTime time.Time) lipgloss.Color {
 
 	switch {
 	case age < 24*time.Hour:
-		// Less than 1 day - bright green
-		return lipgloss.Color("#10B981")
+		return styles.Success
 	case age < 7*24*time.Hour:
-		// Less than 1 week - lighter green
-		return lipgloss.Color("#34D399")
+		return styles.BlameAge1
 	case age < 30*24*time.Hour:
-		// Less than 1 month - yellow/green
-		return lipgloss.Color("#84CC16")
+		return styles.BlameAge2
 	case age < 90*24*time.Hour:
-		// Less than 3 months - yellow
-		return lipgloss.Color("#FBBF24")
+		return styles.BlameAge3
 	case age < 180*24*time.Hour:
-		// Less than 6 months - orange
-		return lipgloss.Color("#F97316")
+		return styles.BlameAge4
 	case age < 365*24*time.Hour:
-		// Less than 1 year - muted
-		return lipgloss.Color("#9CA3AF")
+		return styles.BlameAge5
 	default:
-		// More than 1 year - very muted
-		return lipgloss.Color("#6B7280")
+		return styles.TextMuted
 	}
 }
 

@@ -86,8 +86,8 @@ func (p *Plugin) renderWelcomeGuide(width, height int) string {
 	var lines []string
 
 	// Section Style
-	sectionStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("62"))
-	warningStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214"))
+	sectionStyle := lipgloss.NewStyle().Bold(true).Foreground(styles.Primary)
+	warningStyle := lipgloss.NewStyle().Bold(true).Foreground(styles.Warning)
 
 	// Check if tmux is installed
 	if !isTmuxInstalled() {
@@ -385,7 +385,7 @@ func (p *Plugin) renderOrphanedMessage(agentType AgentType) string {
 
 	// Action prompt
 	actionStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("62"))
+		Foreground(styles.Primary)
 	lines = append(lines, actionStyle.Render("Press Enter to start a new session"))
 
 	return strings.Join(lines, "\n")
@@ -569,8 +569,8 @@ func (p *Plugin) renderShellPrimer(width, height int) string {
 	var lines []string
 
 	// Section style
-	sectionStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("62"))
-	warningStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214"))
+	sectionStyle := lipgloss.NewStyle().Bold(true).Foreground(styles.Primary)
+	warningStyle := lipgloss.NewStyle().Bold(true).Foreground(styles.Warning)
 
 	// Check if tmux is installed
 	if !isTmuxInstalled() {
@@ -630,14 +630,14 @@ func (p *Plugin) renderCommitStatusHeader(width int) string {
 	// Box style for header
 	headerStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
+		BorderForeground(styles.Primary).
 		Padding(0, 1).
 		Width(width - 2)
 
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("62"))
-	hashStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
-	pushedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	localStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(styles.Primary)
+	hashStyle := lipgloss.NewStyle().Foreground(styles.Warning)
+	pushedStyle := lipgloss.NewStyle().Foreground(styles.Success)
+	localStyle := lipgloss.NewStyle().Foreground(styles.TextMuted)
 
 	var sb strings.Builder
 	sb.WriteString(titleStyle.Render(fmt.Sprintf("Commits (%d)", len(p.commitStatusList))))

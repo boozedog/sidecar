@@ -330,7 +330,7 @@ func (m Model) renderProjectAddOverlay(content string) string {
 
 	// Error message
 	if m.projectAddError != "" {
-		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+		errStyle := lipgloss.NewStyle().Foreground(styles.Error)
 		b.WriteString("\n")
 		b.WriteString(errStyle.Render(m.projectAddError))
 		b.WriteString("\n")

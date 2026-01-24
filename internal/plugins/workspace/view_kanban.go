@@ -57,10 +57,10 @@ func (p *Plugin) renderKanbanView(width, height int) string {
 	}
 	columnColors := map[WorktreeStatus]lipgloss.Color{
 		StatusActive:   styles.StatusCompleted.GetForeground().(lipgloss.Color), // Green
-		StatusThinking: lipgloss.Color("141"),                                   // Purple
+		StatusThinking: styles.Primary,                                            // Purple
 		StatusWaiting:  styles.StatusModified.GetForeground().(lipgloss.Color),  // Yellow
-		StatusDone:     lipgloss.Color("81"),                                    // Cyan
-		StatusPaused:   lipgloss.Color("245"),                                   // Gray
+		StatusDone:     styles.Secondary,                                        // Cyan/Blue
+		StatusPaused:   styles.TextMuted,                                        // Gray
 	}
 
 	// Calculate column widths (account for panel borders)

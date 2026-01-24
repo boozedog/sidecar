@@ -530,7 +530,7 @@ func (p *Plugin) renderCompactSessionRow(session adapter.Session, selected bool,
 		sb.WriteString(" ")
 		if worktreeBadge != "" {
 			// Cyan/teal color for worktree badge to stand out
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#14B8A6")).Render(worktreeBadge))
+			sb.WriteString(lipgloss.NewStyle().Foreground(styles.Success).Render(worktreeBadge))
 			sb.WriteString(" ")
 		}
 		sb.WriteString(styles.Body.Render(name))

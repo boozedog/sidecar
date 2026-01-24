@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/marcus/sidecar/internal/styles"
 )
 
 // PromptPicker is a modal for selecting a prompt template.
@@ -198,15 +199,15 @@ func (pp *PromptPicker) View() string {
 	// Filter input - show focused style when filter has keyboard focus
 	sb.WriteString("Filter:")
 	sb.WriteString("\n")
-	filterStyle := inputStyle.Width(30)
+	filterStyle := inputStyle().Width(30)
 	if pp.filterFocused {
-		filterStyle = inputFocusedStyle.Width(30)
+		filterStyle = inputFocusedStyle().Width(30)
 	}
 	sb.WriteString(filterStyle.Render(pp.filterInput.View()))
 	sb.WriteString("\n\n")
 
 	// Column headers
-	colStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	colStyle := lipgloss.NewStyle().Foreground(styles.TextMuted)
 	sb.WriteString(colStyle.Render(fmt.Sprintf("  %-24s %-7s %-10s %s", "Prompt", "Scope", "Ticket", "Preview")))
 	sb.WriteString("\n")
 	sb.WriteString(colStyle.Render(strings.Repeat("─", min(pp.width-6, 70))))
@@ -219,9 +220,9 @@ func (pp *PromptPicker) View() string {
 	}
 	noneLine := fmt.Sprintf("%s%-24s %-7s %-10s %s", nonePrefix, "(none)", "", "", "No prompt template")
 	if pp.selectedIdx == -1 {
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(noneLine))
+		sb.WriteString(lipgloss.NewStyle().Foreground(styles.Primary).Render(noneLine))
 	} else if pp.hoverIdx == -1 {
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("250")).Render(noneLine))
+		sb.WriteString(lipgloss.NewStyle().Foreground(styles.TextSecondary).Render(noneLine))
 	} else {
 		sb.WriteString(dimText(noneLine))
 	}
@@ -260,9 +261,9 @@ func (pp *PromptPicker) View() string {
 
 		// Style priority: selected > hover > default
 		if i == pp.selectedIdx {
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(line))
+			sb.WriteString(lipgloss.NewStyle().Foreground(styles.Primary).Render(line))
 		} else if i == pp.hoverIdx {
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("250")).Render(line))
+			sb.WriteString(lipgloss.NewStyle().Foreground(styles.TextSecondary).Render(line))
 		} else {
 			sb.WriteString(dimText(line))
 		}

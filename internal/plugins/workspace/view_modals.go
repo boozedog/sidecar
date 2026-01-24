@@ -44,18 +44,18 @@ func (p *Plugin) renderCreateModal(width, height int) string {
 
 	// Name field - use textinput.View() for proper cursor rendering
 	nameLabel := "Name:"
-	nameStyle := inputStyle
+	nameStyle := inputStyle()
 	if p.createFocus == 0 {
-		nameStyle = inputFocusedStyle
+		nameStyle = inputFocusedStyle()
 	}
 
 	// Add validation indicator to label
 	nameValue := p.createNameInput.Value()
 	if nameValue != "" {
 		if p.branchNameValid {
-			nameLabel = "Name: " + lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Render("✓")
+			nameLabel = "Name: " + lipgloss.NewStyle().Foreground(styles.Success).Render("✓")
 		} else {
-			nameLabel = "Name: " + lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render("✗")
+			nameLabel = "Name: " + lipgloss.NewStyle().Foreground(styles.Error).Render("✗")
 		}
 	}
 
@@ -66,7 +66,7 @@ func (p *Plugin) renderCreateModal(width, height int) string {
 	// Show validation errors or sanitized suggestion
 	if nameValue != "" && !p.branchNameValid {
 		sb.WriteString("\n")
-		errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+		errorStyle := lipgloss.NewStyle().Foreground(styles.Error)
 		if len(p.branchNameErrors) > 0 {
 			sb.WriteString(errorStyle.Render("  ⚠ " + strings.Join(p.branchNameErrors, ", ")))
 		}
@@ -79,9 +79,9 @@ func (p *Plugin) renderCreateModal(width, height int) string {
 
 	// Base branch field with autocomplete
 	baseLabel := "Base Branch (default: current):"
-	baseStyle := inputStyle
+	baseStyle := inputStyle()
 	if p.createFocus == 1 {
-		baseStyle = inputFocusedStyle
+		baseStyle = inputFocusedStyle()
 	}
 	sb.WriteString(baseLabel)
 	sb.WriteString("\n")
@@ -104,7 +104,7 @@ func (p *Plugin) renderCreateModal(width, height int) string {
 			line := prefix + branch
 			sb.WriteString("\n")
 			if i == p.branchIdx {
-				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(line))
+				sb.WriteString(lipgloss.NewStyle().Foreground(styles.Primary).Render(line))
 			} else {
 				sb.WriteString(dimText(line))
 			}
@@ -121,9 +121,9 @@ func (p *Plugin) renderCreateModal(width, height int) string {
 
 	// Prompt field (focus=2)
 	promptLabel := "Prompt:"
-	promptStyle := inputStyle
+	promptStyle := inputStyle()
 	if p.createFocus == 2 {
-		promptStyle = inputFocusedStyle
+		promptStyle = inputFocusedStyle()
 	}
 	sb.WriteString(promptLabel)
 	sb.WriteString("\n")
@@ -178,9 +178,9 @@ func (p *Plugin) renderCreateModal(width, height int) string {
 			taskLabel = "Link Task (optional):"
 		}
 
-		taskStyle := inputStyle
+		taskStyle := inputStyle()
 		if p.createFocus == 3 {
-			taskStyle = inputFocusedStyle
+			taskStyle = inputFocusedStyle()
 		}
 		sb.WriteString(taskLabel)
 		sb.WriteString("\n")
@@ -252,7 +252,7 @@ func (p *Plugin) renderCreateModal(width, height int) string {
 					line := fmt.Sprintf("%s%s  %s", prefix, task.ID, title)
 					sb.WriteString("\n")
 					if i == p.taskSearchIdx {
-						sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(line))
+						sb.WriteString(lipgloss.NewStyle().Foreground(styles.Primary).Render(line))
 					} else {
 						sb.WriteString(dimText(line))
 					}
@@ -288,7 +288,7 @@ func (p *Plugin) renderCreateModal(width, height int) string {
 		line := prefix + name
 
 		if p.createFocus == 4 && at == p.createAgentType {
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(line))
+			sb.WriteString(lipgloss.NewStyle().Foreground(styles.Primary).Render(line))
 		} else if at == p.createAgentType {
 			sb.WriteString(line)
 		} else {
@@ -309,7 +309,7 @@ func (p *Plugin) renderCreateModal(width, height int) string {
 			skipLine := fmt.Sprintf("  %s Auto-approve all actions", checkBox)
 
 			if p.createFocus == 5 {
-				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(skipLine))
+				sb.WriteString(lipgloss.NewStyle().Foreground(styles.Primary).Render(skipLine))
 			} else {
 				sb.WriteString(skipLine)
 			}
@@ -326,7 +326,7 @@ func (p *Plugin) renderCreateModal(width, height int) string {
 
 	// Display error if present
 	if p.createError != "" {
-		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+		errStyle := lipgloss.NewStyle().Foreground(styles.Error)
 		sb.WriteString(errStyle.Render("Error: " + p.createError))
 		sb.WriteString("\n\n")
 	}
@@ -349,7 +349,7 @@ func (p *Plugin) renderCreateModal(width, height int) string {
 	sb.WriteString(cancelBtnStyle.Render(" Cancel "))
 
 	content := sb.String()
-	modal := modalStyle.Width(modalW).Render(content)
+	modal := modalStyle().Width(modalW).Render(content)
 
 	// Calculate modal position for hit regions
 	modalH := lipgloss.Height(modal)
@@ -531,7 +531,7 @@ func (p *Plugin) renderTaskLinkModal(width, height int) string {
 
 	// Search field - use textinput.View() for proper cursor rendering
 	searchLabel := "Search tasks:"
-	searchStyle := inputFocusedStyle
+	searchStyle := inputFocusedStyle()
 	sb.WriteString(searchLabel)
 	sb.WriteString("\n")
 	sb.WriteString(searchStyle.Render(p.taskSearchInput.View()))
@@ -562,7 +562,7 @@ func (p *Plugin) renderTaskLinkModal(width, height int) string {
 			line := fmt.Sprintf("%s%s  %s", prefix, task.ID, taskTitle)
 			sb.WriteString("\n")
 			if i == p.taskSearchIdx {
-				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(line))
+				sb.WriteString(lipgloss.NewStyle().Foreground(styles.Primary).Render(line))
 			} else {
 				sb.WriteString(dimText(line))
 			}
@@ -599,7 +599,7 @@ func (p *Plugin) renderTaskLinkModal(width, height int) string {
 			line := fmt.Sprintf("%s%s  %s", prefix, task.ID, taskTitle)
 			sb.WriteString("\n")
 			if i == p.taskSearchIdx {
-				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(line))
+				sb.WriteString(lipgloss.NewStyle().Foreground(styles.Primary).Render(line))
 			} else {
 				sb.WriteString(dimText(line))
 			}
@@ -614,7 +614,7 @@ func (p *Plugin) renderTaskLinkModal(width, height int) string {
 	sb.WriteString(dimText("↑/↓ navigate  Enter select  Esc cancel"))
 
 	content := sb.String()
-	modal := modalStyle.Width(modalW).Render(content)
+	modal := modalStyle().Width(modalW).Render(content)
 
 	// Calculate modal position for hit regions
 	modalH := lipgloss.Height(modal)
@@ -663,7 +663,7 @@ func (p *Plugin) renderConfirmDeleteModal(width, height int) string {
 
 	var sb strings.Builder
 	title := "Delete Worktree?"
-	sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196")).Render(title))
+	sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(styles.Error).Render(title))
 	sb.WriteString("\n\n")
 
 	// Worktree name
@@ -673,7 +673,7 @@ func (p *Plugin) renderConfirmDeleteModal(width, height int) string {
 	sb.WriteString("\n")
 
 	// Warning text
-	warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+	warningStyle := lipgloss.NewStyle().Foreground(styles.Warning)
 	sb.WriteString(warningStyle.Render("This will:"))
 	sb.WriteString("\n")
 	sb.WriteString(dimText("  • Remove the working directory"))
@@ -720,7 +720,7 @@ func (p *Plugin) renderConfirmDeleteModal(width, height int) string {
 			line := fmt.Sprintf("  %s %s", checkbox, opt.label)
 
 			if p.deleteConfirmFocus == opt.focusID {
-				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Bold(true).Render("> " + line[2:]))
+				sb.WriteString(lipgloss.NewStyle().Foreground(styles.Primary).Bold(true).Render("> " + line[2:]))
 			} else {
 				sb.WriteString(line)
 			}
@@ -759,7 +759,7 @@ func (p *Plugin) renderConfirmDeleteModal(width, height int) string {
 	sb.WriteString(cancelStyle.Render(" Cancel "))
 
 	content := sb.String()
-	modal := modalStyle.Width(modalW).Render(content)
+	modal := modalStyle().Width(modalW).Render(content)
 
 	// Register hit regions for the modal
 	// Calculate modal position (centered)
@@ -861,7 +861,7 @@ func (p *Plugin) renderConfirmDeleteShellModal(width, height int) string {
 
 	var sb strings.Builder
 	title := "Delete Shell?"
-	sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196")).Render(title))
+	sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(styles.Error).Render(title))
 	sb.WriteString("\n\n")
 
 	// Shell info
@@ -870,7 +870,7 @@ func (p *Plugin) renderConfirmDeleteShellModal(width, height int) string {
 	sb.WriteString("\n")
 
 	// Warning text
-	warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+	warningStyle := lipgloss.NewStyle().Foreground(styles.Warning)
 	sb.WriteString(warningStyle.Render("This will:"))
 	sb.WriteString("\n")
 	sb.WriteString(dimText("  • Terminate the tmux session"))
@@ -896,7 +896,7 @@ func (p *Plugin) renderConfirmDeleteShellModal(width, height int) string {
 	sb.WriteString(cancelStyle.Render(" Cancel "))
 
 	content := sb.String()
-	modal := modalStyle.Width(modalW).Render(content)
+	modal := modalStyle().Width(modalW).Render(content)
 
 	// Calculate modal position for hit regions
 	modalHeight := lipgloss.Height(modal)
@@ -959,9 +959,9 @@ func (p *Plugin) renderRenameShellModal(width, height int) string {
 
 	// New name field
 	nameLabel := "New Name:"
-	nameStyle := inputFocusedStyle
+	nameStyle := inputFocusedStyle()
 	if p.renameShellFocus != 0 {
-		nameStyle = inputStyle
+		nameStyle = inputStyle()
 	}
 	sb.WriteString(nameLabel)
 	sb.WriteString("\n")
@@ -971,7 +971,7 @@ func (p *Plugin) renderRenameShellModal(width, height int) string {
 	// Display error if present
 	if p.renameShellError != "" {
 		sb.WriteString("\n")
-		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+		errStyle := lipgloss.NewStyle().Foreground(styles.Error)
 		sb.WriteString(errStyle.Render("Error: " + p.renameShellError))
 	}
 
@@ -995,7 +995,7 @@ func (p *Plugin) renderRenameShellModal(width, height int) string {
 	sb.WriteString(cancelStyle.Render(" Cancel "))
 
 	content := sb.String()
-	modal := modalStyle.Width(modalW).Render(content)
+	modal := modalStyle().Width(modalW).Render(content)
 
 	// Calculate modal position for hit regions
 	modalHeight := lipgloss.Height(modal)
@@ -1048,7 +1048,7 @@ func (p *Plugin) renderPromptPickerModal(width, height int) string {
 	p.promptPicker.height = height
 
 	content := p.promptPicker.View()
-	modal := modalStyle.Width(modalW).Render(content)
+	modal := modalStyle().Width(modalW).Render(content)
 
 	// Calculate modal position for hit regions
 	modalH := lipgloss.Height(modal)
@@ -1116,7 +1116,7 @@ func (p *Plugin) renderAgentChoiceModal(width, height int) string {
 		selected := i == p.agentChoiceIdx && p.agentChoiceButtonFocus == 0
 		if selected {
 			prefix = "> "
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(prefix + opt))
+			sb.WriteString(lipgloss.NewStyle().Foreground(styles.Primary).Render(prefix + opt))
 		} else {
 			sb.WriteString(dimText(prefix + opt))
 		}
@@ -1143,7 +1143,7 @@ func (p *Plugin) renderAgentChoiceModal(width, height int) string {
 	sb.WriteString(cancelStyle.Render(" Cancel "))
 
 	content := sb.String()
-	modal := modalStyle.Width(modalW).Render(content)
+	modal := modalStyle().Width(modalW).Render(content)
 
 	// Register hit regions for the modal
 	// Calculate modal position (centered)
@@ -1225,21 +1225,21 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 	for _, step := range steps {
 		status := p.mergeState.StepStatus[step]
 		icon := "○" // pending
-		color := lipgloss.Color("240")
+		color := styles.TextMuted
 
 		switch status {
 		case "running":
 			icon = "●"
-			color = lipgloss.Color("214") // yellow
+			color = styles.Warning // yellow
 		case "done":
 			icon = "✓"
-			color = lipgloss.Color("42") // green
+			color = styles.Success // green
 		case "error":
 			icon = "✗"
-			color = lipgloss.Color("196") // red
+			color = styles.Error // red
 		case "skipped":
 			icon = "○"
-			color = lipgloss.Color("240") // gray, same as pending
+			color = styles.TextMuted // gray, same as pending
 		}
 
 		// Highlight current step
@@ -1298,10 +1298,10 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 
 		// Style helpers for selection and hover states
 		selectedStyle := func(s string) string {
-			return lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(s)
+			return lipgloss.NewStyle().Foreground(styles.Primary).Render(s)
 		}
 		hoverStyle := func(s string) string {
-			return lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(s)
+			return lipgloss.NewStyle().Foreground(styles.TextSecondary).Render(s)
 		}
 
 		// Option 1: Create PR (default)
@@ -1331,7 +1331,7 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 		sb.WriteString("\n")
 		sb.WriteString(dimText(fmt.Sprintf("      Merge directly to '%s' without PR", baseBranch)))
 		sb.WriteString("\n")
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("      Warning: Bypasses code review"))
+		sb.WriteString(lipgloss.NewStyle().Foreground(styles.Warning).Render("      Warning: Bypasses code review"))
 		sb.WriteString("\n\n")
 
 		sb.WriteString(dimText("↑/↓: select   Enter: continue   Esc: cancel"))
@@ -1350,7 +1350,7 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 
 	case MergeStepWaitingMerge:
 		if p.mergeState.ExistingPR {
-			sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214")).Render("Using Existing Pull Request"))
+			sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(styles.Warning).Render("Using Existing Pull Request"))
 		} else {
 			sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Pull Request Created"))
 		}
@@ -1371,7 +1371,7 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 
 		// Option 1: Delete worktree (default)
 		if p.mergeState.DeleteAfterMerge {
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(" ● Delete worktree after merge"))
+			sb.WriteString(lipgloss.NewStyle().Foreground(styles.Primary).Render(" ● Delete worktree after merge"))
 		} else {
 			sb.WriteString(dimText(" ○ Delete worktree after merge"))
 		}
@@ -1379,7 +1379,7 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 
 		// Option 2: Keep worktree
 		if !p.mergeState.DeleteAfterMerge {
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(" ● Keep worktree"))
+			sb.WriteString(lipgloss.NewStyle().Foreground(styles.Primary).Render(" ● Keep worktree"))
 		} else {
 			sb.WriteString(dimText(" ○ Keep worktree"))
 		}
@@ -1395,7 +1395,7 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 		if p.mergeState.UseDirectMerge {
 			mergeMethod = "Direct Merge Complete"
 		}
-		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("42")).Render(mergeMethod + "!"))
+		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(styles.Success).Render(mergeMethod + "!"))
 		sb.WriteString("\n\n")
 
 		sb.WriteString(strings.Repeat("─", min(modalW-4, 60)))
@@ -1433,10 +1433,10 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 			line := fmt.Sprintf("  %s %s", checkbox, opt.label)
 
 			if p.mergeState.ConfirmationFocus == i {
-				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Bold(true).Render("> " + line[2:]))
+				sb.WriteString(lipgloss.NewStyle().Foreground(styles.Primary).Bold(true).Render("> " + line[2:]))
 			} else if p.mergeConfirmCheckboxHover == i+1 {
 				// Hover state (subtle highlight)
-				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("75")).Render(line))
+				sb.WriteString(lipgloss.NewStyle().Foreground(styles.Secondary).Render(line))
 			} else {
 				sb.WriteString(line)
 			}
@@ -1461,10 +1461,10 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 		pullLabel := fmt.Sprintf("Update local '%s' from remote", baseBranch)
 		pullLine := fmt.Sprintf("  %s %s", pullCheckbox, pullLabel)
 		if p.mergeState.ConfirmationFocus == 3 {
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Bold(true).Render("> " + pullLine[2:]))
+			sb.WriteString(lipgloss.NewStyle().Foreground(styles.Primary).Bold(true).Render("> " + pullLine[2:]))
 		} else if p.mergeConfirmCheckboxHover == 4 {
 			// Hover state (subtle highlight)
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("75")).Render(pullLine))
+			sb.WriteString(lipgloss.NewStyle().Foreground(styles.Secondary).Render(pullLine))
 		} else {
 			sb.WriteString(pullLine)
 		}
@@ -1480,20 +1480,20 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 		confirmLabel := " Clean Up "
 		skipLabel := " Skip All "
 
-		confirmStyle := lipgloss.NewStyle().Background(lipgloss.Color("62")).Foreground(lipgloss.Color("0"))
-		skipStyle := lipgloss.NewStyle().Background(lipgloss.Color("240")).Foreground(lipgloss.Color("255"))
+		confirmStyle := lipgloss.NewStyle().Background(styles.Primary).Foreground(styles.TextInverse)
+		skipStyle := lipgloss.NewStyle().Background(styles.BgTertiary).Foreground(styles.TextPrimary)
 
 		if p.mergeState.ConfirmationFocus == 4 {
-			confirmStyle = confirmStyle.Bold(true).Background(lipgloss.Color("42"))
+			confirmStyle = confirmStyle.Bold(true).Background(styles.Success)
 		} else if p.mergeConfirmButtonHover == 1 {
 			// Hover state for Clean Up button
-			confirmStyle = confirmStyle.Background(lipgloss.Color("75"))
+			confirmStyle = confirmStyle.Background(styles.Secondary)
 		}
 		if p.mergeState.ConfirmationFocus == 5 {
-			skipStyle = skipStyle.Bold(true).Background(lipgloss.Color("214"))
+			skipStyle = skipStyle.Bold(true).Background(styles.Warning)
 		} else if p.mergeConfirmButtonHover == 2 {
 			// Hover state for Skip All button
-			skipStyle = skipStyle.Background(lipgloss.Color("245"))
+			skipStyle = skipStyle.Background(styles.TextMuted)
 		}
 
 		sb.WriteString("  ")
@@ -1508,7 +1508,7 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 		sb.WriteString("Cleaning up worktree and branch...")
 
 	case MergeStepDone:
-		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("42")).Render("Merge workflow complete!"))
+		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(styles.Success).Render("Merge workflow complete!"))
 		sb.WriteString("\n\n")
 
 		// Show cleanup summary
@@ -1516,7 +1516,7 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 			results := p.mergeState.CleanupResults
 			sb.WriteString("Summary:\n")
 
-			successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+			successStyle := lipgloss.NewStyle().Foreground(styles.Success)
 			if results.LocalWorktreeDeleted {
 				sb.WriteString(successStyle.Render("  ✓ Local worktree deleted"))
 				sb.WriteString("\n")
@@ -1535,8 +1535,8 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 					sb.WriteString("\n")
 				} else if results.PullError != nil {
 					// Truncated error with toggle
-					warnStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
-					errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+					warnStyle := lipgloss.NewStyle().Foreground(styles.Warning)
+					errorStyle := lipgloss.NewStyle().Foreground(styles.Error)
 
 					sb.WriteString(warnStyle.Render("  ⚠ Pull failed: "))
 					sb.WriteString(errorStyle.Render(results.PullErrorSummary))
@@ -1604,7 +1604,7 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 			// Show any errors/warnings
 			if len(results.Errors) > 0 {
 				sb.WriteString("\n")
-				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("Warnings:"))
+				sb.WriteString(lipgloss.NewStyle().Foreground(styles.Warning).Render("Warnings:"))
 				sb.WriteString("\n")
 				for _, err := range results.Errors {
 					sb.WriteString(dimText("  • " + err))
@@ -1630,12 +1630,12 @@ func (p *Plugin) renderMergeModal(width, height int) string {
 	// Show error if any
 	if p.mergeState.Error != nil {
 		sb.WriteString("\n\n")
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render(
+		sb.WriteString(lipgloss.NewStyle().Foreground(styles.Error).Render(
 			fmt.Sprintf("Error: %s", p.mergeState.Error.Error())))
 	}
 
 	content := sb.String()
-	modal := modalStyle.Width(modalW).Render(content)
+	modal := modalStyle().Width(modalW).Render(content)
 
 	// Register hit regions for merge method options during MergeStepMergeMethod
 	if p.mergeState.Step == MergeStepMergeMethod {
@@ -1749,7 +1749,7 @@ func (p *Plugin) renderCommitForMergeModal(width, height int) string {
 
 	var sb strings.Builder
 	title := "Uncommitted Changes"
-	sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214")).Render(title))
+	sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(styles.Warning).Render(title))
 	sb.WriteString("\n\n")
 
 	// Workspace info
@@ -1771,7 +1771,7 @@ func (p *Plugin) renderCommitForMergeModal(width, height int) string {
 	sb.WriteString("\n")
 
 	// Info message
-	infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	infoStyle := lipgloss.NewStyle().Foreground(styles.TextMuted)
 	sb.WriteString(infoStyle.Render("You must commit these changes before creating a PR."))
 	sb.WriteString("\n")
 	sb.WriteString(infoStyle.Render("All changes will be staged and committed."))
@@ -1779,13 +1779,13 @@ func (p *Plugin) renderCommitForMergeModal(width, height int) string {
 
 	// Commit message field
 	sb.WriteString("Commit message:\n")
-	sb.WriteString(inputFocusedStyle.Render(p.mergeCommitMessageInput.View()))
+	sb.WriteString(inputFocusedStyle().Render(p.mergeCommitMessageInput.View()))
 	sb.WriteString("\n")
 
 	// Display error if present
 	if p.mergeCommitState.Error != "" {
 		sb.WriteString("\n")
-		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+		errStyle := lipgloss.NewStyle().Foreground(styles.Error)
 		sb.WriteString(errStyle.Render("Error: " + p.mergeCommitState.Error))
 	}
 
@@ -1793,7 +1793,7 @@ func (p *Plugin) renderCommitForMergeModal(width, height int) string {
 	sb.WriteString(dimText("Enter to commit and continue • Esc to cancel"))
 
 	content := sb.String()
-	modal := modalStyle.Width(modalW).Render(content)
+	modal := modalStyle().Width(modalW).Render(content)
 
 	// Use OverlayModal for dimmed background effect
 	return ui.OverlayModal(background, modal, width, height)
@@ -1820,13 +1820,13 @@ func (p *Plugin) renderTypeSelectorModal(width, height int) string {
 	options := []string{"Shell", "Workspace"}
 	for i, opt := range options {
 		prefix := "  "
-		style := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+		style := lipgloss.NewStyle().Foreground(styles.TextMuted)
 
 		if i == p.typeSelectorIdx {
 			prefix = "> "
-			style = lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Bold(true)
+			style = lipgloss.NewStyle().Foreground(styles.Primary).Bold(true)
 		} else if i == p.typeSelectorHover {
-			style = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+			style = lipgloss.NewStyle().Foreground(styles.TextSecondary)
 		}
 
 		sb.WriteString(style.Render(prefix + opt))
@@ -1851,9 +1851,9 @@ func (p *Plugin) renderTypeSelectorModal(width, height int) string {
 		p.typeSelectorNameInput.Width = inputW
 		p.typeSelectorNameInput.Placeholder = p.nextShellDisplayName()
 
-		nameStyle := inputStyle
+		nameStyle := inputStyle()
 		if p.typeSelectorFocus == 1 {
-			nameStyle = inputFocusedStyle
+			nameStyle = inputFocusedStyle()
 		}
 		sb.WriteString(nameStyle.Render(p.typeSelectorNameInput.View()))
 		sb.WriteString("\n")
@@ -1882,7 +1882,7 @@ func (p *Plugin) renderTypeSelectorModal(width, height int) string {
 	sb.WriteString(cancelStyle.Render(" Cancel "))
 
 	content := sb.String()
-	modal := modalStyle.Width(modalW).Render(content)
+	modal := modalStyle().Width(modalW).Render(content)
 
 	// Hit regions
 	modalHeight := lipgloss.Height(modal)

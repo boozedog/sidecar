@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/marcus/sidecar/internal/app"
+	"github.com/marcus/sidecar/internal/styles"
 	"github.com/marcus/sidecar/internal/mouse"
 	"github.com/marcus/sidecar/internal/plugin"
 	"github.com/marcus/sidecar/internal/plugins/filebrowser"
@@ -1072,7 +1073,7 @@ func (p *Plugin) initCommitTextarea() {
 	p.commitMessage.SetValue("") // Ensure empty
 	p.commitMessage.Placeholder = "Type your commit message..."
 	// Make placeholder more visible (default color 240 is too dim)
-	p.commitMessage.FocusedStyle.Placeholder = lipgloss.NewStyle().Foreground(lipgloss.Color("248"))
+	p.commitMessage.FocusedStyle.Placeholder = lipgloss.NewStyle().Foreground(styles.TextSecondary)
 	p.commitMessage.Focus()
 	p.commitMessage.CharLimit = 0
 	// Size for modal: modalWidth - 6 (border+padding) - 2 (textarea internal padding)

@@ -179,7 +179,7 @@ func renderAdapterIcon(session adapter.Session) string {
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("#10A37F")).Render(icon)
 	case "cursor-cli":
 		// Cursor purple
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("#7C3AED")).Render(icon)
+		return lipgloss.NewStyle().Foreground(styles.Primary).Render(icon)
 	default:
 		return styles.Muted.Render(icon)
 	}
@@ -832,7 +832,7 @@ func (p *Plugin) renderThinkingBlock(block adapter.ContentBlock, msgID string, m
 
 	// Light purple style for thinking blocks
 	thinkingStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#A78BFA")).
+		Foreground(styles.Primary).
 		Italic(true)
 
 	thinkingIcon := "◈"
@@ -924,7 +924,7 @@ func (p *Plugin) renderToolUseBlock(block adapter.ContentBlock, maxWidth int) []
 	if block.IsError {
 		// Red styling for errors with x indicator
 		errorStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#F87171")) // Light red
+			Foreground(styles.Error)
 		// Build error header without the original icon (avoid byte slicing Unicode)
 		errorHeader := "✗ " + strings.TrimPrefix(toolHeader, icon+" ")
 		lines = append(lines, errorStyle.Render(errorHeader))

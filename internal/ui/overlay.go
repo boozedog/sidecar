@@ -6,12 +6,13 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/marcus/sidecar/internal/styles"
 )
 
 // DimStyle applies a dim gray color to background content behind modals.
 // We strip existing ANSI codes and apply gray because SGR 2 (faint) doesn't
 // reliably combine with existing color codes in most terminals.
-var DimStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
+var DimStyle = lipgloss.NewStyle().Foreground(styles.TextMuted)
 
 // DimSequence and ResetSequence are the raw ANSI codes used by DimStyle.
 // Exported for testing.

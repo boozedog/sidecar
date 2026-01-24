@@ -10,23 +10,27 @@ import (
 	"github.com/marcus/sidecar/internal/styles"
 )
 
-var (
-	// Modal styles
-	modalStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")).
-			Padding(1, 2)
+// Modal style functions - return fresh styles using current theme colors.
+func modalStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.BorderActive).
+		Padding(1, 2)
+}
 
-	inputStyle = lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("240")).
-			Padding(0, 1)
+func inputStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(styles.BorderNormal).
+		Padding(0, 1)
+}
 
-	inputFocusedStyle = lipgloss.NewStyle().
-				Border(lipgloss.NormalBorder()).
-				BorderForeground(lipgloss.Color("62")).
-				Padding(0, 1)
-)
+func inputFocusedStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(styles.Primary).
+		Padding(0, 1)
+}
 
 
 // Panel dimension constants for consistent width calculations.
@@ -233,7 +237,7 @@ func (p *Plugin) renderSidebarContent(width, height int) string {
 
 	// Show warnings from delete operation if any
 	if len(p.deleteWarnings) > 0 {
-		warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214")) // Orange
+		warningStyle := lipgloss.NewStyle().Foreground(styles.Warning)
 		for _, w := range p.deleteWarnings {
 			// Truncate warning to fit width
 			if len(w) > width-2 {
@@ -245,7 +249,7 @@ func (p *Plugin) renderSidebarContent(width, height int) string {
 
 	// Show toast message if active (td-a1c8456f: session disconnect notification)
 	if p.toastMessage != "" && !p.toastTime.IsZero() && time.Since(p.toastTime) < flashDuration {
-		toastStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true) // Orange bold
+		toastStyle := lipgloss.NewStyle().Foreground(styles.Warning).Bold(true)
 		msg := p.toastMessage
 		if len(msg) > width-4 {
 			msg = msg[:width-7] + "..."
@@ -504,8 +508,8 @@ func (p *Plugin) renderWorktreeItem(wt *Worktree, selected bool, width int) stri
 		}
 		// Dimmed selection style (when preview pane is active)
 		dimmedSelectedStyle := lipgloss.NewStyle().
-			Background(lipgloss.Color("237")). // Darker background
-			Foreground(lipgloss.Color("252")). // Slightly dimmed text
+			Background(styles.BgSecondary).
+			Foreground(styles.TextSecondary).
 			Width(width)
 		return dimmedSelectedStyle.Render(content)
 	}
@@ -541,7 +545,7 @@ func (p *Plugin) renderWorktreeItem(wt *Worktree, selected bool, width int) stri
 	// Apply PR style
 	styledPRIcon := ""
 	if hasPR {
-		styledPRIcon = lipgloss.NewStyle().Foreground(lipgloss.Color("33")).Render(" PR") // blue
+		styledPRIcon = lipgloss.NewStyle().Foreground(styles.Secondary).Render(" PR")
 	}
 
 	// For non-selected, style parts individually
@@ -634,8 +638,8 @@ func (p *Plugin) renderShellEntryForSession(shell *ShellSession, selected bool, 
 		}
 		// Dimmed selection style
 		dimmedSelectedStyle := lipgloss.NewStyle().
-			Background(lipgloss.Color("237")).
-			Foreground(lipgloss.Color("252")).
+			Background(styles.BgSecondary).
+			Foreground(styles.TextSecondary).
 			Width(width)
 		return dimmedSelectedStyle.Render(content)
 	}

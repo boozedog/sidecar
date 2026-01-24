@@ -95,7 +95,7 @@ func (p *Plugin) renderPullConflict() string {
 
 	menuContent := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("1")). // Red border for conflicts
+		BorderForeground(styles.Error).
 		Padding(1, 2).
 		Width(menuWidth).
 		Render(sb.String())

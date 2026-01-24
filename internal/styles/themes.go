@@ -67,6 +67,20 @@ type ColorPalette struct {
 	ToastSuccessText string `json:"toastSuccessText"` // Toast success foreground
 	ToastErrorText   string `json:"toastErrorText"`   // Toast error foreground
 
+	// Danger button colors (for destructive action buttons)
+	DangerLight  string `json:"dangerLight"`  // Light red for danger button text
+	DangerDark   string `json:"dangerDark"`   // Dark red for danger button background
+	DangerBright string `json:"dangerBright"` // Bright red for focused danger button bg
+	DangerHover  string `json:"dangerHover"`  // Darker red for hover danger button bg
+	TextInverse  string `json:"textInverse"`  // Inverse text (white on dark themes)
+
+	// Blame age gradient colors (newest → oldest)
+	BlameAge1 string `json:"blameAge1"` // < 1 week (light green)
+	BlameAge2 string `json:"blameAge2"` // < 1 month (lime)
+	BlameAge3 string `json:"blameAge3"` // < 3 months (amber)
+	BlameAge4 string `json:"blameAge4"` // < 6 months (orange)
+	BlameAge5 string `json:"blameAge5"` // < 1 year (gray)
+
 	// Third-party theme names
 	SyntaxTheme   string `json:"syntaxTheme"`   // Chroma theme name
 	MarkdownTheme string `json:"markdownTheme"` // Glamour theme name
@@ -137,6 +151,20 @@ var (
 			ToastSuccessText: "#000000", // Black on green
 			ToastErrorText:   "#FFFFFF", // White on red
 
+			// Danger button colors
+			DangerLight:  "#FCA5A5",
+			DangerDark:   "#7F1D1D",
+			DangerBright: "#DC2626",
+			DangerHover:  "#B91C1C",
+			TextInverse:  "#FFFFFF",
+
+			// Blame age gradient
+			BlameAge1: "#34D399",
+			BlameAge2: "#84CC16",
+			BlameAge3: "#FBBF24",
+			BlameAge4: "#F97316",
+			BlameAge5: "#9CA3AF",
+
 			// Third-party themes
 			SyntaxTheme:   "monokai",
 			MarkdownTheme: "dark",
@@ -199,6 +227,20 @@ var (
 			ToastSuccessText: "#282A36", // Dark bg on green
 			ToastErrorText:   "#F8F8F2", // Light on red
 
+			// Danger button colors
+			DangerLight:  "#FFADAD",
+			DangerDark:   "#3D1F1F",
+			DangerBright: "#FF5555",
+			DangerHover:  "#E63E3E",
+			TextInverse:  "#F8F8F2",
+
+			// Blame age gradient
+			BlameAge1: "#69FF94",
+			BlameAge2: "#A4E22E",
+			BlameAge3: "#FFB86C",
+			BlameAge4: "#FF7979",
+			BlameAge5: "#6272A4",
+
 			// Third-party themes
 			SyntaxTheme:   "dracula",
 			MarkdownTheme: "dark",
@@ -252,6 +294,20 @@ var (
 			ToastSuccessText: "#1B1D1E",
 			ToastErrorText:   "#F8F8F2",
 
+			// Danger button colors
+			DangerLight:  "#F8A0B8",
+			DangerDark:   "#3D0F1E",
+			DangerBright: "#F92672",
+			DangerHover:  "#D91E63",
+			TextInverse:  "#F8F8F2",
+
+			// Blame age gradient
+			BlameAge1: "#A6E22E",
+			BlameAge2: "#E6DB74",
+			BlameAge3: "#FD971F",
+			BlameAge4: "#F92672",
+			BlameAge5: "#75715E",
+
 			SyntaxTheme:   "monokai",
 			MarkdownTheme: "dark",
 		},
@@ -303,6 +359,20 @@ var (
 			Link:             "#88C0D0",
 			ToastSuccessText: "#2E3440",
 			ToastErrorText:   "#E5E9F0",
+
+			// Danger button colors
+			DangerLight:  "#D08770",
+			DangerDark:   "#3B2A25",
+			DangerBright: "#BF616A",
+			DangerHover:  "#A5545C",
+			TextInverse:  "#ECEFF4",
+
+			// Blame age gradient
+			BlameAge1: "#A3BE8C",
+			BlameAge2: "#EBCB8B",
+			BlameAge3: "#D08770",
+			BlameAge4: "#BF616A",
+			BlameAge5: "#4C566A",
 
 			SyntaxTheme:   "nord",
 			MarkdownTheme: "dark",
@@ -356,6 +426,20 @@ var (
 			ToastSuccessText: "#FDF6E3",
 			ToastErrorText:   "#FDF6E3",
 
+			// Danger button colors
+			DangerLight:  "#E8A0A0",
+			DangerDark:   "#2A1515",
+			DangerBright: "#DC322F",
+			DangerHover:  "#C12926",
+			TextInverse:  "#FDF6E3",
+
+			// Blame age gradient
+			BlameAge1: "#859900",
+			BlameAge2: "#B58900",
+			BlameAge3: "#CB4B16",
+			BlameAge4: "#DC322F",
+			BlameAge5: "#586E75",
+
 			SyntaxTheme:   "solarized-dark",
 			MarkdownTheme: "dark",
 		},
@@ -407,6 +491,20 @@ var (
 			Link:             "#73DACA",
 			ToastSuccessText: "#15161E",
 			ToastErrorText:   "#C0CAF5",
+
+			// Danger button colors
+			DangerLight:  "#F7A8B8",
+			DangerDark:   "#2D1520",
+			DangerBright: "#F7768E",
+			DangerHover:  "#E05F77",
+			TextInverse:  "#C0CAF5",
+
+			// Blame age gradient
+			BlameAge1: "#9ECE6A",
+			BlameAge2: "#E0AF68",
+			BlameAge3: "#FF9E64",
+			BlameAge4: "#F7768E",
+			BlameAge5: "#565F89",
 
 			SyntaxTheme:   "tokyo-night",
 			MarkdownTheme: "dark",
@@ -705,6 +803,40 @@ func ApplyThemeColors(theme Theme) {
 	ToastSuccessTextColor = lipgloss.Color(c.ToastSuccessText)
 	ToastErrorTextColor = lipgloss.Color(c.ToastErrorText)
 
+	// Danger button colors (with defaults)
+	if c.DangerLight != "" {
+		DangerLight = lipgloss.Color(c.DangerLight)
+	}
+	if c.DangerDark != "" {
+		DangerDark = lipgloss.Color(c.DangerDark)
+	}
+	if c.DangerBright != "" {
+		DangerBright = lipgloss.Color(c.DangerBright)
+	}
+	if c.DangerHover != "" {
+		DangerHover = lipgloss.Color(c.DangerHover)
+	}
+	if c.TextInverse != "" {
+		TextInverse = lipgloss.Color(c.TextInverse)
+	}
+
+	// Blame age gradient colors (with defaults)
+	if c.BlameAge1 != "" {
+		BlameAge1 = lipgloss.Color(c.BlameAge1)
+	}
+	if c.BlameAge2 != "" {
+		BlameAge2 = lipgloss.Color(c.BlameAge2)
+	}
+	if c.BlameAge3 != "" {
+		BlameAge3 = lipgloss.Color(c.BlameAge3)
+	}
+	if c.BlameAge4 != "" {
+		BlameAge4 = lipgloss.Color(c.BlameAge4)
+	}
+	if c.BlameAge5 != "" {
+		BlameAge5 = lipgloss.Color(c.BlameAge5)
+	}
+
 	// Store syntax/markdown theme names for external use
 	CurrentSyntaxTheme = c.SyntaxTheme
 	CurrentMarkdownTheme = c.MarkdownTheme
@@ -964,6 +1096,23 @@ func rebuildStyles() {
 	ButtonHover = lipgloss.NewStyle().
 		Foreground(TextPrimary).
 		Background(ButtonHoverColor).
+		Padding(0, 2)
+
+	// Danger button styles
+	ButtonDanger = lipgloss.NewStyle().
+		Foreground(DangerLight).
+		Background(DangerDark).
+		Padding(0, 2)
+
+	ButtonDangerFocused = lipgloss.NewStyle().
+		Foreground(TextInverse).
+		Background(DangerBright).
+		Padding(0, 2).
+		Bold(true)
+
+	ButtonDangerHover = lipgloss.NewStyle().
+		Foreground(TextInverse).
+		Background(DangerHover).
 		Padding(0, 2)
 }
 

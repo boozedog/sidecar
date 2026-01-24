@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/marcus/sidecar/internal/features"
+	"github.com/marcus/sidecar/internal/styles"
 )
 
 // Interactive mode constants
@@ -1188,11 +1189,14 @@ func (p *Plugin) pollInteractivePaneImmediate() tea.Cmd {
 // Uses bold reverse video with a bright background for maximum visibility (td-43d37b).
 // The bright cyan/white combination stands out against most terminal backgrounds
 // including Claude Code's diff highlighting and colored output.
-var cursorStyle = lipgloss.NewStyle().
-	Reverse(true).
-	Bold(true).
-	Background(lipgloss.Color("14")). // Bright cyan when reversed becomes the text color
-	Foreground(lipgloss.Color("0"))   // Black text on bright background
+// cursorStyle returns the cursor style using current theme colors.
+func cursorStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Reverse(true).
+		Bold(true).
+		Background(styles.Primary).
+		Foreground(styles.BgPrimary)
+}
 
 // getCursorPosition returns the cached cursor position for rendering (td-648af4).
 // This NEVER spawns subprocesses - it only returns cached state updated by
@@ -1302,7 +1306,7 @@ func renderWithCursor(content string, cursorRow, cursorCol int, visible bool) st
 		if padding < 0 {
 			padding = 0
 		}
-		lines[cursorRow] = line + strings.Repeat(" ", padding) + cursorStyle.Render("█")
+		lines[cursorRow] = line + strings.Repeat(" ", padding) + cursorStyle().Render("█")
 	} else {
 		// Use ANSI-aware slicing to preserve escape codes in before/after
 		before := ansi.Cut(line, 0, cursorCol)
@@ -1315,7 +1319,7 @@ func renderWithCursor(content string, cursorRow, cursorCol int, visible bool) st
 		if charStripped == "" || charStripped == " " {
 			charStripped = "█"
 		}
-		lines[cursorRow] = before + cursorStyle.Render(charStripped) + after
+		lines[cursorRow] = before + cursorStyle().Render(charStripped) + after
 	}
 
 	return strings.Join(lines, "\n")

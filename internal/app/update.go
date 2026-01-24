@@ -1289,6 +1289,10 @@ func (m Model) handleProjectAddKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.focusProjectAddInput()
 		return m, nil
 
+	case "esc":
+		m.resetProjectAdd()
+		return m, nil
+
 	case "enter":
 		switch m.projectAddFocus {
 		case 2: // Add button

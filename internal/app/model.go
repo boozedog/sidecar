@@ -426,6 +426,7 @@ func (m *Model) resetProjectSwitcher() {
 	m.projectSwitcherScroll = 0
 	m.projectSwitcherHover = -1
 	m.projectSwitcherFiltered = nil
+	m.resetProjectAdd()
 }
 
 // initProjectSwitcher initializes the project switcher modal.

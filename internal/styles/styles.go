@@ -44,6 +44,20 @@ var (
 	ToastSuccessTextColor = lipgloss.Color("#000000") // Toast success foreground
 	ToastErrorTextColor   = lipgloss.Color("#FFFFFF") // Toast error foreground
 
+	// Danger button colors
+	DangerLight  = lipgloss.Color("#FCA5A5") // Light red text
+	DangerDark   = lipgloss.Color("#7F1D1D") // Dark red background
+	DangerBright = lipgloss.Color("#DC2626") // Bright red focused bg
+	DangerHover  = lipgloss.Color("#B91C1C") // Darker red hover bg
+	TextInverse  = lipgloss.Color("#FFFFFF") // Inverse/contrast text
+
+	// Blame age gradient colors
+	BlameAge1 = lipgloss.Color("#34D399") // < 1 week
+	BlameAge2 = lipgloss.Color("#84CC16") // < 1 month
+	BlameAge3 = lipgloss.Color("#FBBF24") // < 3 months
+	BlameAge4 = lipgloss.Color("#F97316") // < 6 months
+	BlameAge5 = lipgloss.Color("#9CA3AF") // < 1 year
+
 	// Third-party theme names (updated by ApplyTheme)
 	CurrentSyntaxTheme   = "monokai"
 	CurrentMarkdownTheme = "dark"
@@ -340,19 +354,19 @@ var (
 
 	// Danger button styles (for destructive actions like delete)
 	ButtonDanger = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FCA5A5")). // Light red text
-			Background(lipgloss.Color("#7F1D1D")). // Dark red background
+			Foreground(DangerLight).
+			Background(DangerDark).
 			Padding(0, 2)
 
 	ButtonDangerFocused = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#FFFFFF")). // White text
-				Background(lipgloss.Color("#DC2626")). // Red background
+				Foreground(TextInverse).
+				Background(DangerBright).
 				Padding(0, 2).
 				Bold(true)
 
 	ButtonDangerHover = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#FFFFFF")). // White text
-				Background(lipgloss.Color("#B91C1C")). // Darker red hover
+				Foreground(TextInverse).
+				Background(DangerHover).
 				Padding(0, 2)
 )
 
