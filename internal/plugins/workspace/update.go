@@ -439,7 +439,12 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 		if shell := p.getSelectedShell(); shell != nil {
-			cmds = append(cmds, p.scheduleShellPollByName(shell.TmuxName, 0)) // Immediate poll
+			// Check liveness before polling - if user typed exit, session is already dead (td-8e3324)
+			if sessionExists(shell.TmuxName) {
+				cmds = append(cmds, p.scheduleShellPollByName(shell.TmuxName, 0))
+			} else {
+				cmds = append(cmds, func() tea.Msg { return ShellSessionDeadMsg{TmuxName: shell.TmuxName} })
+			}
 		}
 
 	case shellAttachAfterCreateMsg:
@@ -976,6 +981,12 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		p.exitInteractiveMode()
 		p.toastMessage = "Session ended"
 		p.toastTime = time.Now()
+		// Auto-remove dead shell from list (td-b6904e)
+		if p.shellSelected {
+			if shell := p.getSelectedShell(); shell != nil {
+				cmds = append(cmds, func() tea.Msg { return ShellSessionDeadMsg{TmuxName: shell.TmuxName} })
+			}
+		}
 
 	case InteractivePasteResultMsg:
 		if msg.SessionDead {
