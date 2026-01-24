@@ -201,11 +201,20 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 
 	case PromptInstallDefaultsMsg:
 		// User pressed 'd' to install default prompts
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return p, func() tea.Msg {
+				return app.ToastMsg{Message: "Cannot determine home directory", Duration: 3 * time.Second, IsError: true}
+			}
+		}
 		configDir := filepath.Join(home, ".config", "sidecar")
 		if WriteDefaultPromptsToConfig(configDir) {
 			p.createPrompts = LoadPrompts(configDir, p.ctx.WorkDir)
 			p.promptPicker = NewPromptPicker(p.createPrompts, p.width, p.height)
+		} else {
+			return p, func() tea.Msg {
+				return app.ToastMsg{Message: "Failed to write default prompts", Duration: 3 * time.Second, IsError: true}
+			}
 		}
 
 	case DeleteDoneMsg:

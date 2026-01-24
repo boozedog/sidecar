@@ -462,3 +462,36 @@ func TestWriteDefaultPromptsToConfig_OverwritesPrompts(t *testing.T) {
 		t.Errorf("Expected 5 prompts, got %d", len(prompts))
 	}
 }
+
+func TestWriteDefaultPromptsToConfig_InvalidJSON(t *testing.T) {
+	dir := t.TempDir()
+
+	// Write invalid JSON to config
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte("not valid json{{{"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if !WriteDefaultPromptsToConfig(dir) {
+		t.Fatal("WriteDefaultPromptsToConfig returned false for invalid JSON")
+	}
+
+	// Should recover and write valid config with defaults
+	prompts := LoadPrompts(dir, t.TempDir())
+	if len(prompts) != 5 {
+		t.Errorf("Expected 5 prompts after invalid JSON recovery, got %d", len(prompts))
+	}
+}
+
+func TestWriteDefaultPromptsToConfig_CreatesDirectory(t *testing.T) {
+	base := t.TempDir()
+	dir := filepath.Join(base, "nested", "config", "dir")
+
+	if !WriteDefaultPromptsToConfig(dir) {
+		t.Fatal("WriteDefaultPromptsToConfig returned false for nested dir")
+	}
+
+	prompts := LoadPrompts(dir, t.TempDir())
+	if len(prompts) != 5 {
+		t.Errorf("Expected 5 prompts, got %d", len(prompts))
+	}
+}
