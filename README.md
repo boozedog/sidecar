@@ -54,6 +54,7 @@ As the agent works, you can:
 - See files change in real-time in the Git plugin
 - Browse and edit code yourself in the File Browser
 - View and resume conversations across all supported agent adapters
+- Switch between built-in and community themes with live previews
 
 This setup gives you visibility into what the agent is doing without interrupting your workflow. The entire dev loop—planning, monitoring, reviewing, committing—happens in the terminal while agents write the code.
 

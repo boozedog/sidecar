@@ -183,6 +183,14 @@ These shortcuts work across all plugins:
 
 Each plugin adds its own context-specific shortcuts shown in the footer bar.
 
+## Themes
+
+Sidecar ships with built-in themes plus a community theme browser with live previews.
+
+- Press `#` to open the theme switcher
+- Press `tab` to toggle between built-in and community themes
+- Press `enter` to apply the highlighted theme
+
 ## Configuration
 
 Sidecar runs with sensible defaults. Create `~/.config/sidecar/config.json` only if you need customization:

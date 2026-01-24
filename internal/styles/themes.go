@@ -426,6 +426,7 @@ var themeRegistry = map[string]Theme{
 
 // currentTheme tracks the active theme name
 var currentTheme = "default"
+var currentThemeValue = DefaultTheme
 
 // IsValidHexColor checks if a string is a valid hex color code (#RRGGBB or #RRGGBBAA)
 func IsValidHexColor(hex string) bool {
@@ -453,9 +454,9 @@ func GetTheme(name string) Theme {
 // GetCurrentTheme returns the currently active theme
 func GetCurrentTheme() Theme {
 	themeMu.RLock()
-	name := currentTheme
+	theme := currentThemeValue
 	themeMu.RUnlock()
-	return GetTheme(name)
+	return theme
 }
 
 // GetCurrentThemeName returns the name of the currently active theme
@@ -711,6 +712,10 @@ func ApplyThemeColors(theme Theme) {
 	// Update tab theme state
 	CurrentTabStyle = c.TabStyle
 	CurrentTabColors = parseTabColors(c.TabColors)
+
+	themeMu.Lock()
+	currentThemeValue = theme
+	themeMu.Unlock()
 
 	// Rebuild all styles that depend on these colors
 	rebuildStyles()

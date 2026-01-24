@@ -1214,9 +1214,9 @@ func (m Model) handleQuitConfirmMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// Modal content starts at modalX + 2 (border + padding)
 	contentStartX := modalX + 2
 	quitButtonX := contentStartX
-	quitButtonWidth := 6 // " Quit "
+	quitButtonWidth := 6                               // " Quit "
 	cancelButtonX := quitButtonX + quitButtonWidth + 2 // 2 spaces between buttons
-	cancelButtonWidth := 8 // " Cancel "
+	cancelButtonWidth := 8                             // " Cancel "
 
 	// Check if click is inside modal
 	if msg.X >= modalX && msg.X < modalX+modalWidth &&
@@ -1347,7 +1347,7 @@ func (m Model) handleProjectAddMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// Line 9: blank (\n)
 	// WITHOUT error: Line 10: blank (\n), Line 11: buttons, Line 12: blank (\n\n), Line 13: help
 	// WITH error: Line 10: blank (\n), Line 11: error, Line 12: blank (\n), Line 13: blank (\n), Line 14: buttons, Line 15: blank (\n\n), Line 16: help
-	modalContentLines := 14 // Without error
+	modalContentLines := 14  // Without error
 	linesBeforeButtons := 10 // Without error
 	if m.projectAddError != "" {
 		modalContentLines = 17
@@ -1368,7 +1368,7 @@ func (m Model) handleProjectAddMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 		if msg.Y == buttonY {
 			// Rough button X positions within the modal
-			addBtnStart := modalX + 3  // border + padding + small indent
+			addBtnStart := modalX + 3    // border + padding + small indent
 			addBtnEnd := addBtnStart + 7 // " Add " width
 			cancelBtnStart := addBtnEnd + 3
 			cancelBtnEnd := cancelBtnStart + 10 // " Cancel " width
@@ -1432,8 +1432,9 @@ func (m Model) handleCommunityBrowserKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			scheme := community.GetScheme(selectedName)
 			if scheme != nil {
 				palette := community.Convert(scheme)
-				styles.ApplyThemeColors(styles.Theme{Colors: palette})
 				overrides := community.PaletteToOverrides(palette)
+				overrides["communityName"] = selectedName
+				styles.ApplyThemeWithGenericOverrides("default", overrides)
 				m.resetCommunityBrowser()
 				m.resetThemeSwitcher()
 				m.updateContext()
@@ -1528,7 +1529,8 @@ func (m *Model) previewCommunityScheme() {
 		scheme := community.GetScheme(schemes[m.communityBrowserCursor])
 		if scheme != nil {
 			palette := community.Convert(scheme)
-			styles.ApplyThemeColors(styles.Theme{Colors: palette})
+			overrides := community.PaletteToOverrides(palette)
+			styles.ApplyThemeWithGenericOverrides("default", overrides)
 		}
 	}
 }
@@ -1584,8 +1586,9 @@ func (m Model) handleCommunityBrowserMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd
 						scheme := community.GetScheme(selectedName)
 						if scheme != nil {
 							palette := community.Convert(scheme)
-							styles.ApplyThemeColors(styles.Theme{Colors: palette})
 							overrides := community.PaletteToOverrides(palette)
+							overrides["communityName"] = selectedName
+							styles.ApplyThemeWithGenericOverrides("default", overrides)
 							m.resetCommunityBrowser()
 							m.resetThemeSwitcher()
 							m.updateContext()
@@ -1604,7 +1607,8 @@ func (m Model) handleCommunityBrowserMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd
 					scheme := community.GetScheme(schemes[schemeIdx])
 					if scheme != nil {
 						palette := community.Convert(scheme)
-						styles.ApplyThemeColors(styles.Theme{Colors: palette})
+						overrides := community.PaletteToOverrides(palette)
+						styles.ApplyThemeWithGenericOverrides("default", overrides)
 					}
 				}
 			}

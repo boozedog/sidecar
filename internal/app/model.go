@@ -13,11 +13,11 @@ import (
 	"github.com/marcus/sidecar/internal/community"
 	"github.com/marcus/sidecar/internal/config"
 	"github.com/marcus/sidecar/internal/keymap"
-	"github.com/marcus/sidecar/internal/styles"
 	"github.com/marcus/sidecar/internal/mouse"
 	"github.com/marcus/sidecar/internal/palette"
 	"github.com/marcus/sidecar/internal/plugin"
 	"github.com/marcus/sidecar/internal/state"
+	"github.com/marcus/sidecar/internal/styles"
 	"github.com/marcus/sidecar/internal/version"
 )
 
@@ -26,13 +26,13 @@ import (
 type ModalKind int
 
 const (
-	ModalNone          ModalKind = iota // No modal open
-	ModalPalette                        // Command palette (highest priority)
-	ModalHelp                           // Help overlay
-	ModalDiagnostics                    // Diagnostics/version info
-	ModalQuitConfirm                    // Quit confirmation dialog
-	ModalProjectSwitcher                // Project switcher
-	ModalThemeSwitcher                  // Theme switcher (lowest priority)
+	ModalNone            ModalKind = iota // No modal open
+	ModalPalette                          // Command palette (highest priority)
+	ModalHelp                             // Help overlay
+	ModalDiagnostics                      // Diagnostics/version info
+	ModalQuitConfirm                      // Quit confirmation dialog
+	ModalProjectSwitcher                  // Project switcher
+	ModalThemeSwitcher                    // Theme switcher (lowest priority)
 )
 
 // activeModal returns the highest-priority open modal.
@@ -107,22 +107,23 @@ type Model struct {
 	projectAddError       string
 
 	// Theme switcher modal
-	showThemeSwitcher     bool
-	themeSwitcherCursor   int
-	themeSwitcherScroll   int
-	themeSwitcherHover    int // -1 = no hover, 0+ = hovered theme index
-	themeSwitcherInput    textinput.Model
-	themeSwitcherFiltered []string
-	themeSwitcherOriginal string // original theme to restore on cancel
+	showThemeSwitcher          bool
+	themeSwitcherCursor        int
+	themeSwitcherScroll        int
+	themeSwitcherHover         int // -1 = no hover, 0+ = hovered theme index
+	themeSwitcherInput         textinput.Model
+	themeSwitcherFiltered      []string
+	themeSwitcherOriginal      string // original theme to restore on cancel
+	themeSwitcherCommunityName string
 
 	// Community theme browser (sub-mode of theme switcher)
-	showCommunityBrowser      bool
-	communityBrowserCursor    int
-	communityBrowserScroll    int
-	communityBrowserHover     int
-	communityBrowserInput     textinput.Model
-	communityBrowserFiltered  []string
-	communityBrowserOriginal  string // theme state to restore on cancel
+	showCommunityBrowser     bool
+	communityBrowserCursor   int
+	communityBrowserScroll   int
+	communityBrowserHover    int
+	communityBrowserInput    textinput.Model
+	communityBrowserFiltered []string
+	communityBrowserOriginal string // theme state to restore on cancel
 
 	// Header/footer
 	ui *UIState
@@ -184,10 +185,10 @@ func New(reg *plugin.Registry, km *keymap.Registry, cfg *config.Config, currentV
 		ui:                    ui,
 		ready:                 false,
 		intro:                 NewIntroModel(repoName),
-		currentVersion:       currentVersion,
-		projectSwitcherHover: -1, // No hover initially
-		themeSwitcherHover:      -1, // No hover initially
-		communityBrowserHover:  -1,
+		currentVersion:        currentVersion,
+		projectSwitcherHover:  -1, // No hover initially
+		themeSwitcherHover:    -1, // No hover initially
+		communityBrowserHover: -1,
 	}
 }
 
@@ -377,11 +378,11 @@ func (m *Model) updateDiagnosticsButtonBounds() {
 			lineCount += len(dp.Diagnostics())
 		}
 	}
-	lineCount++ // blank after plugins
+	lineCount++    // blank after plugins
 	lineCount += 3 // system section (title + 2 lines)
-	lineCount++ // blank
-	lineCount++ // version title
-	lineCount++ // sidecar version line
+	lineCount++    // blank
+	lineCount++    // version title
+	lineCount++    // sidecar version line
 	if m.tdVersionInfo != nil {
 		lineCount++ // td version line
 	}
@@ -654,10 +655,13 @@ func (m *Model) resetThemeSwitcher() {
 	m.themeSwitcherHover = -1
 	m.themeSwitcherFiltered = nil
 	m.themeSwitcherOriginal = ""
+	m.themeSwitcherCommunityName = ""
 }
 
 // initThemeSwitcher initializes the theme switcher modal.
 func (m *Model) initThemeSwitcher() {
+	m.resetCommunityBrowser()
+
 	ti := textinput.New()
 	ti.Placeholder = "Filter themes..."
 	ti.Focus()
@@ -669,13 +673,26 @@ func (m *Model) initThemeSwitcher() {
 	m.themeSwitcherScroll = 0
 	m.themeSwitcherHover = -1
 	m.themeSwitcherOriginal = styles.GetCurrentThemeName()
+	m.themeSwitcherCommunityName = ""
+
+	if freshCfg, err := config.Load(); err == nil {
+		if freshCfg.UI.Theme.Name != "" {
+			m.themeSwitcherOriginal = freshCfg.UI.Theme.Name
+		}
+		m.themeSwitcherCommunityName = communityNameFromOverrides(freshCfg.UI.Theme.Overrides)
+	}
 
 	// Set cursor to current theme if found
-	for i, name := range m.themeSwitcherFiltered {
-		if name == m.themeSwitcherOriginal {
-			m.themeSwitcherCursor = i
-			break
+	if m.themeSwitcherCommunityName == "" {
+		for i, name := range m.themeSwitcherFiltered {
+			if name == m.themeSwitcherOriginal {
+				m.themeSwitcherCursor = i
+				break
+			}
 		}
+	} else {
+		m.initCommunityBrowser()
+		m.selectCommunityScheme(m.themeSwitcherCommunityName)
 	}
 }
 
@@ -744,6 +761,32 @@ func filterCommunitySchemes(all []string, query string) []string {
 		}
 	}
 	return matches
+}
+
+func communityNameFromOverrides(overrides map[string]interface{}) string {
+	if overrides == nil {
+		return ""
+	}
+	if value, ok := overrides["communityName"]; ok {
+		if name, ok := value.(string); ok {
+			return name
+		}
+	}
+	return ""
+}
+
+func (m *Model) selectCommunityScheme(name string) {
+	if name == "" {
+		return
+	}
+	for i, schemeName := range m.communityBrowserFiltered {
+		if schemeName == name {
+			m.communityBrowserCursor = i
+			m.communityBrowserScroll = themeSwitcherEnsureCursorVisible(i, 0, 8)
+			m.communityBrowserHover = -1
+			return
+		}
+	}
 }
 
 // applyThemeFromConfig applies a theme, using config overrides only if the

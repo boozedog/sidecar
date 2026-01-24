@@ -1052,7 +1052,7 @@ export default function Home() {
                 icon="palette"
                 title="Custom Themes"
                 color="green"
-                description="Ship with multiple themes or create your own. Customize colors to match your terminal aesthetic."
+                description="Built-in themes plus a community theme browser with live previews. Customize colors to match your terminal aesthetic."
               />
               <FeatureListItem
                 icon="monitor"

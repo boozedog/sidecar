@@ -392,6 +392,8 @@ func (m Model) renderThemeSwitcherOverlay(content string) string {
 	themes := m.themeSwitcherFiltered
 	if m.themeSwitcherInput.Value() != "" {
 		b.WriteString(styles.Muted.Render(fmt.Sprintf("%d of %d themes", len(themes), len(allThemes))))
+	} else if m.themeSwitcherCommunityName != "" {
+		b.WriteString(styles.Muted.Render(fmt.Sprintf("Community theme: %s", m.themeSwitcherCommunityName)))
 	}
 	b.WriteString("\n")
 
@@ -420,7 +422,8 @@ func (m Model) renderThemeSwitcherOverlay(content string) string {
 
 	// Render scroll indicator if needed (top)
 	if scrollOffset > 0 {
-		b.WriteString(styles.Muted.Render(fmt.Sprintf("  ↑ %d more above\n", scrollOffset)))
+		b.WriteString(styles.Muted.Render(fmt.Sprintf("  ↑ %d more above", scrollOffset)))
+		b.WriteString("\n")
 	}
 
 	// Styles for theme items
@@ -431,6 +434,9 @@ func (m Model) renderThemeSwitcherOverlay(content string) string {
 	nameCurrentSelectedStyle := lipgloss.NewStyle().Foreground(styles.Success).Bold(true)
 
 	currentTheme := m.themeSwitcherOriginal
+	if m.themeSwitcherCommunityName != "" {
+		currentTheme = ""
+	}
 
 	// Render theme list
 	for i := scrollOffset; i < scrollOffset+visibleCount && i < len(themes); i++ {
@@ -478,7 +484,8 @@ func (m Model) renderThemeSwitcherOverlay(content string) string {
 	// Render scroll indicator if needed (bottom)
 	remaining := len(themes) - (scrollOffset + visibleCount)
 	if remaining > 0 {
-		b.WriteString(styles.Muted.Render(fmt.Sprintf("  ↓ %d more below\n", remaining)))
+		b.WriteString(styles.Muted.Render(fmt.Sprintf("  ↓ %d more below", remaining)))
+		b.WriteString("\n")
 	}
 
 	b.WriteString("\n")
@@ -544,7 +551,8 @@ func (m Model) renderCommunityBrowserOverlay(content string) string {
 
 	// Scroll indicator (top)
 	if scrollOffset > 0 {
-		b.WriteString(styles.Muted.Render(fmt.Sprintf("  ↑ %d more\n", scrollOffset)))
+		b.WriteString(styles.Muted.Render(fmt.Sprintf("  ↑ %d more", scrollOffset)))
+		b.WriteString("\n")
 	}
 
 	// Styles
@@ -589,7 +597,8 @@ func (m Model) renderCommunityBrowserOverlay(content string) string {
 	// Scroll indicator (bottom)
 	remaining := len(schemes) - (scrollOffset + visibleCount)
 	if remaining > 0 {
-		b.WriteString(styles.Muted.Render(fmt.Sprintf("  ↓ %d more\n", remaining)))
+		b.WriteString(styles.Muted.Render(fmt.Sprintf("  ↓ %d more", remaining)))
+		b.WriteString("\n")
 	}
 
 	b.WriteString("\n")
