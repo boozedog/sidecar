@@ -105,10 +105,12 @@ func getTmuxInstallInstructions() string {
 type (
 	// ShellCreatedMsg signals shell session was created
 	ShellCreatedMsg struct {
-		SessionName string // tmux session name
-		DisplayName string // Display name (e.g., "Shell 1")
-		PaneID      string // tmux pane ID (e.g., "%12") for interactive mode
-		Err         error  // Non-nil if creation failed
+		SessionName string    // tmux session name
+		DisplayName string    // Display name (e.g., "Shell 1")
+		PaneID      string    // tmux pane ID (e.g., "%12") for interactive mode
+		Err         error     // Non-nil if creation failed
+		AgentType   AgentType // td-16b2b5: Agent to start (AgentNone if plain shell)
+		SkipPerms   bool      // td-16b2b5: Whether to skip permissions for agent
 	}
 
 	// ShellDetachedMsg signals user detached from shell session
@@ -125,6 +127,21 @@ type (
 	// (e.g., user typed 'exit' in the shell)
 	ShellSessionDeadMsg struct {
 		TmuxName string // Session name for cleanup (stable identifier)
+	}
+
+	// ShellAgentStartedMsg signals agent was started in a shell session.
+	// td-21a2d8: Sent after agent command is sent to tmux.
+	ShellAgentStartedMsg struct {
+		TmuxName  string    // Shell's tmux session name
+		AgentType AgentType // Agent type that was started
+		SkipPerms bool      // Whether skip permissions was enabled
+	}
+
+	// ShellAgentErrorMsg signals agent failed to start in a shell session.
+	// td-21a2d8: Sent when agent command fails to execute.
+	ShellAgentErrorMsg struct {
+		TmuxName string // Shell's tmux session name
+		Err      error  // Error that occurred
 	}
 
 	// ShellOutputMsg signals shell output was captured (for polling)
@@ -333,6 +350,107 @@ func (p *Plugin) createNewShell(customName string) tea.Cmd {
 		paneID := getPaneID(sessionName)
 
 		return ShellCreatedMsg{SessionName: sessionName, DisplayName: displayName, PaneID: paneID}
+	}
+}
+
+// createShellWithAgent creates a new shell session with optional agent startup.
+// td-16b2b5: Captures agent info from type selector state, creates shell, and includes
+// agent info in the message so the handler can start the agent after shell creation.
+func (p *Plugin) createShellWithAgent() tea.Cmd {
+	// Capture state before clearing modal
+	customName := p.typeSelectorNameInput.Value()
+	agentType := p.typeSelectorAgentType
+	skipPerms := p.typeSelectorSkipPerms
+
+	if !isTmuxInstalled() {
+		return func() tea.Msg {
+			return ShellCreatedMsg{Err: fmt.Errorf("tmux not installed: %s", getTmuxInstallInstructions())}
+		}
+	}
+
+	sessionName := p.generateShellSessionName()
+	displayName := strings.TrimSpace(customName)
+	if displayName == "" {
+		displayName = p.nextShellDisplayName()
+	}
+	workDir := p.ctx.WorkDir
+
+	return func() tea.Msg {
+		// Check if session already exists (shouldn't happen with unique names)
+		if sessionExists(sessionName) {
+			paneID := getPaneID(sessionName)
+			return ShellCreatedMsg{
+				SessionName: sessionName,
+				DisplayName: displayName,
+				PaneID:      paneID,
+				AgentType:   agentType,
+				SkipPerms:   skipPerms,
+			}
+		}
+
+		// Create new detached session in project directory
+		args := []string{
+			"new-session",
+			"-d",              // Detached
+			"-s", sessionName, // Session name
+			"-c", workDir, // Working directory
+		}
+		cmd := exec.Command("tmux", args...)
+		if err := cmd.Run(); err != nil {
+			return ShellCreatedMsg{
+				SessionName: sessionName,
+				DisplayName: displayName,
+				Err:         fmt.Errorf("create shell session: %w", err),
+			}
+		}
+
+		// Capture pane ID for interactive mode support
+		paneID := getPaneID(sessionName)
+
+		return ShellCreatedMsg{
+			SessionName: sessionName,
+			DisplayName: displayName,
+			PaneID:      paneID,
+			AgentType:   agentType,
+			SkipPerms:   skipPerms,
+		}
+	}
+}
+
+// startAgentInShell sends an agent command to an existing shell's tmux session.
+// td-21a2d8: Called after shell is created when an agent was selected.
+func (p *Plugin) startAgentInShell(tmuxName string, agentType AgentType, skipPerms bool) tea.Cmd {
+	return func() tea.Msg {
+		// Get the base command for this agent type
+		baseCmd := AgentCommands[agentType]
+		if baseCmd == "" {
+			return ShellAgentErrorMsg{
+				TmuxName: tmuxName,
+				Err:      fmt.Errorf("unknown agent type: %s", agentType),
+			}
+		}
+
+		// Add skip permissions flag if enabled
+		if skipPerms {
+			if flag := SkipPermissionsFlags[agentType]; flag != "" {
+				baseCmd = baseCmd + " " + flag
+			}
+		}
+
+		// Send the command to the shell's tmux session
+		cmd := exec.Command("tmux", "send-keys", "-t", tmuxName, baseCmd, "Enter")
+		if err := cmd.Run(); err != nil {
+			return ShellAgentErrorMsg{
+				TmuxName: tmuxName,
+				Err:      fmt.Errorf("failed to start agent: %w", err),
+			}
+		}
+
+		return ShellAgentStartedMsg{
+			TmuxName:  tmuxName,
+			AgentType: agentType,
+			SkipPerms: skipPerms,
+		}
 	}
 }
 

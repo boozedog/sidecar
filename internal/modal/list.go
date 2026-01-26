@@ -26,6 +26,7 @@ type listSection struct {
 	selectedIdx  *int // Pointer to allow external control
 	maxVisible   int  // Maximum number of visible items
 	scrollOffset int  // Current scroll position
+	singleFocus  bool // If true, register as single focusable (Tab skips between sections, j/k changes selection)
 }
 
 // List creates a list section with selectable items.
@@ -52,6 +53,15 @@ func WithMaxVisible(n int) ListOption {
 	}
 }
 
+// WithSingleFocus makes the list register as a single focusable unit for Tab navigation.
+// When focused, j/k or up/down change selection within the list without Tab-cycling through each item.
+// This is useful for lists that are part of a larger form where Tab should skip between sections.
+func WithSingleFocus() ListOption {
+	return func(s *listSection) {
+		s.singleFocus = true
+	}
+}
+
 func (s *listSection) Render(contentWidth int, focusID, hoverID string) RenderedSection {
 	if len(s.items) == 0 {
 		return RenderedSection{Content: styles.Muted.Render("(no items)")}
@@ -74,6 +84,9 @@ func (s *listSection) Render(contentWidth int, focusID, hoverID string) Rendered
 	// Clamp scroll offset
 	maxScroll := max(0, len(s.items)-visibleCount)
 	s.scrollOffset = clamp(s.scrollOffset, 0, maxScroll)
+
+	// In singleFocus mode, check if the list itself has focus
+	listHasFocus := s.singleFocus && focusID == s.id
 
 	var sb strings.Builder
 	focusables := make([]FocusableInfo, 0, visibleCount)
@@ -98,10 +111,14 @@ func (s *listSection) Render(contentWidth int, focusID, hoverID string) Rendered
 			style = styles.ListItemNormal
 		}
 
-		// Render cursor
+		// Render cursor - show when selected, or when list has focus and this is selected item
 		cursor := "  "
 		if isSelected {
-			cursor = styles.ListCursor.Render("> ")
+			if listHasFocus {
+				cursor = styles.ListCursor.Render("▸ ") // Filled cursor when list has focus
+			} else {
+				cursor = styles.ListCursor.Render("> ")
+			}
 		}
 
 		// Render item
@@ -111,13 +128,26 @@ func (s *listSection) Render(contentWidth int, focusID, hoverID string) Rendered
 		}
 		sb.WriteString(line)
 
-		// Register focusable
+		// Register focusable - in singleFocus mode, only register the list itself (once)
+		if !s.singleFocus {
+			focusables = append(focusables, FocusableInfo{
+				ID:      item.ID,
+				OffsetX: 0,
+				OffsetY: i,
+				Width:   ansi.StringWidth(line),
+				Height:  1,
+			})
+		}
+	}
+
+	// In singleFocus mode, register the list as a single focusable
+	if s.singleFocus && len(focusables) == 0 {
 		focusables = append(focusables, FocusableInfo{
-			ID:      item.ID,
+			ID:      s.id,
 			OffsetX: 0,
-			OffsetY: i,
-			Width:   ansi.StringWidth(line),
-			Height:  1,
+			OffsetY: 0,
+			Width:   contentWidth,
+			Height:  visibleCount,
 		})
 	}
 
@@ -142,12 +172,18 @@ func (s *listSection) Render(contentWidth int, focusID, hoverID string) Rendered
 }
 
 func (s *listSection) Update(msg tea.Msg, focusID string) (string, tea.Cmd) {
-	// Check if any of our items are focused
+	// Check if the list or any of its items are focused
 	isFocused := false
-	for _, item := range s.items {
-		if item.ID == focusID {
-			isFocused = true
-			break
+	if s.singleFocus {
+		// In singleFocus mode, ONLY check if list ID matches (don't respond to individual item IDs)
+		isFocused = focusID == s.id
+	} else {
+		// Otherwise, check if any item is focused
+		for _, item := range s.items {
+			if item.ID == focusID {
+				isFocused = true
+				break
+			}
 		}
 	}
 	if !isFocused {

@@ -436,19 +436,28 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 				return app.ToastMsg{Message: msg.Err.Error(), Duration: 5 * time.Second, IsError: true}
 			}
 		}
+
+		// Determine agent type for display - use chosen agent if set, otherwise AgentShell
+		displayAgentType := AgentShell
+		if msg.AgentType != AgentNone && msg.AgentType != "" {
+			displayAgentType = msg.AgentType
+		}
+
 		// Create new shell session entry
 		shell := &ShellSession{
 			Name:     msg.DisplayName,
 			TmuxName: msg.SessionName,
 			Agent: &Agent{
-				Type:        AgentShell,
+				Type:        displayAgentType, // td-2ba8a3: Show chosen agent type
 				TmuxSession: msg.SessionName,
 				TmuxPane:    msg.PaneID, // Store pane ID for interactive mode
 				OutputBuf:   NewOutputBuffer(outputBufferCap),
 				StartedAt:   time.Now(),
 				Status:      AgentStatusRunning,
 			},
-			CreatedAt: time.Now(),
+			CreatedAt:   time.Now(),
+			ChosenAgent: msg.AgentType, // td-317b64: Track chosen agent
+			SkipPerms:   msg.SkipPerms, // td-317b64: Track skip perms setting
 		}
 		p.shells = append(p.shells, shell)
 		p.managedSessions[msg.SessionName] = true
@@ -474,6 +483,9 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			cmds = append(cmds, p.sendResumeCommandToShell(msg.SessionName, resumeCmd))
 			// Enter interactive mode after command is injected
 			cmds = append(cmds, func() tea.Msg { return shellResumeInjectedMsg{TmuxSession: msg.SessionName} })
+		} else if msg.AgentType != AgentNone && msg.AgentType != "" {
+			// td-2ba8a3: Start agent if one was selected (not AgentNone)
+			cmds = append(cmds, p.startAgentInShell(msg.SessionName, msg.AgentType, msg.SkipPerms))
 		}
 
 	case ShellDetachedMsg:
@@ -489,6 +501,31 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 				cmds = append(cmds, p.scheduleShellPollByName(shell.TmuxName, 0))
 			} else {
 				cmds = append(cmds, func() tea.Msg { return ShellSessionDeadMsg{TmuxName: shell.TmuxName} })
+			}
+		}
+
+	// td-2ba8a3: Shell agent lifecycle messages
+	case ShellAgentStartedMsg:
+		// Agent started successfully - update shell state
+		for i, shell := range p.shells {
+			if shell.TmuxName == msg.TmuxName {
+				p.shells[i].ChosenAgent = msg.AgentType
+				p.shells[i].SkipPerms = msg.SkipPerms
+				if p.shells[i].Agent != nil {
+					p.shells[i].Agent.Type = msg.AgentType
+					p.shells[i].Agent.Status = AgentStatusRunning
+				}
+				break
+			}
+		}
+
+	case ShellAgentErrorMsg:
+		// Agent failed to start - show error toast, shell still usable
+		return p, func() tea.Msg {
+			return app.ToastMsg{
+				Message:  fmt.Sprintf("Failed to start agent: %v", msg.Err),
+				Duration: 5 * time.Second,
+				IsError:  true,
 			}
 		}
 

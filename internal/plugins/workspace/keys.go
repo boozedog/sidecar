@@ -53,12 +53,19 @@ func (p *Plugin) handleTypeSelectorKeys(msg tea.KeyMsg) tea.Cmd {
 
 	// Track selection before to detect changes
 	prevIdx := p.typeSelectorIdx
+	prevAgentIdx := p.typeSelectorAgentIdx
 
 	action, cmd := p.typeSelectorModal.HandleKey(msg)
 
-	// Modal width depends on selection - rebuild if changed
+	// Modal width depends on selection - rebuild if type changed
 	if p.typeSelectorIdx != prevIdx {
 		p.typeSelectorModalWidth = 0 // Force rebuild
+	}
+
+	// Sync agent type when agent index changes (td-f42a86)
+	// No need to rebuild modal - When sections handle visibility dynamically
+	if p.typeSelectorAgentIdx != prevAgentIdx && p.typeSelectorAgentIdx >= 0 && p.typeSelectorAgentIdx < len(ShellAgentOrder) {
+		p.typeSelectorAgentType = ShellAgentOrder[p.typeSelectorAgentIdx]
 	}
 
 	switch action {
@@ -77,10 +84,10 @@ func (p *Plugin) handleTypeSelectorKeys(msg tea.KeyMsg) tea.Cmd {
 func (p *Plugin) executeTypeSelectorConfirm() tea.Cmd {
 	p.viewMode = ViewModeList
 	if p.typeSelectorIdx == 0 {
-		// Shell selected
-		name := p.typeSelectorNameInput.Value()
+		// Shell selected - use createShellWithAgent which captures agent info (td-16b2b5)
+		cmd := p.createShellWithAgent()
 		p.clearTypeSelectorModal()
-		return p.createNewShell(name)
+		return cmd
 	}
 	// Workspace selected
 	p.clearTypeSelectorModal()
@@ -983,6 +990,15 @@ func (p *Plugin) shouldShowSkipPermissions() bool {
 	}
 	flag := SkipPermissionsFlags[p.createAgentType]
 	return flag != ""
+}
+
+// shouldShowShellSkipPerms returns true if the selected shell agent supports skip permissions.
+// td-a902fe: Used in type selector modal when Shell is selected with an agent.
+func (p *Plugin) shouldShowShellSkipPerms() bool {
+	if p.typeSelectorAgentType == AgentNone {
+		return false
+	}
+	return SkipPermissionsFlags[p.typeSelectorAgentType] != ""
 }
 
 func (p *Plugin) agentTypeIndex(agentType AgentType) int {

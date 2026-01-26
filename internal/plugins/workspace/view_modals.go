@@ -1116,10 +1116,10 @@ func (p *Plugin) renderCommitForMergeModal(width, height int) string {
 
 // ensureTypeSelectorModal builds/rebuilds the type selector modal.
 func (p *Plugin) ensureTypeSelectorModal() {
-	// Wider when Shell selected to fit name input
+	// Wider when Shell selected to fit name input and agent list (td-a902fe)
 	modalW := 32
 	if p.typeSelectorIdx == 0 {
-		modalW = 44
+		modalW = 48 // Wider for agent selection
 	}
 	if modalW > p.width-4 {
 		modalW = p.width - 4
@@ -1137,12 +1137,33 @@ func (p *Plugin) ensureTypeSelectorModal() {
 	// Set placeholder for name input
 	p.typeSelectorNameInput.Placeholder = p.nextShellDisplayName()
 
+	// Build agent list items for shell (td-a902fe)
+	agentItems := make([]modal.ListItem, len(ShellAgentOrder))
+	for i, at := range ShellAgentOrder {
+		agentItems[i] = modal.ListItem{
+			ID:    typeSelectorAgentItemPfx + string(at),
+			Label: AgentDisplayNames[at],
+		}
+	}
+
 	p.typeSelectorModal = modal.New("Create New",
 		modal.WithWidth(modalW),
 		modal.WithHints(false),
 	).
-		AddSection(p.typeSelectorOptionsSection()).
+		// Type selector: Shell vs Workspace (use singleFocus so Tab moves to next section)
+		AddSection(modal.List(typeSelectorListID, []modal.ListItem{
+			{ID: "type-shell", Label: "Shell"},
+			{ID: "type-workspace", Label: "Workspace"},
+		}, &p.typeSelectorIdx, modal.WithMaxVisible(2), modal.WithSingleFocus())).
+		// Shell options section (only shown when Shell is selected)
+		AddSection(modal.When(p.typeSelectorIsShell, modal.Spacer())).
+		AddSection(modal.When(p.typeSelectorIsShell, p.typeSelectorShellHeaderSection())).
 		AddSection(modal.When(p.typeSelectorIsShell, p.typeSelectorNameSection())).
+		AddSection(modal.When(p.typeSelectorIsShell, modal.Spacer())).
+		AddSection(modal.When(p.typeSelectorIsShell, p.typeSelectorAgentLabelSection())).
+		AddSection(modal.When(p.typeSelectorIsShell, modal.List(typeSelectorAgentListID, agentItems, &p.typeSelectorAgentIdx, modal.WithMaxVisible(len(agentItems)), modal.WithSingleFocus()))).
+		AddSection(modal.When(p.typeSelectorIsShellWithSkipPerms, modal.Spacer())).
+		AddSection(modal.When(p.typeSelectorIsShellWithSkipPerms, modal.Checkbox(typeSelectorSkipPermsID, "Auto-approve all actions", &p.typeSelectorSkipPerms))).
 		AddSection(modal.Spacer()).
 		AddSection(modal.Buttons(
 			modal.Btn(" Confirm ", typeSelectorConfirmID),
@@ -1155,18 +1176,26 @@ func (p *Plugin) typeSelectorIsShell() bool {
 	return p.typeSelectorIdx == 0
 }
 
-// typeSelectorOptionsSection renders the type options list.
-func (p *Plugin) typeSelectorOptionsSection() modal.Section {
-	items := []modal.ListItem{
-		{ID: "type-shell", Label: "Shell"},
-		{ID: "type-workspace", Label: "Workspace"},
-	}
-	return modal.List(typeSelectorListID, items, &p.typeSelectorIdx, modal.WithMaxVisible(2))
+// typeSelectorIsShellWithSkipPerms returns true when Shell is selected AND agent has skip perms flag.
+// td-a902fe: Used to conditionally show skip permissions checkbox.
+func (p *Plugin) typeSelectorIsShellWithSkipPerms() bool {
+	return p.typeSelectorIdx == 0 && p.shouldShowShellSkipPerms()
+}
+
+// typeSelectorShellHeaderSection renders a header to separate shell options from the type selector.
+func (p *Plugin) typeSelectorShellHeaderSection() modal.Section {
+	return modal.Text("── Shell Options ──")
 }
 
 // typeSelectorNameSection renders the shell name input.
 func (p *Plugin) typeSelectorNameSection() modal.Section {
 	return modal.InputWithLabel(typeSelectorInputID, "Name (optional):", &p.typeSelectorNameInput)
+}
+
+// typeSelectorAgentLabelSection renders the agent selection label.
+// td-a902fe: Shows "Agent (optional):" label above agent list.
+func (p *Plugin) typeSelectorAgentLabelSection() modal.Section {
+	return modal.Text("Agent (optional):")
 }
 
 // clearTypeSelectorModal clears the type selector modal state.
@@ -1176,6 +1205,11 @@ func (p *Plugin) clearTypeSelectorModal() {
 	p.typeSelectorNameInput.Blur()
 	p.typeSelectorModal = nil
 	p.typeSelectorModalWidth = 0
+	// Reset shell agent selection state (td-2bb232)
+	p.typeSelectorAgentIdx = 0
+	p.typeSelectorAgentType = AgentNone
+	p.typeSelectorSkipPerms = false
+	p.typeSelectorFocusField = 0
 }
 
 // renderTypeSelectorModal renders the type selector modal (Shell vs Worktree).

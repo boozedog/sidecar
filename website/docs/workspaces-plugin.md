@@ -133,7 +133,7 @@ Vertical list of all workspaces with rich status information:
 
 Each row shows:
 - Workspace name and branch
-- Agent type (Claude Code, Cursor, etc.)
+- Agent type (Claude Code, Cursor, etc.), or branch name for the root workspace
 - Task ID (if linked to TD)
 - Creation time (relative, e.g., "2h ago")
 - Status indicator

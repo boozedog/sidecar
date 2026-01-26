@@ -216,21 +216,46 @@ func CheckCurrentWorktree(workDir string) (exists bool, mainPath string) {
 		return true, ""
 	}
 
-	// Current worktree doesn't exist - find the main worktree
-	// We need to use a different approach since workDir doesn't exist
-	// Try to get the main worktree from the .git file if it still exists elsewhere
-
-	// Look for any worktree that still exists by checking parent directory
+	// Current worktree doesn't exist - find the main worktree that owned it
+	// by checking .git/worktrees/*/gitdir files in sibling directories
 	parentDir := filepath.Dir(workDir)
 	entries, err := os.ReadDir(parentDir)
 	if err != nil {
 		return false, ""
 	}
 
+	// Normalize workDir for comparison
+	normalizedWorkDir := filepath.Clean(workDir)
+
 	for _, entry := range entries {
-		if entry.IsDir() {
-			candidatePath := filepath.Join(parentDir, entry.Name())
-			if WorktreeExists(candidatePath) {
+		if !entry.IsDir() {
+			continue
+		}
+		candidatePath := filepath.Join(parentDir, entry.Name())
+		if candidatePath == workDir {
+			continue
+		}
+
+		// Check if this repo's .git/worktrees contains a reference to workDir
+		gitWorktreesDir := filepath.Join(candidatePath, ".git", "worktrees")
+		wtEntries, err := os.ReadDir(gitWorktreesDir)
+		if err != nil {
+			continue // Not a git repo or no worktrees
+		}
+
+		for _, wtEntry := range wtEntries {
+			if !wtEntry.IsDir() {
+				continue
+			}
+			gitdirPath := filepath.Join(gitWorktreesDir, wtEntry.Name(), "gitdir")
+			content, err := os.ReadFile(gitdirPath)
+			if err != nil {
+				continue
+			}
+			// gitdir contains path like "/path/to/worktree/.git\n"
+			wtPath := strings.TrimSuffix(strings.TrimSpace(string(content)), "/.git")
+			if filepath.Clean(wtPath) == normalizedWorkDir {
+				// Found the repo that owned this worktree
 				main := GetMainWorktreePath(candidatePath)
 				if main != "" {
 					return false, main

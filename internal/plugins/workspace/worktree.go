@@ -41,7 +41,7 @@ func (p *Plugin) refreshWorktrees() tea.Cmd {
 
 // findMainWorktreeFromDeleted finds the main worktree path when the current
 // directory has been deleted. It searches parent directories for a git repo
-// and then finds its main worktree.
+// that owned the deleted worktree by checking .git/worktrees/*/gitdir files.
 func findMainWorktreeFromDeleted(deletedPath string) string {
 	// Try parent directory first - worktrees are typically siblings of main repo
 	parentDir := filepath.Dir(deletedPath)
@@ -55,6 +55,9 @@ func findMainWorktreeFromDeleted(deletedPath string) string {
 		return ""
 	}
 
+	// Normalize the deleted path for comparison
+	normalizedDeleted := filepath.Clean(deletedPath)
+
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -64,10 +67,30 @@ func findMainWorktreeFromDeleted(deletedPath string) string {
 		if candidatePath == deletedPath {
 			continue
 		}
-		// Check if this is a git repo
-		mainPath := app.GetMainWorktreePath(candidatePath)
-		if mainPath != "" {
-			return mainPath
+
+		// Check if this repo's .git/worktrees contains a reference to the deleted path
+		// This is more reliable than just checking if it's any git repo
+		gitWorktreesDir := filepath.Join(candidatePath, ".git", "worktrees")
+		wtEntries, err := os.ReadDir(gitWorktreesDir)
+		if err != nil {
+			continue // Not a git repo or no worktrees
+		}
+
+		for _, wtEntry := range wtEntries {
+			if !wtEntry.IsDir() {
+				continue
+			}
+			gitdirPath := filepath.Join(gitWorktreesDir, wtEntry.Name(), "gitdir")
+			content, err := os.ReadFile(gitdirPath)
+			if err != nil {
+				continue
+			}
+			// gitdir contains path like "/path/to/worktree/.git\n"
+			wtPath := strings.TrimSuffix(strings.TrimSpace(string(content)), "/.git")
+			if filepath.Clean(wtPath) == normalizedDeleted {
+				// Found the repo that owned this worktree
+				return app.GetMainWorktreePath(candidatePath)
+			}
 		}
 	}
 

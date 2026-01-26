@@ -2,6 +2,29 @@
 
 All notable changes to sidecar are documented here.
 
+## [v0.49.0] - 2026-01-26
+
+### Dependencies
+
+- Updated td dependency to v0.22.1
+
+## [v0.48.0] - 2026-01-25
+
+### Features
+
+- **AI Agent Selection**: Optional AI agent selection when creating new workspace shells
+- **Improved File Search**: Enhanced file search capabilities
+- **Mouse Support**: Added mouse support for inline vim editor
+
+### Improvements
+
+- Workspaces UX enhancements
+- Inline editor improvements
+
+### Dependencies
+
+- Updated td dependency from v0.21.0 to v0.22.0
+
 ## [v0.47.0] - 2026-01-25
 
 ### Features

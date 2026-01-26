@@ -152,6 +152,16 @@ var AgentDisplayNames = map[AgentType]string{
 	AgentShell:    "Project Shell",
 }
 
+// shellAgentAbbreviations provides short labels for agent types in shell entries.
+// td-a29b76: Used to show agent type in sidebar without taking too much space.
+var shellAgentAbbreviations = map[AgentType]string{
+	AgentClaude:   "Claude",
+	AgentCodex:    "Codex",
+	AgentGemini:   "Gemini",
+	AgentCursor:   "Cursor",
+	AgentOpenCode: "OpenCode",
+}
+
 // AgentCommands maps agent types to their CLI commands.
 var AgentCommands = map[AgentType]string{
 	AgentClaude:   "claude",
@@ -170,6 +180,17 @@ var AgentTypeOrder = []AgentType{
 	AgentCursor,
 	AgentOpenCode,
 	AgentNone,
+}
+
+// ShellAgentOrder defines agent order for shell creation (None first as default).
+// td-a902fe: shells default to no agent, so "None" is first.
+var ShellAgentOrder = []AgentType{
+	AgentNone,
+	AgentClaude,
+	AgentCodex,
+	AgentGemini,
+	AgentCursor,
+	AgentOpenCode,
 }
 
 // kanbanCardData stores column and row for Kanban card hit regions.
@@ -205,10 +226,12 @@ type Worktree struct {
 
 // ShellSession represents a tmux shell session (not tied to a git worktree).
 type ShellSession struct {
-	Name      string    // Display name (e.g., "Shell 1")
-	TmuxName  string    // tmux session name (e.g., "sidecar-sh-project-1")
-	Agent     *Agent    // Reuses Agent struct for tmux state
-	CreatedAt time.Time
+	Name        string    // Display name (e.g., "Shell 1")
+	TmuxName    string    // tmux session name (e.g., "sidecar-sh-project-1")
+	Agent       *Agent    // Reuses Agent struct for tmux state
+	CreatedAt   time.Time
+	ChosenAgent AgentType // td-317b64: Agent type selected at creation (AgentNone for plain shell)
+	SkipPerms   bool      // td-317b64: Whether skip permissions was enabled
 }
 
 // Agent represents an AI coding agent process.

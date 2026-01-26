@@ -87,10 +87,13 @@ const (
 	regionWorkspacesPlusButton = "workspaces-plus-button"
 
 	// Type selector modal element IDs
-	typeSelectorListID    = "type-selector-list"
-	typeSelectorInputID   = "type-selector-name-input"
-	typeSelectorConfirmID = "type-selector-confirm"
-	typeSelectorCancelID  = "type-selector-cancel"
+	typeSelectorListID       = "type-selector-list"
+	typeSelectorInputID      = "type-selector-name-input"
+	typeSelectorConfirmID    = "type-selector-confirm"
+	typeSelectorCancelID     = "type-selector-cancel"
+	typeSelectorAgentListID  = "type-selector-agent-list"  // td-a902fe
+	typeSelectorSkipPermsID  = "type-selector-skip-perms"  // td-a902fe
+	typeSelectorAgentItemPfx = "ts-agent-"                 // td-a902fe: prefix for agent items
 
 	// Shell delete confirmation modal regions
 )
@@ -291,6 +294,12 @@ type Plugin struct {
 	typeSelectorNameInput   textinput.Model // Optional shell name input
 	typeSelectorModal       *modal.Modal    // Modal instance
 	typeSelectorModalWidth  int             // Cached width for rebuild detection
+
+	// Type selector modal - shell agent selection (td-2bb232)
+	typeSelectorAgentIdx   int       // Selected index in agent list (0 = None)
+	typeSelectorAgentType  AgentType // The selected agent type
+	typeSelectorSkipPerms  bool      // Whether skip permissions is checked
+	typeSelectorFocusField int       // Focus: 0=name, 1=agent, 2=skipPerms, 3=buttons
 
 	// Resume conversation state (td-aa4136)
 	pendingResumeCmd      string // Resume command to inject after shell creation
