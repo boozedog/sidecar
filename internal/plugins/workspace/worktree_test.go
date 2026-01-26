@@ -100,6 +100,7 @@ func TestParseWorktreeList(t *testing.T) {
 		wantCount   int
 		wantNames   []string
 		wantBranch  []string
+		wantIsMain  []bool // Track which worktrees should be marked as main
 	}{
 		{
 			name: "single worktree",
@@ -112,9 +113,10 @@ HEAD def456
 branch refs/heads/feature
 `,
 			mainWorkdir: "/home/user/project",
-			wantCount:   1,
-			wantNames:   []string{"project-feature"},
-			wantBranch:  []string{"feature"},
+			wantCount:   2, // Main + 1 worktree
+			wantNames:   []string{"project", "project-feature"},
+			wantBranch:  []string{"main", "feature"},
+			wantIsMain:  []bool{true, false},
 		},
 		{
 			name: "multiple worktrees",
@@ -131,9 +133,10 @@ HEAD ghi789
 branch refs/heads/feature-b
 `,
 			mainWorkdir: "/home/user/project",
-			wantCount:   2,
-			wantNames:   []string{"feature-a", "feature-b"},
-			wantBranch:  []string{"feature-a", "feature-b"},
+			wantCount:   3, // Main + 2 worktrees
+			wantNames:   []string{"project", "feature-a", "feature-b"},
+			wantBranch:  []string{"main", "feature-a", "feature-b"},
+			wantIsMain:  []bool{true, false, false},
 		},
 		{
 			name: "detached head",
@@ -146,9 +149,10 @@ HEAD def456
 detached
 `,
 			mainWorkdir: "/home/user/project",
-			wantCount:   1,
-			wantNames:   []string{"detached"},
-			wantBranch:  []string{"(detached)"},
+			wantCount:   2, // Main + 1 worktree
+			wantNames:   []string{"project", "detached"},
+			wantBranch:  []string{"main", "(detached)"},
+			wantIsMain:  []bool{true, false},
 		},
 		{
 			name:        "empty output",
@@ -157,6 +161,7 @@ detached
 			wantCount:   0,
 			wantNames:   nil,
 			wantBranch:  nil,
+			wantIsMain:  nil,
 		},
 		// Branch prefix tests - branch name has repo prefix, directory name does not
 		{
@@ -170,9 +175,10 @@ HEAD def456
 branch refs/heads/project/feature-auth
 `,
 			mainWorkdir: "/home/user/project",
-			wantCount:   1,
-			wantNames:   []string{"feature-auth"},
-			wantBranch:  []string{"project/feature-auth"},
+			wantCount:   2, // Main + 1 worktree
+			wantNames:   []string{"project", "feature-auth"},
+			wantBranch:  []string{"main", "project/feature-auth"},
+			wantIsMain:  []bool{true, false},
 		},
 		{
 			name: "multiple prefixed branches",
@@ -189,9 +195,10 @@ HEAD ghi789
 branch refs/heads/sidecar/add-feature
 `,
 			mainWorkdir: "/home/user/sidecar",
-			wantCount:   2,
-			wantNames:   []string{"fix-bug", "add-feature"},
-			wantBranch:  []string{"sidecar/fix-bug", "sidecar/add-feature"},
+			wantCount:   3, // Main + 2 worktrees
+			wantNames:   []string{"sidecar", "fix-bug", "add-feature"},
+			wantBranch:  []string{"main", "sidecar/fix-bug", "sidecar/add-feature"},
+			wantIsMain:  []bool{true, false, false},
 		},
 		// Nested worktree directories - when branch name contains '/' and creates nested dirs
 		{
@@ -205,10 +212,11 @@ HEAD def456
 branch refs/heads/nested-branch
 `,
 			mainWorkdir: "/home/user/sidecar",
-			wantCount:   1,
-			// Name should be full relative path to match session name derivation
-			wantNames:  []string{"sidecar-prefix/nested-branch"},
-			wantBranch: []string{"nested-branch"},
+			wantCount:   2, // Main + 1 worktree
+			// Main uses basename, worktrees use full relative path
+			wantNames:  []string{"sidecar", "sidecar-prefix/nested-branch"},
+			wantBranch: []string{"main", "nested-branch"},
+			wantIsMain: []bool{true, false},
 		},
 		{
 			name: "deeply nested worktree directory",
@@ -221,10 +229,11 @@ HEAD def456
 branch refs/heads/feature/auth/login
 `,
 			mainWorkdir: "/home/user/project",
-			wantCount:   1,
-			// Full relative path from parent dir
-			wantNames:  []string{"project-td-123/feature/auth/login"},
-			wantBranch: []string{"feature/auth/login"},
+			wantCount:   2, // Main + 1 worktree
+			// Full relative path from parent dir for worktrees
+			wantNames:  []string{"project", "project-td-123/feature/auth/login"},
+			wantBranch: []string{"main", "feature/auth/login"},
+			wantIsMain: []bool{true, false},
 		},
 	}
 
@@ -245,6 +254,9 @@ branch refs/heads/feature/auth/login
 				}
 				if i < len(tt.wantBranch) && wt.Branch != tt.wantBranch[i] {
 					t.Errorf("worktree[%d].Branch = %q, want %q", i, wt.Branch, tt.wantBranch[i])
+				}
+				if i < len(tt.wantIsMain) && wt.IsMain != tt.wantIsMain[i] {
+					t.Errorf("worktree[%d].IsMain = %v, want %v", i, wt.IsMain, tt.wantIsMain[i])
 				}
 			}
 		})

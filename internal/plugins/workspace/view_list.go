@@ -396,8 +396,13 @@ func (p *Plugin) renderWorktreeItem(wt *Worktree, selected bool, width int) stri
 	isSelected := selected
 	isActiveFocus := selected && p.activePane == PaneSidebar
 
-	// Status indicator
-	statusIcon := wt.Status.Icon()
+	// Status indicator - use special icon for main worktree
+	var statusIcon string
+	if wt.IsMain {
+		statusIcon = "◉" // Bullseye icon for main/primary worktree
+	} else {
+		statusIcon = wt.Status.Icon()
+	}
 
 	// Check for conflicts
 	hasConflict := p.hasConflict(wt.Name, p.conflicts)
@@ -516,17 +521,22 @@ func (p *Plugin) renderWorktreeItem(wt *Worktree, selected bool, width int) stri
 
 	// Not selected - use colored styles for visual interest
 	var statusStyle lipgloss.Style
-	switch wt.Status {
-	case StatusActive:
-		statusStyle = styles.StatusCompleted // Green
-	case StatusWaiting:
-		statusStyle = styles.StatusModified // Yellow/orange (warning)
-	case StatusDone:
-		statusStyle = styles.StatusCompleted // Green
-	case StatusError:
-		statusStyle = styles.StatusDeleted // Red
-	default:
-		statusStyle = styles.Muted // Gray for paused
+	if wt.IsMain {
+		// Primary/cyan color for main worktree to stand out
+		statusStyle = lipgloss.NewStyle().Foreground(styles.Primary)
+	} else {
+		switch wt.Status {
+		case StatusActive:
+			statusStyle = styles.StatusCompleted // Green
+		case StatusWaiting:
+			statusStyle = styles.StatusModified // Yellow/orange (warning)
+		case StatusDone:
+			statusStyle = styles.StatusCompleted // Green
+		case StatusError:
+			statusStyle = styles.StatusDeleted // Red
+		default:
+			statusStyle = styles.Muted // Gray for paused
+		}
 	}
 	icon := statusStyle.Render(statusIcon)
 

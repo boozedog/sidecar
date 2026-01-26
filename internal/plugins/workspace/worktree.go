@@ -31,13 +31,21 @@ func (p *Plugin) listWorktrees() ([]*Worktree, error) {
 		return nil, fmt.Errorf("git worktree list: %w", err)
 	}
 
-	return parseWorktreeList(string(output), p.ctx.WorkDir)
+	// Get the actual main worktree path (the original repo), not the current workdir
+	// This ensures IsMain is set correctly regardless of which worktree we're in
+	mainRepoPath := app.GetMainWorktreePath(p.ctx.WorkDir)
+	if mainRepoPath == "" {
+		mainRepoPath = p.ctx.WorkDir // Fallback if detection fails
+	}
+
+	return parseWorktreeList(string(output), mainRepoPath)
 }
 
 // parseWorktreeList parses porcelain format output.
 func parseWorktreeList(output, mainWorkdir string) ([]*Worktree, error) {
 	var worktrees []*Worktree
 	var current *Worktree
+	var mainWorktree *Worktree // Track main worktree to prepend later
 
 	// Parent directory of main workdir - worktrees are created as siblings
 	parentDir := filepath.Dir(mainWorkdir)
@@ -48,26 +56,30 @@ func parseWorktreeList(output, mainWorkdir string) ([]*Worktree, error) {
 
 		if strings.HasPrefix(line, "worktree ") {
 			if current != nil {
-				worktrees = append(worktrees, current)
+				if current.IsMain {
+					mainWorktree = current
+				} else {
+					worktrees = append(worktrees, current)
+				}
 			}
 			path := strings.TrimPrefix(line, "worktree ")
-			// Skip main worktree (where git repo lives)
-			if path == mainWorkdir {
-				current = nil
-				continue
-			}
+			// Mark main worktree (where git repo lives) with IsMain flag
+			isMain := path == mainWorkdir
 			// Derive name as relative path from parent dir, not just basename.
 			// This handles nested worktree directories (e.g., repo-prefix/branch-name)
 			// which are created when the branch name contains '/'.
 			name := filepath.Base(path)
-			if relPath, err := filepath.Rel(parentDir, path); err == nil && relPath != "" {
-				name = relPath
+			if !isMain {
+				if relPath, err := filepath.Rel(parentDir, path); err == nil && relPath != "" {
+					name = relPath
+				}
 			}
 			current = &Worktree{
 				Name:      name,
 				Path:      path,
 				Status:    StatusPaused,
 				CreatedAt: time.Now(), // Will be updated from file stat
+				IsMain:    isMain,
 			}
 		} else if current != nil {
 			if strings.HasPrefix(line, "HEAD ") {
@@ -84,7 +96,16 @@ func parseWorktreeList(output, mainWorkdir string) ([]*Worktree, error) {
 	}
 
 	if current != nil {
-		worktrees = append(worktrees, current)
+		if current.IsMain {
+			mainWorktree = current
+		} else {
+			worktrees = append(worktrees, current)
+		}
+	}
+
+	// Prepend main worktree to the list so it appears first
+	if mainWorktree != nil {
+		worktrees = append([]*Worktree{mainWorktree}, worktrees...)
 	}
 
 	return worktrees, scanner.Err()

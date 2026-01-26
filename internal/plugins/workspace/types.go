@@ -199,6 +199,7 @@ type Worktree struct {
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	IsOrphaned      bool // True if agent file exists but tmux session is gone
+	IsMain          bool // True if this is the primary/main worktree (project root)
 }
 
 // ShellSession represents a tmux shell session (not tied to a git worktree).
