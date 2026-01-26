@@ -36,7 +36,8 @@ func List(id string, items []ListItem, selectedIdx *int, opts ...ListOption) Sec
 		id:          id,
 		items:       items,
 		selectedIdx: selectedIdx,
-		maxVisible:  5, // Default
+		maxVisible:  5,    // Default
+		singleFocus: true, // Default: Tab skips between sections, j/k changes selection
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -56,9 +57,18 @@ func WithMaxVisible(n int) ListOption {
 // WithSingleFocus makes the list register as a single focusable unit for Tab navigation.
 // When focused, j/k or up/down change selection within the list without Tab-cycling through each item.
 // This is useful for lists that are part of a larger form where Tab should skip between sections.
+// Note: This is now the default behavior. This option is kept for backward compatibility.
 func WithSingleFocus() ListOption {
 	return func(s *listSection) {
 		s.singleFocus = true
+	}
+}
+
+// WithPerItemFocus makes the list register each item as a separate focusable for Tab navigation.
+// This overrides the default single-focus behavior when you want Tab to cycle through individual items.
+func WithPerItemFocus() ListOption {
+	return func(s *listSection) {
+		s.singleFocus = false
 	}
 }
 

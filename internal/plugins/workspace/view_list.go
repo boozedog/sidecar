@@ -609,8 +609,12 @@ func (p *Plugin) renderShellEntryForSession(shell *ShellSession, selected bool, 
 	var statusIcon string
 	var statusStyle lipgloss.Style
 
-	// td-a29b76: Show agent-specific status when an AI agent is running
-	if shell.ChosenAgent != AgentNone && shell.ChosenAgent != "" {
+	// td-f88fdd: Handle orphaned shells (manifest entry exists but tmux session is gone)
+	if shell.IsOrphaned {
+		statusIcon = "◌" // Empty circle for orphaned
+		statusStyle = styles.Muted
+	} else if shell.ChosenAgent != AgentNone && shell.ChosenAgent != "" {
+		// td-a29b76: Show agent-specific status when an AI agent is running
 		// Shell has an AI agent - show agent status
 		if shell.Agent != nil {
 			switch shell.Agent.Status {
@@ -648,7 +652,18 @@ func (p *Plugin) renderShellEntryForSession(shell *ShellSession, selected bool, 
 
 	// td-a29b76: Build second line with agent type if present
 	var statusText string
-	if shell.ChosenAgent != AgentNone && shell.ChosenAgent != "" {
+	if shell.IsOrphaned {
+		// td-f88fdd: Orphaned shell - show "offline" status
+		if shell.ChosenAgent != AgentNone && shell.ChosenAgent != "" {
+			agentAbbrev := shellAgentAbbreviations[shell.ChosenAgent]
+			if agentAbbrev == "" {
+				agentAbbrev = string(shell.ChosenAgent)
+			}
+			statusText = fmt.Sprintf("%s · offline", agentAbbrev)
+		} else {
+			statusText = "shell · offline"
+		}
+	} else if shell.ChosenAgent != AgentNone && shell.ChosenAgent != "" {
 		// Show agent type abbreviation
 		agentAbbrev := shellAgentAbbreviations[shell.ChosenAgent]
 		if agentAbbrev == "" {

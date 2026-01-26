@@ -183,9 +183,229 @@ type pollShellMsg struct{}
 
 // initShellSessions discovers existing shell sessions for the current project.
 // Called from Init() to reconnect to sessions from previous runs.
+// td-f88fdd: Uses manifest as source of truth, merged with tmux discovery.
 func (p *Plugin) initShellSessions() {
-	p.shells = p.discoverExistingShells()
+	// Discover running tmux sessions
+	tmuxSessions := p.discoverTmuxSessionNames()
+	tmuxMap := make(map[string]bool)
+	for _, name := range tmuxSessions {
+		tmuxMap[name] = true
+	}
+
+	p.shells = nil
+
+	// Process manifest entries (if manifest exists)
+	if p.shellManifest != nil {
+		for _, def := range p.shellManifest.Shells {
+			isRunning := tmuxMap[def.TmuxName]
+			shell := p.shellFromDefinition(def, isRunning)
+			p.shells = append(p.shells, shell)
+			if isRunning {
+				p.managedSessions[def.TmuxName] = true
+			}
+			delete(tmuxMap, def.TmuxName)
+		}
+	}
+
+	// Add tmux sessions not in manifest (upgrade path / external creation)
+	for tmuxName := range tmuxMap {
+		shell := p.shellFromTmux(tmuxName)
+		p.shells = append(p.shells, shell)
+		p.managedSessions[tmuxName] = true
+		// Save to manifest for future sessions
+		if p.shellManifest != nil {
+			_ = p.shellManifest.AddShell(shellToDefinition(shell))
+		}
+	}
+
+	// Also restore display names from legacy state.json (migration path)
 	p.restoreShellDisplayNames()
+}
+
+// shellFromDefinition creates a ShellSession from a manifest definition.
+func (p *Plugin) shellFromDefinition(def ShellDefinition, isRunning bool) *ShellSession {
+	shell := &ShellSession{
+		Name:        def.DisplayName,
+		TmuxName:    def.TmuxName,
+		CreatedAt:   def.CreatedAt,
+		ChosenAgent: definitionToAgentType(def.AgentType),
+		SkipPerms:   def.SkipPerms,
+		IsOrphaned:  !isRunning,
+	}
+
+	if isRunning {
+		paneID := getPaneID(def.TmuxName)
+		displayType := AgentShell
+		if shell.ChosenAgent != AgentNone {
+			displayType = shell.ChosenAgent
+		}
+		shell.Agent = &Agent{
+			Type:        displayType,
+			TmuxSession: def.TmuxName,
+			TmuxPane:    paneID,
+			OutputBuf:   NewOutputBuffer(outputBufferCap),
+			StartedAt:   def.CreatedAt,
+			Status:      AgentStatusRunning,
+		}
+	}
+
+	return shell
+}
+
+// shellFromTmux creates a ShellSession from a discovered tmux session.
+func (p *Plugin) shellFromTmux(tmuxName string) *ShellSession {
+	paneID := getPaneID(tmuxName)
+	displayName := p.deriveDisplayName(tmuxName)
+
+	return &ShellSession{
+		Name:     displayName,
+		TmuxName: tmuxName,
+		Agent: &Agent{
+			Type:        AgentShell,
+			TmuxSession: tmuxName,
+			TmuxPane:    paneID,
+			OutputBuf:   NewOutputBuffer(outputBufferCap),
+			StartedAt:   time.Now(),
+			Status:      AgentStatusRunning,
+		},
+		CreatedAt: time.Now(),
+	}
+}
+
+// deriveDisplayName extracts a display name from a tmux session name.
+func (p *Plugin) deriveDisplayName(tmuxName string) string {
+	projectName := filepath.Base(p.ctx.WorkDir)
+	basePrefix := shellSessionPrefix + sanitizeName(projectName)
+	indexPattern := regexp.MustCompile(`-(\d+)$`)
+
+	if matches := indexPattern.FindStringSubmatch(tmuxName); matches != nil {
+		idx, _ := strconv.Atoi(matches[1])
+		return fmt.Sprintf("Shell %d", idx)
+	} else if tmuxName == basePrefix {
+		return "Shell 1"
+	}
+	return "Shell"
+}
+
+// discoverTmuxSessionNames returns names of all sidecar shell sessions for this project.
+func (p *Plugin) discoverTmuxSessionNames() []string {
+	projectName := filepath.Base(p.ctx.WorkDir)
+	basePrefix := shellSessionPrefix + sanitizeName(projectName)
+
+	cmd := exec.Command("tmux", "list-sessions", "-F", "#{session_name}")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+
+	var result []string
+	indexPattern := regexp.MustCompile(`^` + regexp.QuoteMeta(basePrefix) + `(?:-(\d+))?$`)
+
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if indexPattern.MatchString(line) {
+			result = append(result, line)
+		}
+	}
+
+	return result
+}
+
+// syncShellsFromManifest reloads the manifest and syncs the shell list.
+// Called when the manifest file changes (from another sidecar instance).
+func (p *Plugin) syncShellsFromManifest() tea.Cmd {
+	return func() tea.Msg {
+		if p.shellManifest == nil {
+			return nil
+		}
+
+		// Reload manifest from disk
+		newManifest, err := LoadShellManifest(p.shellManifest.Path())
+		if err != nil {
+			return nil
+		}
+
+		return shellManifestSyncMsg{Manifest: newManifest}
+	}
+}
+
+// shellManifestSyncMsg carries the reloaded manifest for syncing.
+type shellManifestSyncMsg struct {
+	Manifest *ShellManifest
+}
+
+// applyManifestSync syncs the in-memory shell list with the manifest.
+// Called after receiving shellManifestSyncMsg.
+func (p *Plugin) applyManifestSync() {
+	if p.shellManifest == nil {
+		return
+	}
+
+	// Get current tmux sessions
+	tmuxSessions := p.discoverTmuxSessionNames()
+	tmuxMap := make(map[string]bool)
+	for _, name := range tmuxSessions {
+		tmuxMap[name] = true
+	}
+
+	// Build map of current shells by TmuxName
+	currentShells := make(map[string]*ShellSession)
+	for _, shell := range p.shells {
+		currentShells[shell.TmuxName] = shell
+	}
+
+	// Track which shells exist in manifest
+	manifestShells := make(map[string]bool)
+	for _, def := range p.shellManifest.Shells {
+		manifestShells[def.TmuxName] = true
+	}
+
+	// Process manifest entries - add new or update existing
+	var newShells []*ShellSession
+	for _, def := range p.shellManifest.Shells {
+		isRunning := tmuxMap[def.TmuxName]
+
+		if existing, ok := currentShells[def.TmuxName]; ok {
+			// Update existing shell
+			existing.Name = def.DisplayName
+			existing.ChosenAgent = definitionToAgentType(def.AgentType)
+			existing.SkipPerms = def.SkipPerms
+			existing.IsOrphaned = !isRunning
+			newShells = append(newShells, existing)
+		} else {
+			// New shell from manifest
+			shell := p.shellFromDefinition(def, isRunning)
+			newShells = append(newShells, shell)
+			if isRunning {
+				p.managedSessions[def.TmuxName] = true
+			}
+		}
+	}
+
+	// Remove shells not in manifest
+	for _, shell := range p.shells {
+		if !manifestShells[shell.TmuxName] {
+			// Shell was deleted in another instance
+			delete(p.managedSessions, shell.TmuxName)
+			globalPaneCache.remove(shell.TmuxName)
+			globalActiveRegistry.remove(shell.TmuxName)
+		}
+	}
+
+	p.shells = newShells
+
+	// Adjust selection if needed
+	if p.shellSelected && p.selectedShellIdx >= len(p.shells) {
+		if len(p.shells) > 0 {
+			p.selectedShellIdx = len(p.shells) - 1
+		} else if len(p.worktrees) > 0 {
+			p.shellSelected = false
+			p.selectedIdx = 0
+		}
+	}
 }
 
 func (p *Plugin) restoreShellDisplayNames() {
@@ -198,78 +418,28 @@ func (p *Plugin) restoreShellDisplayNames() {
 		return
 	}
 
+	// td-f88fdd: Migrate display names from state.json to manifest
+	migrated := false
 	for _, shell := range p.shells {
 		if shell == nil {
 			continue
 		}
 		if name, ok := wtState.ShellDisplayNames[shell.TmuxName]; ok && name != "" {
 			shell.Name = name
+			// If we have a manifest, update it with the migrated name
+			if p.shellManifest != nil && p.shellManifest.FindShell(shell.TmuxName) != nil {
+				_ = p.shellManifest.UpdateShell(shellToDefinition(shell))
+				migrated = true
+			}
 		}
+	}
+
+	// Clear from state.json after migration to avoid re-migration
+	if migrated {
+		wtState.ShellDisplayNames = nil
+		_ = state.SetWorkspaceState(p.ctx.WorkDir, wtState)
 	}
 }
-
-// discoverExistingShells finds all existing sidecar shell sessions for this project.
-func (p *Plugin) discoverExistingShells() []*ShellSession {
-	projectName := filepath.Base(p.ctx.WorkDir)
-	basePrefix := shellSessionPrefix + sanitizeName(projectName)
-
-	// List all tmux sessions
-	cmd := exec.Command("tmux", "list-sessions", "-F", "#{session_name}")
-	output, err := cmd.Output()
-	if err != nil {
-		return nil
-	}
-
-	var shells []*ShellSession
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-
-	// Pattern to match: sidecar-sh-{project}-{index} or legacy sidecar-sh-{project}
-	indexPattern := regexp.MustCompile(`^` + regexp.QuoteMeta(basePrefix) + `(?:-(\d+))?$`)
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		matches := indexPattern.FindStringSubmatch(line)
-		if matches == nil {
-			continue
-		}
-
-		// Determine display name based on index
-		var displayName string
-		if matches[1] == "" {
-			// Legacy format: sidecar-sh-{project} -> "Shell 1"
-			displayName = "Shell 1"
-		} else {
-			idx, _ := strconv.Atoi(matches[1])
-			displayName = fmt.Sprintf("Shell %d", idx)
-		}
-
-		// Capture pane ID for interactive mode support
-		paneID := getPaneID(line)
-
-		shell := &ShellSession{
-			Name:     displayName,
-			TmuxName: line,
-			Agent: &Agent{
-				Type:        AgentShell,
-				TmuxSession: line,
-				TmuxPane:    paneID,
-				OutputBuf:   NewOutputBuffer(outputBufferCap),
-				StartedAt:   time.Now(), // Approximate
-				Status:      AgentStatusRunning,
-			},
-			CreatedAt: time.Now(), // Approximate
-		}
-		shells = append(shells, shell)
-		p.managedSessions[line] = true
-	}
-
-	return shells
-}
-
 // nextShellIndex returns the next available shell index based on existing sessions.
 func (p *Plugin) nextShellIndex() int {
 	projectName := filepath.Base(p.ctx.WorkDir)
@@ -413,6 +583,46 @@ func (p *Plugin) createShellWithAgent() tea.Cmd {
 			PaneID:      paneID,
 			AgentType:   agentType,
 			SkipPerms:   skipPerms,
+		}
+	}
+}
+
+// recreateOrphanedShell recreates a tmux session for an orphaned shell.
+// td-f88fdd: Called when user tries to attach/interact with an orphaned shell.
+func (p *Plugin) recreateOrphanedShell(idx int) tea.Cmd {
+	if idx < 0 || idx >= len(p.shells) {
+		return nil
+	}
+
+	shell := p.shells[idx]
+	if !shell.IsOrphaned {
+		return nil // Not orphaned, nothing to do
+	}
+
+	sessionName := shell.TmuxName
+	workDir := p.ctx.WorkDir
+
+	return func() tea.Msg {
+		// Create new detached session
+		args := []string{"new-session", "-d", "-s", sessionName, "-c", workDir}
+		cmd := exec.Command("tmux", args...)
+		if err := cmd.Run(); err != nil {
+			return ShellCreatedMsg{
+				SessionName: sessionName,
+				DisplayName: shell.Name,
+				Err:         fmt.Errorf("recreate shell session: %w", err),
+			}
+		}
+
+		// Capture pane ID
+		paneID := getPaneID(sessionName)
+
+		return ShellCreatedMsg{
+			SessionName: sessionName,
+			DisplayName: shell.Name,
+			PaneID:      paneID,
+			AgentType:   shell.ChosenAgent,
+			SkipPerms:   shell.SkipPerms,
 		}
 	}
 }

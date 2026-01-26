@@ -758,7 +758,7 @@ func (p *Plugin) buildFileCache() {
 		// Skip common large/irrelevant directories
 		name := d.Name()
 		if d.IsDir() {
-			if name == ".git" || name == "node_modules" || name == "vendor" ||
+			if name == ".git" || name == ".sidecar" || name == "node_modules" || name == "vendor" ||
 				name == ".next" || name == "dist" || name == "build" ||
 				name == "__pycache__" || name == ".venv" || name == "venv" ||
 				name == ".idea" || name == ".vscode" {
@@ -853,7 +853,7 @@ func (p *Plugin) buildDirCache() {
 		name := d.Name()
 
 		// Skip common large/irrelevant directories
-		if name == ".git" || name == "node_modules" || name == "vendor" ||
+		if name == ".git" || name == ".sidecar" || name == "node_modules" || name == "vendor" ||
 			name == ".next" || name == "dist" || name == "build" ||
 			name == "__pycache__" || name == ".venv" || name == "venv" ||
 			name == ".idea" || name == ".vscode" {

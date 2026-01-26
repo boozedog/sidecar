@@ -16,6 +16,7 @@ const (
 
 // Sidecar files that should be in .gitignore
 var sidecarGitignoreEntries = []string{
+	".sidecar/",
 	".sidecar-agent",
 	".sidecar-task",
 	".sidecar-pr",

@@ -123,6 +123,15 @@ after Update in bubbletea).
 
 ## Keyboard shortcuts
 
+For complete shortcut listings per plugin, see `docs/guides/keyboard-shortcuts-reference.md`.
+
+### Key routing flow
+```
+User presses key → App handleKeyMsg() → Plugin Update()
+                   (quit, palette, `, ~, !, @)   (if not handled)
+```
+Context precedence: plugin context checked first, then `global`.
+
 ### Quick start: three things must match
 1. Command ID in `Commands()` (example: "stage-file")
 2. Binding command in `internal/keymap/bindings.go` (example: "stage-file")
@@ -164,10 +173,18 @@ func (p *Plugin) FocusContext() string {
 - Plugins must not render their own footer or hint line in View.
 - Match established patterns: Tab and Shift+Tab to switch panes, backslash to toggle sidebar, Esc to close modals, q to quit or go back depending on context.
 
+### Priority guidelines
+- **1**: Primary actions (Stage, Commit, Open)
+- **2**: Secondary actions (Diff, Search, Push)
+- **3**: Tertiary actions (History, Refresh)
+- **4+**: Palette only (Browse, external integrations)
+
 ### Root contexts (q behavior)
 - In root contexts, "q" shows the quit confirmation.
 - In non-root contexts, "q" navigates back or closes the view.
 - Update the root list in `internal/app/update.go` when adding new contexts.
+
+**Root contexts** (q = quit): `global`, `conversations`, `conversations-sidebar`, `git-status`, `git-status-commits`, `git-status-diff`, `file-browser-tree`, `workspace-list`, `td-monitor`
 
 ### Key format reference
 ```go
@@ -195,6 +212,26 @@ func (p *Plugin) FocusContext() string {
 - No conflicting keys in the same context.
 - Footer hints are short and high priority actions use Priority 1 or 2.
 - Verify q behavior with `isRootContext()`.
+
+### Common mistakes
+| Symptom | Fix |
+|---------|-----|
+| Shortcut doesn't work | Check Command ID matches in `Commands()` and `bindings.go`; verify `FocusContext()` returns matching context |
+| Wrong/duplicate footer | Remove footer rendering from plugin's `View()` |
+| Important hint truncated | Set lower Priority value (1=highest importance) |
+| 'q' behavior wrong | Update `isRootContext()` in `internal/app/update.go` |
+
+### Core files
+| File | Purpose |
+|------|---------|
+| `internal/plugin/plugin.go` | `Command` struct, `Commands()`, `FocusContext()` interface |
+| `internal/keymap/bindings.go` | Default key→command mappings |
+| `internal/keymap/registry.go` | Runtime binding lookup, handler registration |
+| `internal/app/update.go` | Key routing, `isRootContext()` |
+| `internal/app/view.go` | Footer rendering |
+
+### TD Monitor integration
+TD Monitor uses dynamic shortcut export—TD is the single source of truth. See `docs/guides/keyboard-shortcuts-reference.md` for details.
 
 ### Testing
 - Run `sidecar --debug` to inspect key handling.

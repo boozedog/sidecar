@@ -437,35 +437,76 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			}
 		}
 
+		// td-f88fdd: Check if this is recreation of an orphaned shell
+		var existingShell *ShellSession
+		var existingIdx int
+		for i, s := range p.shells {
+			if s.TmuxName == msg.SessionName {
+				existingShell = s
+				existingIdx = i
+				break
+			}
+		}
+
 		// Determine agent type for display - use chosen agent if set, otherwise AgentShell
 		displayAgentType := AgentShell
 		if msg.AgentType != AgentNone && msg.AgentType != "" {
 			displayAgentType = msg.AgentType
+		} else if existingShell != nil && existingShell.ChosenAgent != AgentNone {
+			displayAgentType = existingShell.ChosenAgent
 		}
 
-		// Create new shell session entry
-		shell := &ShellSession{
-			Name:     msg.DisplayName,
-			TmuxName: msg.SessionName,
-			Agent: &Agent{
-				Type:        displayAgentType, // td-2ba8a3: Show chosen agent type
+		if existingShell != nil {
+			// td-f88fdd: Recreated orphaned shell - update existing entry
+			existingShell.IsOrphaned = false
+			existingShell.Agent = &Agent{
+				Type:        displayAgentType,
 				TmuxSession: msg.SessionName,
-				TmuxPane:    msg.PaneID, // Store pane ID for interactive mode
+				TmuxPane:    msg.PaneID,
 				OutputBuf:   NewOutputBuffer(outputBufferCap),
 				StartedAt:   time.Now(),
 				Status:      AgentStatusRunning,
-			},
-			CreatedAt:   time.Now(),
-			ChosenAgent: msg.AgentType, // td-317b64: Track chosen agent
-			SkipPerms:   msg.SkipPerms, // td-317b64: Track skip perms setting
-		}
-		p.shells = append(p.shells, shell)
-		p.managedSessions[msg.SessionName] = true
+			}
+			p.managedSessions[msg.SessionName] = true
 
-		// Auto-select and focus the new shell
-		p.shellSelected = true
-		p.selectedShellIdx = len(p.shells) - 1
-		p.saveSelectionState()
+			// td-f88fdd: Update manifest to reflect shell is no longer orphaned
+			if p.shellManifest != nil {
+				_ = p.shellManifest.UpdateShell(shellToDefinition(existingShell))
+			}
+
+			p.shellSelected = true
+			p.selectedShellIdx = existingIdx
+			p.saveSelectionState()
+		} else {
+			// Create new shell session entry
+			shell := &ShellSession{
+				Name:     msg.DisplayName,
+				TmuxName: msg.SessionName,
+				Agent: &Agent{
+					Type:        displayAgentType, // td-2ba8a3: Show chosen agent type
+					TmuxSession: msg.SessionName,
+					TmuxPane:    msg.PaneID, // Store pane ID for interactive mode
+					OutputBuf:   NewOutputBuffer(outputBufferCap),
+					StartedAt:   time.Now(),
+					Status:      AgentStatusRunning,
+				},
+				CreatedAt:   time.Now(),
+				ChosenAgent: msg.AgentType, // td-317b64: Track chosen agent
+				SkipPerms:   msg.SkipPerms, // td-317b64: Track skip perms setting
+			}
+			p.shells = append(p.shells, shell)
+			p.managedSessions[msg.SessionName] = true
+
+			// Save to manifest for persistence and cross-instance sync (td-f88fdd)
+			if p.shellManifest != nil {
+				_ = p.shellManifest.AddShell(shellToDefinition(shell))
+			}
+
+			// Auto-select and focus the new shell
+			p.shellSelected = true
+			p.selectedShellIdx = len(p.shells) - 1
+			p.saveSelectionState()
+		}
 		p.activePane = PaneSidebar
 		p.autoScrollOutput = true
 
@@ -474,7 +515,7 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 		// Start polling for output using stable TmuxName
-		cmds = append(cmds, p.scheduleShellPollByName(shell.TmuxName, 500*time.Millisecond))
+		cmds = append(cmds, p.scheduleShellPollByName(msg.SessionName, 500*time.Millisecond))
 
 		// If there's a pending resume command, inject it and enter interactive mode (td-aa4136)
 		if p.pendingResumeCmd != "" {
@@ -600,6 +641,10 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 				// Clean up pane cache and active registry (td-018f25)
 				globalPaneCache.remove(msg.SessionName)
 				globalActiveRegistry.remove(msg.SessionName)
+				// Remove from manifest (td-f88fdd)
+				if p.shellManifest != nil {
+					_ = p.shellManifest.RemoveShell(msg.SessionName)
+				}
 				break
 			}
 		}
@@ -615,11 +660,18 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 				} else if len(p.worktrees) > 0 {
 					p.shellSelected = false
 					p.selectedIdx = 0
+				} else {
+					// No shells or worktrees left - reset selection state (td-782611)
+					p.shellSelected = false
+					p.selectedShellIdx = 0
+					p.selectedIdx = -1
 				}
 			}
 			p.saveSelectionState()
-			// Reload content for the newly selected item
-			cmds = append(cmds, p.loadSelectedContent())
+			// Reload content for the newly selected item (if any remain)
+			if len(p.shells) > 0 || len(p.worktrees) > 0 {
+				cmds = append(cmds, p.loadSelectedContent())
+			}
 		}
 
 	case ShellSessionDeadMsg:
@@ -641,6 +693,10 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 				// Clean up pane cache and active registry (td-018f25)
 				globalPaneCache.remove(msg.TmuxName)
 				globalActiveRegistry.remove(msg.TmuxName)
+				// Remove from manifest (td-f88fdd)
+				if p.shellManifest != nil {
+					_ = p.shellManifest.RemoveShell(msg.TmuxName)
+				}
 				break
 			}
 		}
@@ -656,13 +712,40 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 				} else if len(p.worktrees) > 0 {
 					p.shellSelected = false
 					p.selectedIdx = 0
+				} else {
+					// No shells or worktrees left - reset selection state (td-782611)
+					p.shellSelected = false
+					p.selectedShellIdx = 0
+					p.selectedIdx = -1
 				}
 			}
 			p.saveSelectionState()
-			// Reload content for the newly selected item
-			return p, p.loadSelectedContent()
+			// Reload content for the newly selected item (if any remain)
+			if len(p.shells) > 0 || len(p.worktrees) > 0 {
+				return p, p.loadSelectedContent()
+			}
 		}
 		return p, nil
+
+	case ShellManifestChangedMsg:
+		// Manifest changed by another sidecar instance (td-f88fdd)
+		// Reload manifest and sync shells
+		cmds = append(cmds, p.syncShellsFromManifest())
+		// Continue listening for more changes
+		cmds = append(cmds, p.listenForShellManifestChanges())
+		return p, tea.Batch(cmds...)
+
+	case shellManifestSyncMsg:
+		// Apply the reloaded manifest (td-f88fdd)
+		if msg.Manifest == nil {
+			return p, nil
+		}
+		p.shellManifest = msg.Manifest
+		p.applyManifestSync()
+		// Reload content if a shell is selected
+		if p.shellSelected {
+			return p, p.loadSelectedContent()
+		}
 
 	case ShellOutputMsg:
 		// Update last output time if content changed
@@ -730,6 +813,10 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		for _, shell := range p.shells {
 			if shell.TmuxName == msg.TmuxName {
 				shell.Name = msg.NewName
+				// Update manifest (td-f88fdd)
+				if p.shellManifest != nil {
+					_ = p.shellManifest.UpdateShell(shellToDefinition(shell))
+				}
 				break
 			}
 		}

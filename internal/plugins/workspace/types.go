@@ -232,6 +232,7 @@ type ShellSession struct {
 	CreatedAt   time.Time
 	ChosenAgent AgentType // td-317b64: Agent type selected at creation (AgentNone for plain shell)
 	SkipPerms   bool      // td-317b64: Whether skip permissions was enabled
+	IsOrphaned  bool      // td-f88fdd: True if manifest entry exists but tmux session is gone
 }
 
 // Agent represents an AI coding agent process.

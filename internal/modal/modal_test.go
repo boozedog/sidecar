@@ -467,23 +467,28 @@ func TestListSection(t *testing.T) {
 	}
 	s := List("list", items, &selectedIdx)
 
-	res := s.Render(60, "item1", "")
+	// With default singleFocus, use list ID for focus
+	res := s.Render(60, "list", "")
 
 	if !strings.Contains(res.Content, "Item 1") {
 		t.Errorf("expected content to contain 'Item 1', got %q", res.Content)
 	}
-	if len(res.Focusables) != 3 {
-		t.Errorf("expected 3 focusables, got %d", len(res.Focusables))
+	// Default is singleFocus=true, so list registers as 1 focusable
+	if len(res.Focusables) != 1 {
+		t.Errorf("expected 1 focusable (list itself), got %d", len(res.Focusables))
+	}
+	if res.Focusables[0].ID != "list" {
+		t.Errorf("expected focusable ID 'list', got %q", res.Focusables[0].ID)
 	}
 
-	// Test navigation
-	s.Update(tea.KeyMsg{Type: tea.KeyDown}, "item1")
+	// Test navigation - use "list" as focusID since singleFocus is default
+	s.Update(tea.KeyMsg{Type: tea.KeyDown}, "list")
 	if selectedIdx != 1 {
 		t.Errorf("expected selectedIdx 1 after down, got %d", selectedIdx)
 	}
 
 	// Test enter returns selected item ID
-	action, _ := s.Update(tea.KeyMsg{Type: tea.KeyEnter}, "item2")
+	action, _ := s.Update(tea.KeyMsg{Type: tea.KeyEnter}, "list")
 	if action != "item2" {
 		t.Errorf("expected action 'item2' on enter, got %q", action)
 	}

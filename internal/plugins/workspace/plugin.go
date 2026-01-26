@@ -301,9 +301,13 @@ type Plugin struct {
 	typeSelectorSkipPerms  bool      // Whether skip permissions is checked
 	typeSelectorFocusField int       // Focus: 0=name, 1=agent, 2=skipPerms, 3=buttons
 
-	// Resume conversation state (td-aa4136)
+// Resume conversation state (td-aa4136)
 	pendingResumeCmd      string // Resume command to inject after shell creation
 	pendingResumeWorktree string // Worktree name to enter interactive mode after agent starts
+
+	// Shell manifest for persistence and cross-instance sync (td-f88fdd)
+	shellManifest *ShellManifest
+	shellWatcher  *ShellWatcher
 }
 
 // New creates a new worktree manager plugin.
@@ -383,6 +387,16 @@ func (p *Plugin) Init(ctx *plugin.Context) error {
 	// Reset state restoration flag for project switching
 	p.stateRestored = false
 
+	// Load shell manifest for persistence (td-f88fdd)
+	manifestPath := filepath.Join(ctx.WorkDir, ".sidecar", "shells.json")
+	p.shellManifest, _ = LoadShellManifest(manifestPath)
+
+	// Stop any previous watcher (important for project switching)
+	if p.shellWatcher != nil {
+		p.shellWatcher.Stop()
+		p.shellWatcher = nil
+	}
+
 	// Discover existing shell sessions for this project
 	p.initShellSessions()
 
@@ -446,12 +460,50 @@ func (p *Plugin) Start() tea.Cmd {
 		}
 	}
 
+	// Start shell manifest watcher for cross-instance sync (td-f88fdd)
+	cmds = append(cmds, p.startShellWatcher())
+
 	return tea.Batch(cmds...)
+}
+
+// startShellWatcher creates and starts the shell manifest file watcher.
+func (p *Plugin) startShellWatcher() tea.Cmd {
+	if p.shellManifest == nil {
+		return nil
+	}
+
+	var err error
+	p.shellWatcher, err = NewShellWatcher(p.shellManifest.Path())
+	if err != nil {
+		return nil // Watcher failed, continue without cross-instance sync
+	}
+
+	p.shellWatcher.Start()
+	return p.listenForShellManifestChanges()
+}
+
+// listenForShellManifestChanges waits for manifest file changes.
+func (p *Plugin) listenForShellManifestChanges() tea.Cmd {
+	if p.shellWatcher == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		// Block until watcher signals a change
+		// Channel is closed when watcher stops
+		if _, ok := <-p.shellWatcher.msgChan; !ok {
+			return nil // Watcher stopped
+		}
+		return ShellManifestChangedMsg{}
+	}
 }
 
 // Stop cleans up plugin resources.
 func (p *Plugin) Stop() {
-	// Cleanup managed tmux sessions if needed
+	// Stop shell watcher (td-f88fdd)
+	if p.shellWatcher != nil {
+		p.shellWatcher.Stop()
+		p.shellWatcher = nil
+	}
 }
 
 // saveSelectionState persists the current selection to disk.
@@ -476,26 +528,9 @@ func (p *Plugin) saveSelectionState() {
 		}
 	}
 
-	if len(p.shells) > 0 {
-		shellNames := make(map[string]string, len(p.shells))
-		for _, shell := range p.shells {
-			if shell == nil || shell.TmuxName == "" || shell.Name == "" {
-				continue
-			}
-			// Only persist custom names, not defaults like "Shell 1", "Shell 2"
-			if !isDefaultShellName(shell.Name) {
-				shellNames[shell.TmuxName] = shell.Name
-			}
-		}
-		if len(shellNames) > 0 {
-			wtState.ShellDisplayNames = shellNames
-		} else {
-			wtState.ShellDisplayNames = nil
-		}
-	}
-
-	// Only save if we have something selected or display names
-	if wtState.WorkspaceName != "" || wtState.ShellTmuxName != "" || len(wtState.ShellDisplayNames) > 0 {
+	// td-f88fdd: Shell display names now persisted in .sidecar/shells.json manifest
+	// Only save selection state (which worktree/shell is selected)
+	if wtState.WorkspaceName != "" || wtState.ShellTmuxName != "" {
 		_ = state.SetWorkspaceState(p.ctx.WorkDir, wtState)
 	}
 }

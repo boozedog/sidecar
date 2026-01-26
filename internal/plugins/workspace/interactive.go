@@ -361,6 +361,12 @@ func (p *Plugin) enterInteractiveMode() tea.Cmd {
 			return nil
 		}
 		shell := p.shells[p.selectedShellIdx]
+
+		// td-f88fdd: Handle orphaned shells - recreate before entering interactive mode
+		if shell.IsOrphaned {
+			return p.recreateOrphanedShell(p.selectedShellIdx)
+		}
+
 		if shell.Agent == nil {
 			return nil
 		}
