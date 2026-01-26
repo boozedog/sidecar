@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/marcus/sidecar/internal/config"
 	"github.com/marcus/sidecar/internal/plugin"
+	"github.com/marcus/sidecar/internal/tty"
 )
 
 // TestMapKeyToTmux_Printable tests regular character input
@@ -963,21 +964,21 @@ func TestUpdateBracketedPasteMode_ActiveState(t *testing.T) {
 
 // TestPartialMouseSeqRegex_MatchesScrollDown tests SGR scroll down detection
 func TestPartialMouseSeqRegex_MatchesScrollDown(t *testing.T) {
-	if !partialMouseSeqRegex.MatchString("[<65;83;33M") {
+	if !tty.PartialMouseSeqRegex.MatchString("[<65;83;33M") {
 		t.Error("expected regex to match scroll-down sequence [<65;83;33M")
 	}
 }
 
 // TestPartialMouseSeqRegex_MatchesScrollUp tests SGR scroll up detection
 func TestPartialMouseSeqRegex_MatchesScrollUp(t *testing.T) {
-	if !partialMouseSeqRegex.MatchString("[<64;10;5M") {
+	if !tty.PartialMouseSeqRegex.MatchString("[<64;10;5M") {
 		t.Error("expected regex to match scroll-up sequence [<64;10;5M")
 	}
 }
 
 // TestPartialMouseSeqRegex_MatchesRelease tests SGR release event (lowercase m)
 func TestPartialMouseSeqRegex_MatchesRelease(t *testing.T) {
-	if !partialMouseSeqRegex.MatchString("[<0;50;20m") {
+	if !tty.PartialMouseSeqRegex.MatchString("[<0;50;20m") {
 		t.Error("expected regex to match release sequence [<0;50;20m")
 	}
 }
@@ -985,7 +986,7 @@ func TestPartialMouseSeqRegex_MatchesRelease(t *testing.T) {
 // TestPartialMouseSeqRegex_NoMatchNormalText tests that normal text is not matched
 func TestPartialMouseSeqRegex_NoMatchNormalText(t *testing.T) {
 	for _, text := range []string{"hello", "[notmouse]", "[<abc;def;ghiM", "ls -la"} {
-		if partialMouseSeqRegex.MatchString(text) {
+		if tty.PartialMouseSeqRegex.MatchString(text) {
 			t.Errorf("regex should not match normal text %q", text)
 		}
 	}
@@ -995,11 +996,11 @@ func TestPartialMouseSeqRegex_NoMatchNormalText(t *testing.T) {
 // mouse sequences (from fast scrolling) are matched as a single KeyRunes message
 func TestPartialMouseSeqRegex_MatchesMultipleSequences(t *testing.T) {
 	// Two scroll events arriving together (fast scroll)
-	if !partialMouseSeqRegex.MatchString("[<64;81;24M[<64;81;24M") {
+	if !tty.PartialMouseSeqRegex.MatchString("[<64;81;24M[<64;81;24M") {
 		t.Error("expected regex to match two concatenated scroll sequences")
 	}
 	// Three events
-	if !partialMouseSeqRegex.MatchString("[<64;10;5M[<65;10;5M[<0;10;5m") {
+	if !tty.PartialMouseSeqRegex.MatchString("[<64;10;5M[<65;10;5M[<0;10;5m") {
 		t.Error("expected regex to match three concatenated mouse sequences")
 	}
 }
@@ -1007,7 +1008,7 @@ func TestPartialMouseSeqRegex_MatchesMultipleSequences(t *testing.T) {
 // TestPartialMouseSeqRegex_NoMatchWithESC tests sequences with ESC are not matched
 // (those are handled by mouseEscapeRegex instead)
 func TestPartialMouseSeqRegex_NoMatchWithESC(t *testing.T) {
-	if partialMouseSeqRegex.MatchString("\x1b[<65;83;33M") {
+	if tty.PartialMouseSeqRegex.MatchString("\x1b[<65;83;33M") {
 		t.Error("regex should not match full ESC sequence (handled by mouseEscapeRegex)")
 	}
 }

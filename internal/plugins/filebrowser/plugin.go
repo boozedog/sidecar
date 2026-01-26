@@ -15,6 +15,7 @@ import (
 	"github.com/marcus/sidecar/internal/mouse"
 	"github.com/marcus/sidecar/internal/plugin"
 	"github.com/marcus/sidecar/internal/state"
+	"github.com/marcus/sidecar/internal/tty"
 )
 
 const (
@@ -227,6 +228,12 @@ type Plugin struct {
 
 	// State restoration flag
 	stateRestored bool
+
+	// Inline editor state (tmux-based editing)
+	inlineEditor      *tty.Model // Embeddable tty model for inline editing
+	inlineEditMode    bool       // True when inline editing is active
+	inlineEditSession string     // Tmux session name for editor
+	inlineEditFile    string     // Path of file being edited
 }
 
 // New creates a new File Browser plugin.
@@ -236,6 +243,7 @@ func New() *Plugin {
 		imageRenderer: image.New(), // Detect terminal graphics protocol once
 		treeVisible:   true,        // Tree pane visible by default
 		showIgnored:   true,        // Show git-ignored files by default
+		inlineEditor:  tty.New(nil), // Initialize inline editor with default config
 	}
 }
 
@@ -406,6 +414,27 @@ func (p *Plugin) refresh() tea.Cmd {
 
 // Update handles messages.
 func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
+	// Handle inline edit mode - delegate most messages to tty model
+	if p.inlineEditMode && p.inlineEditor != nil && p.inlineEditor.IsActive() {
+		switch msg := msg.(type) {
+		case tea.WindowSizeMsg:
+			p.width = msg.Width
+			p.height = msg.Height
+			// Update inline editor dimensions
+			return p, p.inlineEditor.SetDimensions(p.calculateInlineEditorWidth(), p.calculateInlineEditorHeight())
+
+		case tea.KeyMsg, tea.MouseMsg, tty.EscapeTimerMsg, tty.CaptureResultMsg,
+			tty.PollTickMsg, tty.PaneResizedMsg, tty.SessionDeadMsg, tty.PasteResultMsg:
+			cmd := p.inlineEditor.Update(msg)
+			// Check if editor exited
+			if !p.inlineEditor.IsActive() {
+				p.exitInlineEditMode()
+				return p, tea.Batch(cmd, p.refresh())
+			}
+			return p, cmd
+		}
+	}
+
 	switch msg := msg.(type) {
 	case app.PluginFocusedMsg:
 		// Refresh tree when plugin gains focus to pick up external file changes
@@ -598,6 +627,15 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			}
 		}
 
+	case InlineEditStartedMsg:
+		return p, p.handleInlineEditStarted(msg)
+
+	case InlineEditExitedMsg:
+		// Refresh preview after editing
+		if msg.FilePath != "" {
+			return p, LoadPreview(p.ctx.WorkDir, msg.FilePath)
+		}
+
 	case tea.KeyMsg:
 		return p.handleKey(msg)
 	}
@@ -695,6 +733,9 @@ func (p *Plugin) Commands() []plugin.Command {
 
 // FocusContext returns the current focus context.
 func (p *Plugin) FocusContext() string {
+	if p.inlineEditMode {
+		return "file-browser-inline-edit"
+	}
 	if p.projectSearchMode {
 		return "file-browser-project-search"
 	}

@@ -26,11 +26,19 @@ var (
 		Default:     true,
 		Description: "Enable write support for tmux panes",
 	}
+
+	// TmuxInlineEdit enables inline file editing via tmux in the files plugin.
+	TmuxInlineEdit = Feature{
+		Name:        "tmux_inline_edit",
+		Default:     true,
+		Description: "Enable inline file editing via tmux in the files plugin",
+	}
 )
 
 // allFeatures is the registry of all known features.
 var allFeatures = []Feature{
 	TmuxInteractiveInput,
+	TmuxInlineEdit,
 }
 
 // defaultValues provides O(1) lookup for feature defaults.

@@ -173,6 +173,10 @@ func (p *Plugin) handleTreeKey(key string) (plugin.Plugin, tea.Cmd) {
 		node := p.tree.GetNode(p.treeCursor)
 		if node != nil && !node.IsDir {
 			cmd := p.openTab(node.Path, TabOpenReplace)
+			// Use inline editing if supported, otherwise open in external editor
+			if p.isInlineEditSupported(node.Path) {
+				return p, tea.Batch(cmd, p.enterInlineEditMode(node.Path))
+			}
 			return p, tea.Batch(cmd, p.openFile(node.Path))
 		}
 
@@ -443,6 +447,10 @@ func (p *Plugin) handlePreviewKey(key string) (plugin.Plugin, tea.Cmd) {
 	case "e":
 		// Open previewed file in editor
 		if p.previewFile != "" {
+			// Use inline editing if supported, otherwise open in external editor
+			if p.isInlineEditSupported(p.previewFile) {
+				return p, p.enterInlineEditMode(p.previewFile)
+			}
 			return p, p.openFile(p.previewFile)
 		}
 

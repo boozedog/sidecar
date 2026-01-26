@@ -88,6 +88,11 @@ func (p *Plugin) renderView() string {
 	// Clear mouse hit regions at start of each render
 	p.mouseHandler.Clear()
 
+	// Inline edit mode renders the terminal in place of normal content
+	if p.inlineEditMode && p.inlineEditor != nil && p.inlineEditor.IsActive() {
+		return p.renderInlineEditView()
+	}
+
 	// Project search is a full overlay - render modal over dimmed background
 	if p.projectSearchMode {
 		background := p.renderNormalPanes()
