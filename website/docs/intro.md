@@ -20,6 +20,7 @@ AI coding agents are powerful but opaque. When Claude Code or Cursor makes chang
 - **Real-time git monitoring** - Stage files, review diffs, commit changes while your agent works
 - **Multi-agent support** - Browse session history from Claude Code, Cursor, Gemini CLI, and more
 - **Parallel development** - Run multiple agents across git worktrees with live output streaming
+- **Instant project switching** - Jump between repos with `@`. State, cursor, and preferences restore per-project
 - **Task integration** - Connect workspaces to TD tasks for context tracking across sessions
 - **Zero context switching** - Everything in your terminal, no editor required
 
@@ -190,11 +191,34 @@ These shortcuts work across all plugins:
 
 Each plugin adds its own context-specific shortcuts shown in the footer bar.
 
+### Project Switching
+
+Press `@` to switch back and forth between projects instantly. Your context is preserved per-project:
+
+- **State per project** - Cursor position, expanded directories, and sidebar widths
+- **Active plugin memory** - Restores whichever plugin you were using
+- **Instant switch** - No re-scanning or loading delays
+
+Configure projects in `~/.config/sidecar/config.json`:
+
+```json
+{
+  "projects": {
+    "list": [
+      {"name": "frontend", "path": "~/code/frontend"},
+      {"name": "backend", "path": "~/code/backend"}
+    ]
+  }
+}
+```
+
 ### Worktree Switcher
 
 Press `W` to switch between git worktrees within the current repository. This is useful when you're working with multiple worktrees for parallel development.
 
 Sidecar remembers your last active worktree per project. When you switch away and later return, sidecar automatically restores the worktree you were working in—no need to manually navigate back.
+
+Both project and worktree switching preserve your full context, so you can jump between codebases without losing your place.
 
 ## Themes
 
@@ -267,6 +291,7 @@ curl -fsSL https://raw.githubusercontent.com/marcus/sidecar/main/scripts/setup.s
 
 - **[Git Plugin](./git-plugin)** - Full reference for staging, diffing, and commits
 - **[Workspaces Plugin](./workspaces-plugin)** - Parallel agent setup and management
+- **[Project Switching](./project-switching)** - Multi-repo workflow configuration
 - **[TD Integration](./td)** - Task tracking across sessions
 - **[GitHub Repository](https://github.com/marcus/sidecar)** - Source code and issues
 

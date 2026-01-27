@@ -7,7 +7,7 @@ const TABS = ['td', 'git', 'files', 'conversations', 'workspaces'];
 
 const MINI_FEATURES = [
   { icon: 'command', title: 'Command Palette', description: 'Quick access to all commands with fuzzy search. Press Ctrl+P to open.' },
-  { icon: 'folder-kanban', title: 'Project Switcher', description: 'Jump between projects instantly. Your recent projects are always one keystroke away.' },
+  { icon: 'folder-kanban', title: 'Project Switcher', description: 'Switch back and forth between projects instantly. State persists per-project—cursor, plugin, and preferences restore automatically.' },
   { icon: 'columns-2', title: 'Split Panes', description: 'View two plugins side by side. Great for watching diffs while reviewing tasks.' },
   { icon: 'activity', title: 'Diagnostics Overlay', description: 'Real-time metrics on memory, goroutines, and render performance. Toggle with F12.' },
   { icon: 'search', title: 'Fuzzy File Finder', description: 'Find any file by typing part of its name. Respects .gitignore patterns.' },
@@ -19,7 +19,7 @@ const MINI_FEATURES = [
   { icon: 'clipboard', title: 'System Clipboard', description: 'Copy file paths, diffs, commit hashes, and more directly to your clipboard.' },
   { icon: 'move', title: 'Vim Navigation', description: 'h/j/k/l, gg/G, Ctrl+d/u, and more. Navigate like you would in vim.' },
   { icon: 'git-merge', title: 'Merge Workflow', description: 'Merge PRs, delete branches, and clean up workspaces with guided prompts.' },
-  { icon: 'git-fork', title: 'Worktree Switcher', description: 'Switch between git worktrees instantly. Keep multiple branches checked out simultaneously.' },
+  { icon: 'git-fork', title: 'Worktree Switcher', description: 'Switch back and forth between git worktrees instantly. Per-worktree state restores automatically.' },
   { icon: 'refresh-cw', title: 'Global Refresh', description: 'Press R to refresh all plugins at once. Git status, files, and tasks update together.' },
   { icon: 'sun', title: 'Theme Switching', description: 'Cycle through themes or browse the community gallery. Changes apply instantly.' },
   { icon: 'gauge', title: 'Lightweight', description: 'Minimal CPU and memory footprint. Runs in the background without slowing down your machine like heavy editors.' },
@@ -906,7 +906,7 @@ export default function Home() {
 
             <p className="sc-subtitle">
               Sidecar puts your entire development workflow in one shell:
-              plan tasks with <a href="https://marcus.github.io/td/" className="sc-inlineLink">td</a>, chat with AI agents, review diffs, stage commits, review past conversations, and manage git workspaces—all without leaving Sidecar.
+              plan tasks with <a href="https://marcus.github.io/td/" className="sc-inlineLink">td</a>, chat with AI agents, review diffs, stage commits, switch between projects instantly, and manage git workspaces—all without leaving Sidecar.
             </p>
 
             <div className="sc-heroCta">
@@ -1152,9 +1152,15 @@ export default function Home() {
                 description="Built-in themes plus a community theme browser with live previews. Customize colors to match your terminal aesthetic."
               />
               <FeatureListItem
+                icon="folder-kanban"
+                title="Instant Project Switching"
+                color="yellow"
+                description="Switch back and forth between projects with @. Cursor position, active plugin, and view preferences restore per-project."
+              />
+              <FeatureListItem
                 icon="monitor"
                 title="tmux Integration"
-                color="yellow"
+                color="green"
                 description="Designed to run in a tmux pane beside your agent. Attach and detach seamlessly."
               />
               <FeatureListItem
