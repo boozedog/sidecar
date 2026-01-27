@@ -62,6 +62,11 @@ func (p *Plugin) Icon() string { return pluginIcon }
 func (p *Plugin) Init(ctx *plugin.Context) error {
 	p.ctx = ctx
 
+	// Clear any stale state from previous initialization (important for project switching)
+	p.model = nil
+	p.notInstalled = nil
+	p.started = false
+
 	// Try to create embedded monitor with custom renderers for gradient borders.
 	// Version is empty for embedded use (not displayed in this context).
 	opts := monitor.EmbeddedOptions{
@@ -111,7 +116,10 @@ func (p *Plugin) Start() tea.Cmd {
 func (p *Plugin) Stop() {
 	if p.model != nil {
 		p.model.Close()
+		p.model = nil
 	}
+	p.notInstalled = nil
+	p.started = false
 }
 
 // Update handles messages by delegating to the embedded monitor.
