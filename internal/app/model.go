@@ -201,14 +201,28 @@ type Model struct {
 	updateSpinnerFrame int
 
 	// Update modal state
-	updateModalState    UpdateModalState
-	updatePhase         UpdatePhase
-	updatePhaseStatus   map[UpdatePhase]string
-	updateStartTime     time.Time
-	updateReleaseNotes  string // Release notes for current update
-	updateChangelog     string // Full changelog content
-	changelogVisible    bool
+	updateModalState      UpdateModalState
+	updatePhase           UpdatePhase
+	updatePhaseStatus     map[UpdatePhase]string
+	updateStartTime       time.Time
+	updateReleaseNotes    string // Release notes for current update
+	updateChangelog       string // Full changelog content
+	changelogVisible      bool
 	changelogScrollOffset int
+
+	// Update modal (declarative)
+	updatePreviewModal        *modal.Modal
+	updatePreviewModalWidth   int
+	updatePreviewMouseHandler *mouse.Handler
+	updateCompleteModal       *modal.Modal
+	updateCompleteModalWidth  int
+	updateCompleteMouseHandler *mouse.Handler
+	updateErrorModal          *modal.Modal
+	updateErrorModalWidth     int
+	updateErrorMouseHandler   *mouse.Handler
+	changelogModal            *modal.Modal
+	changelogModalWidth       int
+	changelogMouseHandler     *mouse.Handler
 
 	// Intro animation
 	intro IntroModel

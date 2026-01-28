@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/marcus/sidecar/internal/markdown"
+	"github.com/marcus/sidecar/internal/modal"
+	"github.com/marcus/sidecar/internal/mouse"
 	"github.com/marcus/sidecar/internal/styles"
 	"github.com/marcus/sidecar/internal/ui"
 )
@@ -56,98 +59,123 @@ func (m *Model) renderUpdateModalOverlay(background string) string {
 	return ui.OverlayModal(background, modalContent, m.width, m.height)
 }
 
-// renderUpdatePreviewModal renders the preview state showing release notes before update.
-func (m *Model) renderUpdatePreviewModal() string {
-	modalW := m.updateModalWidth()
-	contentW := modalW - 4 // Account for borders and padding
-
-	var sb strings.Builder
-
-	// Title
-	title := lipgloss.NewStyle().Bold(true).Foreground(styles.Primary).Render("Sidecar Update")
-	sb.WriteString(centerText(title, contentW))
-	sb.WriteString("\n\n")
-
-	// Version comparison
-	if m.updateAvailable != nil {
-		currentV := m.updateAvailable.CurrentVersion
-		latestV := m.updateAvailable.LatestVersion
-		arrow := lipgloss.NewStyle().Foreground(styles.Success).Render(" → ")
-		versionLine := fmt.Sprintf("%s%s%s", currentV, arrow, latestV)
-		sb.WriteString(centerText(versionLine, contentW))
-		sb.WriteString("\n")
+// ensureUpdatePreviewModal creates/updates the preview modal with caching.
+func (m *Model) ensureUpdatePreviewModal() {
+	if m.updateAvailable == nil {
+		return
 	}
+	modalW := m.updateModalWidth()
+	if m.updatePreviewModal != nil && m.updatePreviewModalWidth == modalW {
+		return
+	}
+	m.updatePreviewModalWidth = modalW
+	contentW := modalW - 6 // borders + padding
 
-	// Divider
-	sb.WriteString("\n")
-	sb.WriteString(lipgloss.NewStyle().Foreground(styles.TextMuted).Render(strings.Repeat("─", contentW)))
-	sb.WriteString("\n\n")
+	// Version line
+	currentV := m.updateAvailable.CurrentVersion
+	latestV := m.updateAvailable.LatestVersion
+	arrow := lipgloss.NewStyle().Foreground(styles.Success).Render(" → ")
+	versionLine := fmt.Sprintf("%s%s%s", currentV, arrow, latestV)
 
-	// Release notes section
-	sb.WriteString(lipgloss.NewStyle().Bold(true).Render("What's New"))
-	sb.WriteString("\n\n")
-
-	// Render release notes
+	// Release notes
 	releaseNotes := m.updateReleaseNotes
-	if releaseNotes == "" && m.updateAvailable != nil {
+	if releaseNotes == "" {
 		releaseNotes = m.updateAvailable.ReleaseNotes
 	}
 	if releaseNotes == "" {
 		releaseNotes = "No release notes available."
 	}
-
-	// Render markdown release notes
+	releaseNotes = parseReleaseNotes(releaseNotes)
 	renderedNotes := m.renderReleaseNotes(releaseNotes, contentW)
 
-	// Limit height of release notes
+	// Limit height
 	lines := strings.Split(renderedNotes, "\n")
 	maxLines := 15
 	if len(lines) > maxLines {
 		lines = lines[:maxLines]
-		lines = append(lines, lipgloss.NewStyle().Foreground(styles.TextMuted).Render("... (truncated)"))
+		lines = append(lines, styles.Muted.Render("... (truncated)"))
 	}
-	sb.WriteString(strings.Join(lines, "\n"))
-	sb.WriteString("\n\n")
+	notesContent := strings.Join(lines, "\n")
 
-	// Changelog hint
-	changelogHint := lipgloss.NewStyle().Foreground(styles.TextMuted).Render("[c] View Full Changelog")
-	sb.WriteString(changelogHint)
-	sb.WriteString("\n")
+	changelogHint := styles.Muted.Render("[c] View Full Changelog")
 
-	// Divider
-	sb.WriteString("\n")
-	sb.WriteString(lipgloss.NewStyle().Foreground(styles.TextMuted).Render(strings.Repeat("─", contentW)))
-	sb.WriteString("\n\n")
+	m.updatePreviewModal = modal.New("Sidecar Update",
+		modal.WithWidth(modalW),
+		modal.WithVariant(modal.VariantDefault),
+		modal.WithPrimaryAction("update"),
+	).
+		AddSection(modal.Text(versionLine)).
+		AddSection(modal.Spacer()).
+		AddSection(modal.Text(lipgloss.NewStyle().Bold(true).Render("What's New"))).
+		AddSection(modal.Spacer()).
+		AddSection(modal.Text(notesContent)).
+		AddSection(modal.Spacer()).
+		AddSection(modal.Text(changelogHint)).
+		AddSection(modal.Spacer()).
+		AddSection(modal.Buttons(
+			modal.Btn(" Update Now ", "update"),
+			modal.Btn(" Later ", "cancel"),
+		))
+}
 
-	// Buttons
-	updateBtn := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#ffffff")).
-		Background(styles.Primary).
-		Padding(0, 2).
-		Render("Update Now")
+// renderUpdatePreviewModal renders the preview state showing release notes before update.
+func (m *Model) renderUpdatePreviewModal() string {
+	m.ensureUpdatePreviewModal()
+	if m.updatePreviewModal == nil {
+		return ""
+	}
+	if m.updatePreviewMouseHandler == nil {
+		m.updatePreviewMouseHandler = mouse.NewHandler()
+	}
+	return m.updatePreviewModal.Render(m.width, m.height, m.updatePreviewMouseHandler)
+}
 
-	laterBtn := lipgloss.NewStyle().
-		Foreground(styles.TextMuted).
-		Padding(0, 2).
-		Render("Later")
+// clearUpdatePreviewModal clears the preview modal cache.
+func (m *Model) clearUpdatePreviewModal() {
+	m.updatePreviewModal = nil
+	m.updatePreviewModalWidth = 0
+	m.updatePreviewMouseHandler = nil
+}
 
-	buttons := fmt.Sprintf("%s    %s", updateBtn, laterBtn)
-	sb.WriteString(centerText(buttons, contentW))
-	sb.WriteString("\n\n")
+// parseReleaseNotes cleans up release notes by removing duplicate headers
+// and excessive whitespace. The modal already shows "What's New" as a header,
+// so we strip any leading "What's New" headers from the content.
+func parseReleaseNotes(notes string) string {
+	if notes == "" {
+		return notes
+	}
 
-	// Hints
-	hints := lipgloss.NewStyle().Foreground(styles.TextMuted).Render("Enter: update   Esc: close")
-	sb.WriteString(centerText(hints, contentW))
+	// Patterns to strip from the beginning of release notes
+	// Match: ## What's New, ### What's New, # What's New (case-insensitive)
+	// Also match: # Release Notes, ## Release Notes
+	headerPatterns := regexp.MustCompile(`(?im)^#+\s*(what'?s?\s*new|release\s*notes)\s*\n*`)
 
-	// Wrap in modal box
-	modalStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(styles.TextMuted).
-		Padding(1, 2).
-		Width(modalW)
+	result := notes
 
-	return modalStyle.Render(sb.String())
+	// Strip leading whitespace and newlines first
+	result = strings.TrimSpace(result)
+
+	// Repeatedly strip matching headers from the beginning
+	// (in case there are multiple, e.g., "## What's New\n### What's New\n")
+	for {
+		loc := headerPatterns.FindStringIndex(result)
+		if loc == nil || loc[0] != 0 {
+			break
+		}
+		result = result[loc[1]:]
+		result = strings.TrimSpace(result)
+	}
+
+	// Collapse multiple consecutive newlines to at most 2
+	multiNewlines := regexp.MustCompile(`\n{3,}`)
+	result = multiNewlines.ReplaceAllString(result, "\n\n")
+
+	// If parsing emptied the content, return original
+	if strings.TrimSpace(result) == "" {
+		return strings.TrimSpace(notes)
+	}
+
+	return result
 }
 
 // renderReleaseNotes renders markdown release notes.
@@ -265,144 +293,213 @@ func formatElapsed(d time.Duration) string {
 	return fmt.Sprintf("%d:%02d", minutes, seconds)
 }
 
-// renderUpdateCompleteModal renders the completion state.
-func (m *Model) renderUpdateCompleteModal() string {
+// ensureUpdateCompleteModal creates/updates the complete modal with caching.
+func (m *Model) ensureUpdateCompleteModal() {
 	modalW := m.updateModalWidth()
-	contentW := modalW - 4
+	if m.updateCompleteModal != nil && m.updateCompleteModalWidth == modalW {
+		return
+	}
+	m.updateCompleteModalWidth = modalW
 
-	var sb strings.Builder
-
-	// Title
-	title := lipgloss.NewStyle().Bold(true).Foreground(styles.Success).Render("Update Complete!")
-	sb.WriteString(centerText(title, contentW))
-	sb.WriteString("\n\n")
-
-	// What was updated
 	checkmark := lipgloss.NewStyle().Foreground(styles.Success).Render("✓")
 
+	var updatesText string
 	if m.updateAvailable != nil {
-		sb.WriteString(fmt.Sprintf("  %s Sidecar updated to %s\n",
-			checkmark, m.updateAvailable.LatestVersion))
+		updatesText = fmt.Sprintf("  %s Sidecar updated to %s", checkmark, m.updateAvailable.LatestVersion)
 	} else {
-		sb.WriteString(fmt.Sprintf("  %s Sidecar updated\n", checkmark))
+		updatesText = fmt.Sprintf("  %s Sidecar updated", checkmark)
 	}
-
 	if m.tdVersionInfo != nil && m.tdVersionInfo.HasUpdate {
-		sb.WriteString(fmt.Sprintf("  %s td updated to %s\n",
-			checkmark, m.tdVersionInfo.LatestVersion))
+		updatesText += fmt.Sprintf("\n  %s td updated to %s", checkmark, m.tdVersionInfo.LatestVersion)
 	}
 
-	sb.WriteString("\n")
+	restartMsg := styles.Muted.Render("Restart sidecar to use the new version.")
+	tip := styles.Muted.Render("Tip: Press q to quit, then run 'sidecar' again.")
 
-	// Restart message
-	restartMsg := lipgloss.NewStyle().Foreground(styles.TextMuted).Render(
-		"Restart sidecar to use the new version.")
-	sb.WriteString(centerText(restartMsg, contentW))
-	sb.WriteString("\n\n")
-
-	// Tip
-	tip := lipgloss.NewStyle().Foreground(styles.TextMuted).Render(
-		"Tip: Press q to quit, then run 'sidecar' again.")
-	sb.WriteString(centerText(tip, contentW))
-	sb.WriteString("\n\n")
-
-	// Divider
-	sb.WriteString(lipgloss.NewStyle().Foreground(styles.TextMuted).Render(strings.Repeat("─", contentW)))
-	sb.WriteString("\n\n")
-
-	// Buttons
-	quitBtn := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#ffffff")).
-		Background(styles.Success).
-		Padding(0, 2).
-		Render("Quit & Restart")
-
-	laterBtn := lipgloss.NewStyle().
-		Foreground(styles.TextMuted).
-		Padding(0, 2).
-		Render("Later")
-
-	buttons := fmt.Sprintf("%s    %s", quitBtn, laterBtn)
-	sb.WriteString(centerText(buttons, contentW))
-	sb.WriteString("\n\n")
-
-	// Hints
-	hints := lipgloss.NewStyle().Foreground(styles.TextMuted).Render("q/Enter: quit   Esc: close")
-	sb.WriteString(centerText(hints, contentW))
-
-	modalStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(styles.TextMuted).
-		Padding(1, 2).
-		Width(modalW)
-
-	return modalStyle.Render(sb.String())
+	m.updateCompleteModal = modal.New("Update Complete!",
+		modal.WithWidth(modalW),
+		modal.WithVariant(modal.VariantInfo),
+		modal.WithPrimaryAction("quit"),
+	).
+		AddSection(modal.Text(updatesText)).
+		AddSection(modal.Spacer()).
+		AddSection(modal.Text(restartMsg)).
+		AddSection(modal.Text(tip)).
+		AddSection(modal.Spacer()).
+		AddSection(modal.Buttons(
+			modal.Btn(" Quit & Restart ", "quit"),
+			modal.Btn(" Later ", "cancel"),
+		))
 }
 
-// renderUpdateErrorModal renders the error state.
-func (m *Model) renderUpdateErrorModal() string {
+// renderUpdateCompleteModal renders the completion state.
+func (m *Model) renderUpdateCompleteModal() string {
+	m.ensureUpdateCompleteModal()
+	if m.updateCompleteModal == nil {
+		return ""
+	}
+	if m.updateCompleteMouseHandler == nil {
+		m.updateCompleteMouseHandler = mouse.NewHandler()
+	}
+	return m.updateCompleteModal.Render(m.width, m.height, m.updateCompleteMouseHandler)
+}
+
+// clearUpdateCompleteModal clears the complete modal cache.
+func (m *Model) clearUpdateCompleteModal() {
+	m.updateCompleteModal = nil
+	m.updateCompleteModalWidth = 0
+	m.updateCompleteMouseHandler = nil
+}
+
+// ensureUpdateErrorModal creates/updates the error modal with caching.
+func (m *Model) ensureUpdateErrorModal() {
 	modalW := m.updateModalWidth()
-	contentW := modalW - 4
+	if m.updateErrorModal != nil && m.updateErrorModalWidth == modalW {
+		return
+	}
+	m.updateErrorModalWidth = modalW
 
-	var sb strings.Builder
-
-	// Title
-	title := lipgloss.NewStyle().Bold(true).Foreground(styles.Error).Render("Update Failed")
-	sb.WriteString(centerText(title, contentW))
-	sb.WriteString("\n\n")
-
-	// Error icon and phase
 	errorIcon := lipgloss.NewStyle().Foreground(styles.Error).Render("✗")
 	phaseName := m.updatePhase.String()
-	sb.WriteString(fmt.Sprintf("  %s Error during: %s\n\n", errorIcon, phaseName))
+	errorLine := fmt.Sprintf("  %s Error during: %s", errorIcon, phaseName)
 
-	// Error message
 	errorMsg := m.updateError
 	if errorMsg == "" {
 		errorMsg = "An unknown error occurred."
 	}
 
-	// Wrap error message
-	errorStyle := lipgloss.NewStyle().
-		Foreground(styles.TextMuted).
-		Width(contentW - 4)
-	sb.WriteString("  ")
-	sb.WriteString(errorStyle.Render(errorMsg))
-	sb.WriteString("\n\n")
+	m.updateErrorModal = modal.New("Update Failed",
+		modal.WithWidth(modalW),
+		modal.WithVariant(modal.VariantDanger),
+		modal.WithPrimaryAction("retry"),
+	).
+		AddSection(modal.Text(errorLine)).
+		AddSection(modal.Spacer()).
+		AddSection(modal.Text(styles.Muted.Render("  "+errorMsg))).
+		AddSection(modal.Spacer()).
+		AddSection(modal.Buttons(
+			modal.Btn(" Retry ", "retry"),
+			modal.Btn(" Close ", "cancel"),
+		))
+}
 
-	// Divider
-	sb.WriteString(lipgloss.NewStyle().Foreground(styles.TextMuted).Render(strings.Repeat("─", contentW)))
-	sb.WriteString("\n\n")
+// renderUpdateErrorModal renders the error state.
+func (m *Model) renderUpdateErrorModal() string {
+	m.ensureUpdateErrorModal()
+	if m.updateErrorModal == nil {
+		return ""
+	}
+	if m.updateErrorMouseHandler == nil {
+		m.updateErrorMouseHandler = mouse.NewHandler()
+	}
+	return m.updateErrorModal.Render(m.width, m.height, m.updateErrorMouseHandler)
+}
 
-	// Buttons
-	retryBtn := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#ffffff")).
-		Background(styles.Warning).
-		Padding(0, 2).
-		Render("Retry")
+// clearUpdateErrorModal clears the error modal cache.
+func (m *Model) clearUpdateErrorModal() {
+	m.updateErrorModal = nil
+	m.updateErrorModalWidth = 0
+	m.updateErrorMouseHandler = nil
+}
 
-	closeBtn := lipgloss.NewStyle().
-		Foreground(styles.TextMuted).
-		Padding(0, 2).
-		Render("Close")
+// clearAllUpdateModals clears all update modal caches.
+func (m *Model) clearAllUpdateModals() {
+	m.clearUpdatePreviewModal()
+	m.clearUpdateCompleteModal()
+	m.clearUpdateErrorModal()
+	m.clearChangelogModal()
+}
 
-	buttons := fmt.Sprintf("%s    %s", retryBtn, closeBtn)
-	sb.WriteString(centerText(buttons, contentW))
-	sb.WriteString("\n\n")
+// getChangelogModalWidth returns the width for the changelog modal.
+func (m *Model) getChangelogModalWidth() int {
+	modalW := m.updateModalWidth() + 10
+	maxW := m.width - 4
+	if modalW > maxW {
+		modalW = maxW
+	}
+	if modalW < 30 {
+		modalW = 30
+	}
+	return modalW
+}
 
-	// Hints
-	hints := lipgloss.NewStyle().Foreground(styles.TextMuted).Render("r/Enter: retry   Esc: close")
-	sb.WriteString(centerText(hints, contentW))
+// ensureChangelogModal creates/updates the changelog modal with caching.
+func (m *Model) ensureChangelogModal() {
+	modalW := m.getChangelogModalWidth()
+	if m.changelogModal != nil && m.changelogModalWidth == modalW {
+		return
+	}
+	m.changelogModalWidth = modalW
+	contentW := modalW - 6 // borders + padding
 
-	modalStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(styles.TextMuted).
-		Padding(1, 2).
-		Width(modalW)
+	// Calculate max visible lines
+	modalMaxHeight := m.height - 6
+	if modalMaxHeight < 10 {
+		modalMaxHeight = 10
+	}
+	maxContentLines := modalMaxHeight - 8
+	if maxContentLines < 5 {
+		maxContentLines = 5
+	}
 
-	return modalStyle.Render(sb.String())
+	// Get and render changelog content
+	content := m.updateChangelog
+	if content == "" {
+		content = "Loading changelog..."
+	}
+	renderedContent := m.renderReleaseNotes(content, contentW)
+	lines := strings.Split(renderedContent, "\n")
+
+	// Create a custom section that handles scrolling
+	scrollSection := modal.Custom(func(cw int, focusID, hoverID string) modal.RenderedSection {
+		// Apply scroll offset
+		startLine := m.changelogScrollOffset
+		maxStart := len(lines) - maxContentLines
+		if maxStart < 0 {
+			maxStart = 0
+		}
+		if startLine > maxStart {
+			startLine = maxStart
+		}
+		if startLine < 0 {
+			startLine = 0
+		}
+
+		endLine := startLine + maxContentLines
+		if endLine > len(lines) {
+			endLine = len(lines)
+		}
+
+		visibleLines := lines[startLine:endLine]
+		visibleContent := strings.Join(visibleLines, "\n")
+
+		// Add scroll indicator if needed
+		if len(lines) > maxContentLines {
+			scrollInfo := styles.Muted.Render(fmt.Sprintf("Lines %d-%d of %d", startLine+1, endLine, len(lines)))
+			visibleContent += "\n\n" + scrollInfo
+		}
+
+		return modal.RenderedSection{Content: visibleContent}
+	}, nil)
+
+	m.changelogModal = modal.New("Changelog",
+		modal.WithWidth(modalW),
+		modal.WithVariant(modal.VariantDefault),
+		modal.WithHints(false), // We show custom hints
+	).
+		AddSection(scrollSection).
+		AddSection(modal.Spacer()).
+		AddSection(modal.Text(styles.Muted.Render("j/k scroll   Esc: close"))).
+		AddSection(modal.Buttons(
+			modal.Btn(" Close ", "cancel"),
+		))
+}
+
+// clearChangelogModal clears the changelog modal cache.
+func (m *Model) clearChangelogModal() {
+	m.changelogModal = nil
+	m.changelogModalWidth = 0
+	m.changelogMouseHandler = nil
 }
 
 // fetchChangelog fetches the CHANGELOG.md from GitHub.
@@ -430,84 +527,13 @@ func fetchChangelog() tea.Cmd {
 
 // renderChangelogOverlay renders the changelog as an overlay on the update preview modal.
 func (m *Model) renderChangelogOverlay(background string) string {
-	modalW := m.updateModalWidth() + 10 // Wider for changelog
-	if modalW > m.width-4 {
-		modalW = m.width - 4
+	m.ensureChangelogModal()
+	if m.changelogModal == nil {
+		return background
 	}
-	contentW := modalW - 4
-
-	// Calculate available height for changelog content
-	modalMaxHeight := m.height - 6
-	if modalMaxHeight < 10 {
-		modalMaxHeight = 10
+	if m.changelogMouseHandler == nil {
+		m.changelogMouseHandler = mouse.NewHandler()
 	}
-
-	var sb strings.Builder
-
-	// Title
-	title := lipgloss.NewStyle().Bold(true).Foreground(styles.Primary).Render("Changelog")
-	sb.WriteString(centerText(title, contentW))
-	sb.WriteString("\n")
-
-	// Divider
-	sb.WriteString(lipgloss.NewStyle().Foreground(styles.TextMuted).Render(strings.Repeat("─", contentW)))
-	sb.WriteString("\n\n")
-
-	// Changelog content
-	content := m.updateChangelog
-	if content == "" {
-		content = "Loading changelog..."
-	}
-
-	// Render markdown
-	renderedContent := m.renderReleaseNotes(content, contentW)
-	lines := strings.Split(renderedContent, "\n")
-
-	// Apply scroll offset and limit lines
-	maxContentLines := modalMaxHeight - 8 // Leave room for title, hints, borders
-	if maxContentLines < 5 {
-		maxContentLines = 5
-	}
-
-	startLine := m.changelogScrollOffset
-	if startLine > len(lines)-maxContentLines {
-		startLine = len(lines) - maxContentLines
-	}
-	if startLine < 0 {
-		startLine = 0
-	}
-
-	endLine := startLine + maxContentLines
-	if endLine > len(lines) {
-		endLine = len(lines)
-	}
-
-	visibleLines := lines[startLine:endLine]
-	sb.WriteString(strings.Join(visibleLines, "\n"))
-	sb.WriteString("\n\n")
-
-	// Scroll indicator
-	if len(lines) > maxContentLines {
-		scrollInfo := fmt.Sprintf("Lines %d-%d of %d", startLine+1, endLine, len(lines))
-		sb.WriteString(centerText(lipgloss.NewStyle().Foreground(styles.TextMuted).Render(scrollInfo), contentW))
-		sb.WriteString("\n")
-	}
-
-	// Divider
-	sb.WriteString(lipgloss.NewStyle().Foreground(styles.TextMuted).Render(strings.Repeat("─", contentW)))
-	sb.WriteString("\n\n")
-
-	// Hints
-	changelogHints := lipgloss.NewStyle().Foreground(styles.TextMuted).Render("j/k scroll   Esc: close")
-	sb.WriteString(centerText(changelogHints, contentW))
-
-	modalStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(styles.TextMuted).
-		Padding(1, 2).
-		Width(modalW).
-		MaxHeight(modalMaxHeight)
-
-	modalContent := modalStyle.Render(sb.String())
+	modalContent := m.changelogModal.Render(m.width, m.height, m.changelogMouseHandler)
 	return ui.OverlayModal(background, modalContent, m.width, m.height)
 }
