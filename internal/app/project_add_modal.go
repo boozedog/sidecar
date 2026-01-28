@@ -362,7 +362,7 @@ func (m *Model) handleProjectAddModalMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd
 }
 
 // handleProjectAddThemePickerMouse handles mouse events for theme picker.
-func (m Model) handleProjectAddThemePickerMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleProjectAddThemePickerMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// Theme picker doesn't have dedicated mouse handling yet
 	return m, nil
 }
