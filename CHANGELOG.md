@@ -2,6 +2,12 @@
 
 All notable changes to sidecar are documented here.
 
+## [v0.53.1] - 2026-01-28
+
+### Bug Fixes
+
+- Fix commit preview reloading repeatedly on watcher events causing screen flashing
+
 ## [v0.53.0] - 2026-01-28
 
 ### Features
