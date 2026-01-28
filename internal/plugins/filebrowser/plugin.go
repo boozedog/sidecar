@@ -236,7 +236,8 @@ type Plugin struct {
 	inlineEditFile       string     // Path of file being edited
 	inlineEditOrigMtime  time.Time  // Original file mtime (to detect changes)
 	inlineEditEditor     string     // Editor command used (vim, nano, emacs, etc.)
-	inlineEditorDragging bool       // True when mouse is being dragged in editor (for text selection)
+	inlineEditorDragging bool      // True when mouse is being dragged in editor (for text selection)
+	lastDragForwardTime  time.Time // Throttle: last time a drag event was forwarded to tmux
 
 	// Exit confirmation state (when clicking away from editor)
 	showExitConfirmation bool        // True when confirmation dialog is shown

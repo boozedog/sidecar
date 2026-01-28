@@ -1,10 +1,18 @@
 package filebrowser
 
 import (
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/marcus/sidecar/internal/mouse"
 	"github.com/marcus/sidecar/internal/state"
 )
+
+// dragForwardThrottle is the minimum interval between forwarding mouse drag
+// events to the inline editor's tmux session. Without throttling, every mouse
+// motion event (~100+/sec) spawns a subprocess, causing 10-30s hangs.
+// 16ms (~60fps) matches the workspace plugin's scrollDebounceInterval.
+const dragForwardThrottle = 16 * time.Millisecond
 
 // Mouse region identifiers
 const (
@@ -117,6 +125,7 @@ func (p *Plugin) handleMouse(msg tea.MouseMsg) (*Plugin, tea.Cmd) {
 					col, row, ok := p.calculateInlineEditorMouseCoords(action.X, action.Y)
 					if ok {
 						p.inlineEditorDragging = true
+						p.lastDragForwardTime = time.Time{}
 						return p, p.forwardMousePressToInlineEditor(col, row)
 					}
 					cmd := p.inlineEditor.Update(msg)
@@ -130,10 +139,16 @@ func (p *Plugin) handleMouse(msg tea.MouseMsg) (*Plugin, tea.Cmd) {
 			}
 		}
 
-		// Handle mouse motion/hover - forward drag events to vim for text selection
+		// Handle mouse motion/hover - forward drag events to vim for text selection.
+		// Throttled to ~60fps to prevent subprocess spam (each forward spawns tmux send-keys).
 		if action.Type == mouse.ActionHover && p.inlineEditorDragging {
+			now := time.Now()
+			if now.Sub(p.lastDragForwardTime) < dragForwardThrottle {
+				return p, nil
+			}
 			col, row, ok := p.calculateInlineEditorMouseCoords(action.X, action.Y)
 			if ok {
+				p.lastDragForwardTime = now
 				return p, p.forwardMouseDragToInlineEditor(col, row)
 			}
 		}
@@ -142,6 +157,7 @@ func (p *Plugin) handleMouse(msg tea.MouseMsg) (*Plugin, tea.Cmd) {
 		if msg.Action == tea.MouseActionRelease {
 			if p.inlineEditorDragging {
 				p.inlineEditorDragging = false
+				p.lastDragForwardTime = time.Time{}
 				col, row, ok := p.calculateInlineEditorMouseCoords(msg.X, msg.Y)
 				if ok {
 					return p, p.forwardMouseReleaseToInlineEditor(col, row)
