@@ -241,13 +241,17 @@ const (
 
 // AgentStartedMsg signals an agent has been started in a worktree.
 type AgentStartedMsg struct {
+	Epoch         uint64 // Epoch when request was issued (for stale detection)
 	WorkspaceName string
-	SessionName  string
-	PaneID       string // tmux pane ID (e.g., "%12") for interactive mode
-	AgentType    AgentType
-	Reconnected  bool // True if we reconnected to an existing session
-	Err          error
+	SessionName   string
+	PaneID        string // tmux pane ID (e.g., "%12") for interactive mode
+	AgentType     AgentType
+	Reconnected   bool // True if we reconnected to an existing session
+	Err           error
 }
+
+// GetEpoch implements plugin.EpochMessage.
+func (m AgentStartedMsg) GetEpoch() uint64 { return m.Epoch }
 
 // ApproveResultMsg signals the result of an approve action.
 type ApproveResultMsg struct {
@@ -329,6 +333,7 @@ func (a *Agent) CheckRunaway() bool {
 // StartAgent creates a tmux session and starts an agent for a worktree.
 // If a session already exists, it reconnects to it instead of failing.
 func (p *Plugin) StartAgent(wt *Worktree, agentType AgentType) tea.Cmd {
+	epoch := p.ctx.Epoch // Capture epoch for stale detection
 	return func() tea.Msg {
 		sessionName := tmuxSessionPrefix + sanitizeName(wt.Name)
 
@@ -338,11 +343,12 @@ func (p *Plugin) StartAgent(wt *Worktree, agentType AgentType) tea.Cmd {
 			// Session exists - reconnect to it instead of failing
 			paneID := getPaneID(sessionName)
 			return AgentStartedMsg{
+				Epoch:         epoch,
 				WorkspaceName: wt.Name,
-				SessionName:  sessionName,
-				PaneID:       paneID,
-				AgentType:    agentType,
-				Reconnected:  true, // Flag that we reconnected to existing session
+				SessionName:   sessionName,
+				PaneID:        paneID,
+				AgentType:     agentType,
+				Reconnected:   true, // Flag that we reconnected to existing session
 			}
 		}
 
@@ -356,7 +362,7 @@ func (p *Plugin) StartAgent(wt *Worktree, agentType AgentType) tea.Cmd {
 
 		cmd := exec.Command("tmux", args...)
 		if err := cmd.Run(); err != nil {
-			return AgentStartedMsg{Err: fmt.Errorf("create session: %w", err)}
+			return AgentStartedMsg{Epoch: epoch, Err: fmt.Errorf("create session: %w", err)}
 		}
 
 		// Set history limit for scrollback capture
@@ -390,17 +396,18 @@ func (p *Plugin) StartAgent(wt *Worktree, agentType AgentType) tea.Cmd {
 		if err := sendCmd.Run(); err != nil {
 			// Try to kill the session if we failed to start the agent
 			exec.Command("tmux", "kill-session", "-t", sessionName).Run()
-			return AgentStartedMsg{Err: fmt.Errorf("start agent: %w", err)}
+			return AgentStartedMsg{Epoch: epoch, Err: fmt.Errorf("start agent: %w", err)}
 		}
 
 		// Capture pane ID for interactive mode support
 		paneID := getPaneID(sessionName)
 
 		return AgentStartedMsg{
+			Epoch:         epoch,
 			WorkspaceName: wt.Name,
-			SessionName:  sessionName,
-			PaneID:       paneID,
-			AgentType:    agentType,
+			SessionName:   sessionName,
+			PaneID:        paneID,
+			AgentType:     agentType,
 		}
 	}
 }
@@ -524,6 +531,7 @@ func (p *Plugin) getAgentCommandWithContext(agentType AgentType, wt *Worktree) s
 // StartAgentWithOptions creates a tmux session and starts an agent with options.
 // If a session already exists, it reconnects to it instead of failing.
 func (p *Plugin) StartAgentWithOptions(wt *Worktree, agentType AgentType, skipPerms bool, prompt *Prompt) tea.Cmd {
+	epoch := p.ctx.Epoch // Capture epoch for stale detection
 	return func() tea.Msg {
 		sessionName := tmuxSessionPrefix + sanitizeName(wt.Name)
 
@@ -533,11 +541,12 @@ func (p *Plugin) StartAgentWithOptions(wt *Worktree, agentType AgentType, skipPe
 			// Session exists - reconnect to it instead of failing
 			paneID := getPaneID(sessionName)
 			return AgentStartedMsg{
+				Epoch:         epoch,
 				WorkspaceName: wt.Name,
-				SessionName:  sessionName,
-				PaneID:       paneID,
-				AgentType:    agentType,
-				Reconnected:  true,
+				SessionName:   sessionName,
+				PaneID:        paneID,
+				AgentType:     agentType,
+				Reconnected:   true,
 			}
 		}
 
@@ -551,7 +560,7 @@ func (p *Plugin) StartAgentWithOptions(wt *Worktree, agentType AgentType, skipPe
 
 		cmd := exec.Command("tmux", args...)
 		if err := cmd.Run(); err != nil {
-			return AgentStartedMsg{Err: fmt.Errorf("create session: %w", err)}
+			return AgentStartedMsg{Epoch: epoch, Err: fmt.Errorf("create session: %w", err)}
 		}
 
 		// Set history limit for scrollback capture
@@ -585,17 +594,18 @@ func (p *Plugin) StartAgentWithOptions(wt *Worktree, agentType AgentType, skipPe
 		if err := sendCmd.Run(); err != nil {
 			// Try to kill the session if we failed to start the agent
 			exec.Command("tmux", "kill-session", "-t", sessionName).Run()
-			return AgentStartedMsg{Err: fmt.Errorf("start agent: %w", err)}
+			return AgentStartedMsg{Epoch: epoch, Err: fmt.Errorf("start agent: %w", err)}
 		}
 
 		// Capture pane ID for interactive mode support
 		paneID := getPaneID(sessionName)
 
 		return AgentStartedMsg{
+			Epoch:         epoch,
 			WorkspaceName: wt.Name,
-			SessionName:  sessionName,
-			PaneID:       paneID,
-			AgentType:    agentType,
+			SessionName:   sessionName,
+			PaneID:        paneID,
+			AgentType:     agentType,
 		}
 	}
 }

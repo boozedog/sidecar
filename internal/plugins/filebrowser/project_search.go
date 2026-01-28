@@ -63,9 +63,13 @@ type SearchMatch struct {
 
 // ProjectSearchResultsMsg contains results from a search.
 type ProjectSearchResultsMsg struct {
+	Epoch   uint64 // Epoch when request was issued (for stale detection)
 	Results []SearchFileResult
 	Error   error
 }
+
+// GetEpoch implements plugin.EpochMessage.
+func (m ProjectSearchResultsMsg) GetEpoch() uint64 { return m.Epoch }
 
 // NewProjectSearchState creates a new search state.
 func NewProjectSearchState() *ProjectSearchState {
@@ -238,10 +242,10 @@ func scheduleProjectSearch(version int, query string) tea.Cmd {
 }
 
 // RunProjectSearch executes ripgrep and returns results.
-func RunProjectSearch(workDir string, state *ProjectSearchState) tea.Cmd {
+func RunProjectSearch(workDir string, state *ProjectSearchState, epoch uint64) tea.Cmd {
 	return func() tea.Msg {
 		if state.Query == "" {
-			return ProjectSearchResultsMsg{Results: nil}
+			return ProjectSearchResultsMsg{Epoch: epoch, Results: nil}
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), projectSearchTimeout)
@@ -253,15 +257,15 @@ func RunProjectSearch(workDir string, state *ProjectSearchState) tea.Cmd {
 
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
-			return ProjectSearchResultsMsg{Error: err}
+			return ProjectSearchResultsMsg{Epoch: epoch, Error: err}
 		}
 
 		if err := cmd.Start(); err != nil {
 			// Check if rg is not installed
 			if strings.Contains(err.Error(), "executable file not found") {
-				return ProjectSearchResultsMsg{Error: &ripgrepNotFoundError{}}
+				return ProjectSearchResultsMsg{Epoch: epoch, Error: &ripgrepNotFoundError{}}
 			}
-			return ProjectSearchResultsMsg{Error: err}
+			return ProjectSearchResultsMsg{Epoch: epoch, Error: err}
 		}
 
 		results := parseRipgrepOutput(stdout, projectSearchMaxResults, len(state.Query))
@@ -271,7 +275,7 @@ func RunProjectSearch(workDir string, state *ProjectSearchState) tea.Cmd {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
 
-		return ProjectSearchResultsMsg{Results: results}
+		return ProjectSearchResultsMsg{Epoch: epoch, Results: results}
 	}
 }
 

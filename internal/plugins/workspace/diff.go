@@ -30,12 +30,13 @@ func (p *Plugin) loadSelectedDiff() tea.Cmd {
 
 // loadDiff returns a command to load diff for a worktree.
 func (p *Plugin) loadDiff(path, name string) tea.Cmd {
+	epoch := p.ctx.Epoch // Capture epoch for stale detection
 	return func() tea.Msg {
 		content, raw, err := getDiff(path)
 		if err != nil {
 			return DiffErrorMsg{WorkspaceName: name, Err: err}
 		}
-		return DiffLoadedMsg{WorkspaceName: name, Content: content, Raw: raw}
+		return DiffLoadedMsg{Epoch: epoch, WorkspaceName: name, Content: content, Raw: raw}
 	}
 }
 
@@ -186,6 +187,7 @@ func (p *Plugin) loadCommitStatus(wt *Worktree) tea.Cmd {
 	if wt == nil {
 		return nil
 	}
+	epoch := p.ctx.Epoch // Capture epoch for stale detection
 	name := wt.Name
 	path := wt.Path
 	baseBranch := wt.BaseBranch
@@ -193,9 +195,9 @@ func (p *Plugin) loadCommitStatus(wt *Worktree) tea.Cmd {
 	return func() tea.Msg {
 		commits, err := getWorktreeCommits(path, baseBranch)
 		if err != nil {
-			return CommitStatusLoadedMsg{WorkspaceName: name, Err: err}
+			return CommitStatusLoadedMsg{Epoch: epoch, WorkspaceName: name, Err: err}
 		}
-		return CommitStatusLoadedMsg{WorkspaceName: name, Commits: commits}
+		return CommitStatusLoadedMsg{Epoch: epoch, WorkspaceName: name, Commits: commits}
 	}
 }
 

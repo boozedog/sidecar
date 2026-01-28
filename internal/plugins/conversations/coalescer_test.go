@@ -20,7 +20,7 @@ func TestEventCoalescer_SingleEvent(t *testing.T) {
 	}()
 
 	c := NewEventCoalescer(50*time.Millisecond, ch)
-	c.Add("session-123")
+	c.Add("session-123", 0)
 
 	wg.Wait()
 
@@ -48,9 +48,9 @@ func TestEventCoalescer_MultipleEvents(t *testing.T) {
 	}()
 
 	c := NewEventCoalescer(100*time.Millisecond, ch)
-	c.Add("session-1")
-	c.Add("session-2")
-	c.Add("session-3")
+	c.Add("session-1", 0)
+	c.Add("session-2", 0)
+	c.Add("session-3", 0)
 
 	wg.Wait()
 
@@ -72,9 +72,9 @@ func TestEventCoalescer_DuplicateSessionIDs(t *testing.T) {
 	}()
 
 	c := NewEventCoalescer(50*time.Millisecond, ch)
-	c.Add("session-1")
-	c.Add("session-1")
-	c.Add("session-1")
+	c.Add("session-1", 0)
+	c.Add("session-1", 0)
+	c.Add("session-1", 0)
 
 	wg.Wait()
 
@@ -96,7 +96,7 @@ func TestEventCoalescer_EmptySessionID(t *testing.T) {
 	}()
 
 	c := NewEventCoalescer(50*time.Millisecond, ch)
-	c.Add("")
+	c.Add("", 0)
 
 	wg.Wait()
 
@@ -119,7 +119,7 @@ func TestEventCoalescer_TooManyEvents(t *testing.T) {
 
 	c := NewEventCoalescer(50*time.Millisecond, ch)
 	for i := 0; i < 15; i++ { // More than maxPendingSessionIDs (10)
-		c.Add(fmt.Sprintf("session-%d", i))
+		c.Add(fmt.Sprintf("session-%d", i), 0)
 	}
 
 	wg.Wait()
@@ -134,7 +134,7 @@ func TestEventCoalescer_Stop(t *testing.T) {
 	ch := make(chan CoalescedRefreshMsg, 1)
 	c := NewEventCoalescer(100*time.Millisecond, ch)
 
-	c.Add("session-1")
+	c.Add("session-1", 0)
 	c.Stop()
 
 	// Wait longer than coalesce window
@@ -164,9 +164,9 @@ func TestEventCoalescer_TimerReset(t *testing.T) {
 	c := NewEventCoalescer(50*time.Millisecond, ch)
 
 	// Add event, wait 30ms, add another
-	c.Add("session-1")
+	c.Add("session-1", 0)
 	time.Sleep(30 * time.Millisecond)
-	c.Add("session-2")
+	c.Add("session-2", 0)
 
 	wg.Wait()
 	elapsed := time.Since(start)
@@ -187,7 +187,7 @@ func TestEventCoalescer_StopWithClosedChannel(t *testing.T) {
 	ch := make(chan CoalescedRefreshMsg, 1)
 	c := NewEventCoalescer(50*time.Millisecond, ch)
 
-	c.Add("session-1")
+	c.Add("session-1", 0)
 
 	// Stop and close channel (simulates plugin shutdown)
 	c.Stop()
@@ -204,7 +204,7 @@ func TestEventCoalescer_StopRaceCondition(t *testing.T) {
 		c := NewEventCoalescer(1*time.Millisecond, ch)
 
 		// Add event
-		c.Add("session-1")
+		c.Add("session-1", 0)
 
 		// Stop and close immediately (race with timer)
 		c.Stop()
@@ -225,7 +225,7 @@ func TestEventCoalescer_DynamicWindow(t *testing.T) {
 		c.UpdateSessionSize("small", 10*1024*1024)
 
 		start := time.Now()
-		c.Add("small")
+		c.Add("small", 0)
 		<-ch
 		elapsed := time.Since(start)
 
@@ -243,7 +243,7 @@ func TestEventCoalescer_DynamicWindow(t *testing.T) {
 		c.UpdateSessionSize("medium", 100*1024*1024)
 
 		start := time.Now()
-		c.Add("medium")
+		c.Add("medium", 0)
 		<-ch
 		elapsed := time.Since(start)
 
@@ -314,7 +314,7 @@ func TestEventCoalescer_AutoReload(t *testing.T) {
 		// 50MB - under HugeSessionThreshold (500MB) so auto-reload enabled
 		// Window: 50ms base (50MB is below 100MB scale threshold)
 		c.UpdateSessionSize("small", 50*1024*1024)
-		c.Add("small")
+		c.Add("small", 0)
 
 		select {
 		case msg := <-ch:
@@ -331,7 +331,7 @@ func TestEventCoalescer_AutoReload(t *testing.T) {
 		c := NewEventCoalescer(50*time.Millisecond, ch)
 
 		c.UpdateSessionSize("huge", 600*1024*1024) // 600MB - over threshold
-		c.Add("huge")
+		c.Add("huge", 0)
 
 		select {
 		case msg := <-ch:

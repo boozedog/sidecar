@@ -157,8 +157,13 @@ func (p *Plugin) schedulePreviewLoad(sessionID string) tea.Cmd {
 	}
 	p.previewToken++
 	token := p.previewToken
+	// Capture epoch for stale detection on project switch
+	var epoch uint64
+	if p.ctx != nil {
+		epoch = p.ctx.Epoch
+	}
 	return tea.Tick(previewDebounce, func(time.Time) tea.Msg {
-		return PreviewLoadMsg{Token: token, SessionID: sessionID}
+		return PreviewLoadMsg{Epoch: epoch, Token: token, SessionID: sessionID}
 	})
 }
 
@@ -169,8 +174,13 @@ func (p *Plugin) scheduleMessageReload(sessionID string) tea.Cmd {
 	}
 	p.messageReloadToken++
 	token := p.messageReloadToken
+	// Capture epoch for stale detection on project switch
+	var epoch uint64
+	if p.ctx != nil {
+		epoch = p.ctx.Epoch
+	}
 	return tea.Tick(watchReloadDebounce, func(time.Time) tea.Msg {
-		return MessageReloadMsg{Token: token, SessionID: sessionID}
+		return MessageReloadMsg{Epoch: epoch, Token: token, SessionID: sessionID}
 	})
 }
 

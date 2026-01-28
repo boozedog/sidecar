@@ -23,4 +23,5 @@ type Context struct {
 	EventBus  *event.Dispatcher
 	Logger    *slog.Logger
 	Keymap    BindingRegistrar // For plugins to register dynamic bindings
+	Epoch     uint64           // Incremented on project switch to invalidate stale async messages
 }

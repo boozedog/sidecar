@@ -5,9 +5,13 @@ type RefreshMsg struct{}
 
 // RefreshDoneMsg signals that refresh has completed.
 type RefreshDoneMsg struct {
+	Epoch     uint64 // Epoch when request was issued (for stale detection)
 	Worktrees []*Worktree
 	Err       error
 }
+
+// GetEpoch implements plugin.EpochMessage.
+func (m RefreshDoneMsg) GetEpoch() uint64 { return m.Epoch }
 
 // WatchEventMsg signals a filesystem change was detected.
 type WatchEventMsg struct {
@@ -51,10 +55,14 @@ type TmuxAttachFinishedMsg struct {
 
 // DiffLoadedMsg delivers diff content for a worktree.
 type DiffLoadedMsg struct {
+	Epoch         uint64 // Epoch when request was issued (for stale detection)
 	WorkspaceName string
-	Content      string
-	Raw          string
+	Content       string
+	Raw           string
 }
+
+// GetEpoch implements plugin.EpochMessage.
+func (m DiffLoadedMsg) GetEpoch() uint64 { return m.Epoch }
 
 // DiffErrorMsg signals diff loading failed.
 type DiffErrorMsg struct {
@@ -64,9 +72,13 @@ type DiffErrorMsg struct {
 
 // StatsLoadedMsg delivers git stats for a worktree.
 type StatsLoadedMsg struct {
+	Epoch         uint64 // Epoch when request was issued (for stale detection)
 	WorkspaceName string
-	Stats        *GitStats
+	Stats         *GitStats
 }
+
+// GetEpoch implements plugin.EpochMessage.
+func (m StatsLoadedMsg) GetEpoch() uint64 { return m.Epoch }
 
 // StatsErrorMsg signals stats loading failed.
 type StatsErrorMsg struct {
@@ -178,10 +190,14 @@ type restartAgentMsg struct {
 
 // CommitStatusLoadedMsg delivers commit status info for the diff view header.
 type CommitStatusLoadedMsg struct {
+	Epoch         uint64 // Epoch when request was issued (for stale detection)
 	WorkspaceName string
-	Commits      []CommitStatusInfo
-	Err          error
+	Commits       []CommitStatusInfo
+	Err           error
 }
+
+// GetEpoch implements plugin.EpochMessage.
+func (m CommitStatusLoadedMsg) GetEpoch() uint64 { return m.Epoch }
 
 // OpenCreateModalWithTaskMsg opens create modal pre-filled with task data.
 // Sent from td-monitor plugin when user presses send-to-worktree hotkey.

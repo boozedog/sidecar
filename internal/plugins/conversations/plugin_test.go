@@ -3438,7 +3438,7 @@ func TestPluginReinitOnProjectSwitch(t *testing.T) {
 
 		// Verify new coalescer is functional by adding an event
 		// (old coalescer had closed=true which would prevent flush)
-		p.coalescer.Add("test-session")
+		p.coalescer.Add("test-session", 0)
 
 		// Channel should receive the coalesced message after flush
 		// Wait briefly for the timer to fire

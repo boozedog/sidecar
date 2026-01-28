@@ -293,6 +293,12 @@ func (p *Plugin) renderContent(content string, width int) []string {
 // resetState clears all session/UI state for reinitialization (td-84a1cb).
 // Called from Init() to ensure clean state when switching projects.
 func (p *Plugin) resetState() {
+	// Reset loading serialization flag (td-6f6ba1: prevent stale load blocking new project)
+	// Must be reset so new project's loadSessions() isn't skipped
+	p.loadingMu.Lock()
+	p.loadingSessions = false
+	p.loadingMu.Unlock()
+
 	// Session list state
 	p.sessions = nil
 	p.cursor = 0
@@ -516,6 +522,9 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		}
 
 	case SessionsLoadedMsg:
+		if plugin.IsStale(p.ctx, msg) {
+			return p, nil // Ignore stale message from previous project
+		}
 		p.sessions = msg.Sessions
 		// Update coalescer with session sizes for dynamic debounce (td-190095)
 		if p.coalescer != nil {
@@ -595,6 +604,9 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		return p, nil
 
 	case PreviewLoadMsg:
+		if plugin.IsStale(p.ctx, msg) {
+			return p, nil // Ignore stale message from previous project
+		}
 		if msg.Token != p.previewToken {
 			return p, nil
 		}
@@ -610,6 +622,9 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		)
 
 	case MessageReloadMsg:
+		if plugin.IsStale(p.ctx, msg) {
+			return p, nil // Ignore stale message from previous project
+		}
 		if msg.Token != p.messageReloadToken {
 			return p, nil
 		}
@@ -619,6 +634,9 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		return p, p.loadMessages(msg.SessionID)
 
 	case MessagesLoadedMsg:
+		if plugin.IsStale(p.ctx, msg) {
+			return p, nil // Ignore stale message from previous project
+		}
 		if msg.SessionID == "" || msg.SessionID != p.selectedSession {
 			// Ignore out-of-order loads when cursor moves quickly.
 			return p, nil
@@ -757,8 +775,16 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		return p, p.listenForWatchEvents()
 
 	case WatchEventMsg:
+		if plugin.IsStale(p.ctx, msg) {
+			return p, nil // Ignore stale message from previous project
+		}
 		// Queue event for coalescing instead of immediate reload
-		p.coalescer.Add(msg.SessionID)
+		// Pass epoch so CoalescedRefreshMsg can be validated for staleness
+		var epoch uint64
+		if p.ctx != nil {
+			epoch = p.ctx.Epoch
+		}
+		p.coalescer.Add(msg.SessionID, epoch)
 
 		cmds := []tea.Cmd{
 			p.listenForWatchEvents(),
@@ -773,6 +799,9 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		return p, tea.Batch(cmds...)
 
 	case CoalescedRefreshMsg:
+		if plugin.IsStale(p.ctx, msg) {
+			return p, nil // Ignore stale message from previous project
+		}
 		// Coalesced watch events - batch refresh
 		cmds := []tea.Cmd{
 			p.listenForCoalescedRefresh(), // Continue listening for more batches
@@ -814,6 +843,11 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 	// Content search messages (td-6ac70a)
 	case ContentSearchDebounceMsg:
 		if p.contentSearchState != nil && msg.Version == p.contentSearchState.DebounceVersion {
+			// Capture epoch for stale detection on project switch
+			var epoch uint64
+			if p.ctx != nil {
+				epoch = p.ctx.Epoch
+			}
 			return p, RunContentSearch(
 				msg.Query,
 				p.sessions,
@@ -823,11 +857,15 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 					CaseSensitive: p.contentSearchState.CaseSensitive,
 					MaxResults:    50,
 				},
+				epoch,
 			)
 		}
 		return p, nil
 
 	case ContentSearchResultsMsg:
+		if plugin.IsStale(p.ctx, msg) {
+			return p, nil // Ignore stale message from previous project
+		}
 		if p.contentSearchState != nil {
 			// Only accept results if query matches current query (td-5b9928: prevent stale results)
 			if msg.Query != p.contentSearchState.Query {
@@ -1057,11 +1095,15 @@ func (p *Plugin) exportSessionToFile() tea.Cmd {
 
 // Message types
 type SessionsLoadedMsg struct {
+	Epoch    uint64 // Epoch when request was issued (for stale detection)
 	Sessions []adapter.Session
 	// Worktree cache data (td-0e43c080: computed in cmd, stored in Update)
 	WorktreePaths []string
 	WorktreeNames map[string]string
 }
+
+// GetEpoch implements plugin.EpochMessage.
+func (m SessionsLoadedMsg) GetEpoch() uint64 { return m.Epoch }
 
 // LoadSettledMsg signals that session loading has settled (no new arrivals).
 type LoadSettledMsg struct {
@@ -1069,15 +1111,24 @@ type LoadSettledMsg struct {
 }
 
 type MessagesLoadedMsg struct {
+	Epoch      uint64 // Epoch when request was issued (for stale detection)
 	SessionID  string
 	Messages   []adapter.Message
 	TotalCount int // Total message count before truncation (td-313ea851)
 	Offset     int // Offset into the message list (td-313ea851)
 }
 
+// GetEpoch implements plugin.EpochMessage.
+func (m MessagesLoadedMsg) GetEpoch() uint64 { return m.Epoch }
+
 type WatchEventMsg struct {
+	Epoch     uint64 // Epoch when request was issued (for stale detection)
 	SessionID string // ID of the session that changed (empty for periodic refresh)
 }
+
+// GetEpoch implements plugin.EpochMessage.
+func (m WatchEventMsg) GetEpoch() uint64 { return m.Epoch }
+
 type WatchStartedMsg struct {
 	Channel <-chan adapter.Event
 	Closers []io.Closer
@@ -1085,14 +1136,22 @@ type WatchStartedMsg struct {
 type ErrorMsg struct{ Err error }
 
 type PreviewLoadMsg struct {
+	Epoch     uint64 // Epoch when request was issued (for stale detection)
 	Token     int
 	SessionID string
 }
 
+// GetEpoch implements plugin.EpochMessage.
+func (m PreviewLoadMsg) GetEpoch() uint64 { return m.Epoch }
+
 type MessageReloadMsg struct {
+	Epoch     uint64 // Epoch when request was issued (for stale detection)
 	Token     int
 	SessionID string
 }
+
+// GetEpoch implements plugin.EpochMessage.
+func (m MessageReloadMsg) GetEpoch() uint64 { return m.Epoch }
 
 // TickCmd returns a command that triggers periodic refresh.
 func TickCmd() tea.Cmd {

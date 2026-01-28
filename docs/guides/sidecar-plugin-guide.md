@@ -30,6 +30,87 @@ Sidecar supports switching between git worktrees. When this happens, all plugins
 - Persisting per-worktree state
 - Detecting deleted worktrees and requesting fallback to main
 
+## Epoch pattern for stale message detection
+
+When switching projects/worktrees, async operations initiated before the switch may complete afterward and deliver stale data. The epoch pattern prevents this race condition.
+
+### The problem
+
+```
+1. User is in Project A
+2. Plugin triggers async load (captures Project A's workDir)
+3. User presses @ to switch to Project B
+4. Registry.Reinit() resets all plugins
+5. Async load completes → delivers Project A's data to Project B's state
+```
+
+### The solution
+
+The `plugin.Context` contains an `Epoch` counter that increments on every project switch. Plugins capture the epoch when creating async commands, embed it in their result messages, and discard results where the epoch doesn't match.
+
+### Step 1: Add Epoch to your message type
+
+```go
+type MyDataLoadedMsg struct {
+    Epoch uint64 // Required for stale detection
+    Data  string
+    Err   error
+}
+
+// Implement EpochMessage interface
+func (m MyDataLoadedMsg) GetEpoch() uint64 { return m.Epoch }
+```
+
+### Step 2: Capture epoch in command creators
+
+```go
+func (p *Plugin) loadData() tea.Cmd {
+    epoch := p.ctx.Epoch // Capture synchronously before closure
+    return func() tea.Msg {
+        data, err := fetchData()
+        return MyDataLoadedMsg{Epoch: epoch, Data: data, Err: err}
+    }
+}
+```
+
+### Step 3: Check staleness in Update handler
+
+```go
+case MyDataLoadedMsg:
+    if plugin.IsStale(p.ctx, msg) {
+        return p, nil // Discard stale message
+    }
+    // Safe to process...
+    p.data = msg.Data
+```
+
+### When to use the epoch pattern
+
+Apply this pattern to **any async message** that:
+- Fetches data from the filesystem or external sources
+- Could take noticeable time to complete
+- Updates plugin state that should be project-specific
+
+Examples from existing plugins:
+- **gitstatus**: `CommitsLoadedMsg`, `StatusLoadedMsg`
+- **conversations**: `SessionsLoadedMsg`, `MessagesLoadedMsg`, `PreviewLoadMsg`
+- **filebrowser**: `PreviewLoadedMsg`, `BlameLoadedMsg`, `ProjectSearchResultsMsg`
+- **workspace**: `RefreshDoneMsg`, `DiffLoadedMsg`, `StatsLoadedMsg`, `AgentStartedMsg`
+
+### Helper reference
+
+```go
+// EpochMessage interface - implement this on your message types
+type EpochMessage interface {
+    GetEpoch() uint64
+}
+
+// IsStale returns true if the message epoch doesn't match current context
+func IsStale(ctx *Context, msg EpochMessage) bool {
+    return ctx != nil && msg.GetEpoch() != ctx.Epoch
+}
+```
+
 ## Lifecycle order (and what to do in each stage)
 1. **Registration** (`cmd/sidecar/main.go`): `registry.Register(myplugin.New())`. Do not perform work here.
 2. **Init**: Detect prerequisites (repos, adapters, env vars). Use `ctx.Logger` for warnings; return an error to degrade gracefully (shows in “Unavailable plugins”).

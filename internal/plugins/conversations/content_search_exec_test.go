@@ -109,7 +109,7 @@ func TestRunContentSearch_EmptyQuery(t *testing.T) {
 	sessions := []adapter.Session{{ID: "s1", AdapterID: "mock"}}
 	adapters := map[string]adapter.Adapter{"mock": &mockSearchAdapter{id: "mock"}}
 
-	cmd := RunContentSearch("", sessions, adapters, adapter.SearchOptions{})
+	cmd := RunContentSearch("", sessions, adapters, adapter.SearchOptions{}, 0)
 	msg := cmd()
 
 	result, ok := msg.(ContentSearchResultsMsg)
@@ -137,7 +137,7 @@ func TestRunContentSearch_BasicSearch(t *testing.T) {
 	}
 	adapters := map[string]adapter.Adapter{"mock": mockAdp}
 
-	cmd := RunContentSearch("test", sessions, adapters, adapter.SearchOptions{})
+	cmd := RunContentSearch("test", sessions, adapters, adapter.SearchOptions{}, 0)
 	msg := cmd()
 
 	result, ok := msg.(ContentSearchResultsMsg)
@@ -164,7 +164,7 @@ func TestRunContentSearch_NonSearchAdapter(t *testing.T) {
 		"nonsearch": &mockNonSearchAdapter{id: "nonsearch"},
 	}
 
-	cmd := RunContentSearch("test", sessions, adapters, adapter.SearchOptions{})
+	cmd := RunContentSearch("test", sessions, adapters, adapter.SearchOptions{}, 0)
 	msg := cmd()
 
 	result, ok := msg.(ContentSearchResultsMsg)
@@ -182,7 +182,7 @@ func TestRunContentSearch_MissingAdapter(t *testing.T) {
 	}
 	adapters := map[string]adapter.Adapter{} // No adapters
 
-	cmd := RunContentSearch("test", sessions, adapters, adapter.SearchOptions{})
+	cmd := RunContentSearch("test", sessions, adapters, adapter.SearchOptions{}, 0)
 	msg := cmd()
 
 	result, ok := msg.(ContentSearchResultsMsg)
@@ -204,7 +204,7 @@ func TestRunContentSearch_NoMatches(t *testing.T) {
 	}
 	adapters := map[string]adapter.Adapter{"mock": mockAdp}
 
-	cmd := RunContentSearch("test", sessions, adapters, adapter.SearchOptions{})
+	cmd := RunContentSearch("test", sessions, adapters, adapter.SearchOptions{}, 0)
 	msg := cmd()
 
 	result, ok := msg.(ContentSearchResultsMsg)
@@ -234,7 +234,7 @@ func TestRunContentSearch_SortsByRecency(t *testing.T) {
 	}
 	adapters := map[string]adapter.Adapter{"mock": mockAdp}
 
-	cmd := RunContentSearch("test", sessions, adapters, adapter.SearchOptions{})
+	cmd := RunContentSearch("test", sessions, adapters, adapter.SearchOptions{}, 0)
 	msg := cmd()
 
 	result, ok := msg.(ContentSearchResultsMsg)
@@ -272,7 +272,7 @@ func TestRunContentSearch_ConcurrentExecution(t *testing.T) {
 	adapters := map[string]adapter.Adapter{"mock": mockAdp}
 
 	start := time.Now()
-	cmd := RunContentSearch("test", sessions, adapters, adapter.SearchOptions{})
+	cmd := RunContentSearch("test", sessions, adapters, adapter.SearchOptions{}, 0)
 	msg := cmd()
 	elapsed := time.Since(start)
 

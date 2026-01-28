@@ -23,6 +23,8 @@ type WorkDirDeletedMsg struct {
 // refreshWorktrees returns a command to refresh the worktree list.
 func (p *Plugin) refreshWorktrees() tea.Cmd {
 	workDir := p.ctx.WorkDir
+	// Capture epoch for stale detection on project switch
+	epoch := p.ctx.Epoch
 	return func() tea.Msg {
 		// Check if current WorkDir still exists (may have been a deleted worktree)
 		if _, err := os.Stat(workDir); os.IsNotExist(err) {
@@ -35,7 +37,7 @@ func (p *Plugin) refreshWorktrees() tea.Cmd {
 		}
 
 		worktrees, err := p.listWorktrees()
-		return RefreshDoneMsg{Worktrees: worktrees, Err: err}
+		return RefreshDoneMsg{Epoch: epoch, Worktrees: worktrees, Err: err}
 	}
 }
 

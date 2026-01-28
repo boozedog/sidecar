@@ -52,6 +52,10 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		return p, nil
 
 	case RefreshDoneMsg:
+		// Discard stale messages from previous project
+		if plugin.IsStale(p.ctx, msg) {
+			return p, nil
+		}
 		p.refreshing = false
 		p.lastRefresh = time.Now()
 		if msg.Err == nil {
@@ -123,6 +127,10 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		}
 
 	case StatsLoadedMsg:
+		// Discard stale messages from previous project
+		if plugin.IsStale(p.ctx, msg) {
+			return p, nil
+		}
 		for _, wt := range p.worktrees {
 			if wt.Name == msg.WorkspaceName {
 				wt.Stats = msg.Stats
@@ -131,6 +139,10 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		}
 
 	case DiffLoadedMsg:
+		// Discard stale messages from previous project
+		if plugin.IsStale(p.ctx, msg) {
+			return p, nil
+		}
 		if p.selectedWorktree() != nil && p.selectedWorktree().Name == msg.WorkspaceName {
 			p.diffContent = msg.Content
 			p.diffRaw = msg.Raw
@@ -144,6 +156,10 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		}
 
 	case CommitStatusLoadedMsg:
+		// Discard stale messages from previous project
+		if plugin.IsStale(p.ctx, msg) {
+			return p, nil
+		}
 		if msg.Err == nil && p.selectedWorktree() != nil && p.selectedWorktree().Name == msg.WorkspaceName {
 			p.commitStatusList = msg.Commits
 			p.commitStatusWorktree = msg.WorkspaceName
@@ -263,6 +279,10 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 
 	// Agent messages
 	case AgentStartedMsg:
+		// Discard stale messages from previous project
+		if plugin.IsStale(p.ctx, msg) {
+			return p, nil
+		}
 		if msg.Err == nil {
 			// Create agent record
 			agent := &Agent{

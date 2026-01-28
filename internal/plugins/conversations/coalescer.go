@@ -29,6 +29,7 @@ type EventCoalescer struct {
 	coalesceWindow time.Duration
 	msgChan        chan<- CoalescedRefreshMsg // channel to send messages
 	closed         bool                       // true after Stop() called, prevents send on closed channel
+	pendingEpoch   uint64                     // Epoch from first event in batch (for stale detection)
 
 	// Session size tracking for dynamic debounce (td-190095)
 	sessionSizes map[string]int64
@@ -51,9 +52,15 @@ func NewEventCoalescer(window time.Duration, msgChan chan<- CoalescedRefreshMsg)
 
 // Add queues a sessionID for refresh. Empty string triggers full refresh.
 // Uses dynamic window based on largest pending session (td-190095).
-func (c *EventCoalescer) Add(sessionID string) {
+// The epoch parameter tracks the project context for stale detection.
+func (c *EventCoalescer) Add(sessionID string, epoch uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// Store epoch from first event in batch (subsequent events in same batch use this)
+	if len(c.pendingIDs) == 0 && !c.refreshAll {
+		c.pendingEpoch = epoch
+	}
 
 	if sessionID == "" {
 		c.refreshAll = true
@@ -152,16 +159,19 @@ func (c *EventCoalescer) flush() {
 	}
 
 	refreshAll := c.refreshAll || len(sessionIDs) > maxPendingSessionIDs
+	epoch := c.pendingEpoch
 
 	// Reset state
 	c.pendingIDs = make(map[string]struct{})
 	c.refreshAll = false
 	c.timer = nil
+	c.pendingEpoch = 0
 
 	// Send message with lock held - safe because select/default prevents blocking
 	if c.msgChan != nil {
 		select {
 		case c.msgChan <- CoalescedRefreshMsg{
+			Epoch:      epoch,
 			SessionIDs: sessionIDs,
 			RefreshAll: refreshAll,
 		}:
@@ -186,6 +196,10 @@ func (c *EventCoalescer) Stop() {
 
 // CoalescedRefreshMsg is sent when the coalesce window closes.
 type CoalescedRefreshMsg struct {
+	Epoch      uint64   // Epoch when request was issued (for stale detection)
 	SessionIDs []string // Specific sessions to refresh (if not RefreshAll)
 	RefreshAll bool     // If true, ignore SessionIDs and do full refresh
 }
+
+// GetEpoch implements plugin.EpochMessage.
+func (m CoalescedRefreshMsg) GetEpoch() uint64 { return m.Epoch }

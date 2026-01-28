@@ -1137,7 +1137,7 @@ func (p *Plugin) toggleProjectSearchOption(state *ProjectSearchState, option *bo
 	if state.Query != "" {
 		state.IsSearching = true
 		state.DebounceVersion++ // Cancel any pending debounced search
-		return p, RunProjectSearch(p.ctx.WorkDir, state)
+		return p, RunProjectSearch(p.ctx.WorkDir, state, p.ctx.Epoch)
 	}
 	return p, nil
 }
@@ -1235,7 +1235,7 @@ func (p *Plugin) openBlameView(path string) (plugin.Plugin, tea.Cmd) {
 		FilePath:  path,
 		IsLoading: true,
 	}
-	return p, RunGitBlame(p.ctx.WorkDir, path)
+	return p, RunGitBlame(p.ctx.WorkDir, path, p.ctx.Epoch)
 }
 
 // blameVisibleHeight returns the visible height for blame content.

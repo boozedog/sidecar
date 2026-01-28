@@ -36,18 +36,23 @@ type PreviewResult struct {
 
 // PreviewLoadedMsg signals that file preview content is ready.
 type PreviewLoadedMsg struct {
+	Epoch  uint64 // Epoch when request was issued (for stale detection)
 	Result PreviewResult
 	Path   string
 }
 
+// GetEpoch implements plugin.EpochMessage.
+func (m PreviewLoadedMsg) GetEpoch() uint64 { return m.Epoch }
+
 // LoadPreview creates a command to load file content.
-func LoadPreview(rootDir, path string) tea.Cmd {
+func LoadPreview(rootDir, path string, epoch uint64) tea.Cmd {
 	return func() tea.Msg {
 		fullPath := filepath.Join(rootDir, path)
 
 		info, err := os.Stat(fullPath)
 		if err != nil {
 			return PreviewLoadedMsg{
+				Epoch:  epoch,
 				Path:   path,
 				Result: PreviewResult{Error: err},
 			}
@@ -63,7 +68,7 @@ func LoadPreview(rootDir, path string) tea.Cmd {
 		// Image files are handled by the image renderer, not text preview
 		if image.IsImageFile(path) {
 			result.IsImage = true
-			return PreviewLoadedMsg{Path: path, Result: result}
+			return PreviewLoadedMsg{Epoch: epoch, Path: path, Result: result}
 		}
 
 		// Check size limit
@@ -77,7 +82,7 @@ func LoadPreview(rootDir, path string) tea.Cmd {
 		f, err := os.Open(fullPath)
 		if err != nil {
 			result.Error = err
-			return PreviewLoadedMsg{Path: path, Result: result}
+			return PreviewLoadedMsg{Epoch: epoch, Path: path, Result: result}
 		}
 		defer f.Close()
 
@@ -88,7 +93,7 @@ func LoadPreview(rootDir, path string) tea.Cmd {
 		// Check for binary (fm pattern)
 		if isBinary(data) {
 			result.IsBinary = true
-			return PreviewLoadedMsg{Path: path, Result: result}
+			return PreviewLoadedMsg{Epoch: epoch, Path: path, Result: result}
 		}
 
 		result.Content = string(data)
@@ -111,6 +116,7 @@ func LoadPreview(rootDir, path string) tea.Cmd {
 		}
 
 		return PreviewLoadedMsg{
+			Epoch:  epoch,
 			Path:   path,
 			Result: result,
 		}

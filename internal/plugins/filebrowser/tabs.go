@@ -189,7 +189,7 @@ func (p *Plugin) applyActiveTab() tea.Cmd {
 		return nil
 	}
 
-	return LoadPreview(p.ctx.WorkDir, tab.Path)
+	return LoadPreview(p.ctx.WorkDir, tab.Path, p.ctx.Epoch)
 }
 
 func (p *Plugin) syncTreeSelection(path string) {

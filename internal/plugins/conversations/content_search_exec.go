@@ -48,10 +48,10 @@ func searchConcurrency() int {
 //   - Sessions sorted by UpdatedAt (recent first for early results)
 //   - Empty sessions skipped
 func RunContentSearch(query string, sessions []adapter.Session,
-	adapters map[string]adapter.Adapter, opts adapter.SearchOptions) tea.Cmd {
+	adapters map[string]adapter.Adapter, opts adapter.SearchOptions, epoch uint64) tea.Cmd {
 	return func() tea.Msg {
 		if query == "" {
-			return ContentSearchResultsMsg{Results: nil}
+			return ContentSearchResultsMsg{Epoch: epoch, Results: nil}
 		}
 
 		// Performance: sort sessions by UpdatedAt descending before searching (td-80cbe1)
@@ -216,6 +216,7 @@ func RunContentSearch(query string, sessions []adapter.Session,
 
 		// Include query in results for staleness validation (td-5b9928)
 		return ContentSearchResultsMsg{
+			Epoch:        epoch,
 			Results:      results,
 			Query:        query,
 			TotalMatches: totalFound,

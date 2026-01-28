@@ -6,7 +6,7 @@ import (
 
 // loadDiff loads the diff for a file.
 func (p *Plugin) loadDiff(path string, staged bool, status FileStatus) tea.Cmd {
-	epoch := p.epoch
+	epoch := p.ctx.Epoch
 	workDir := p.repoRoot
 	return func() tea.Msg {
 		var rawDiff string
@@ -28,7 +28,7 @@ func (p *Plugin) loadDiff(path string, staged bool, status FileStatus) tea.Cmd {
 
 // loadInlineDiff loads a diff for inline preview in the three-pane view.
 func (p *Plugin) loadInlineDiff(path string, staged bool, status FileStatus) tea.Cmd {
-	epoch := p.epoch
+	epoch := p.ctx.Epoch
 	workDir := p.repoRoot
 	return func() tea.Msg {
 		var rawDiff string
@@ -50,7 +50,7 @@ func (p *Plugin) loadInlineDiff(path string, staged bool, status FileStatus) tea
 
 // loadRecentCommits loads recent commits for the sidebar with push status.
 func (p *Plugin) loadRecentCommits() tea.Cmd {
-	epoch := p.epoch
+	epoch := p.ctx.Epoch
 	workDir := p.repoRoot
 	return func() tea.Msg {
 		commits, pushStatus, err := GetCommitHistoryWithPushStatus(workDir, commitHistoryPageSize)
@@ -68,7 +68,7 @@ func (p *Plugin) loadMoreCommits() tea.Cmd {
 	}
 	p.loadingMoreCommits = true
 
-	epoch := p.epoch
+	epoch := p.ctx.Epoch
 	workDir := p.repoRoot
 	skip := len(p.recentCommits)
 	return func() tea.Msg {
@@ -82,7 +82,7 @@ func (p *Plugin) loadMoreCommits() tea.Cmd {
 
 // loadCommitStats fetches stats for a specific commit (lazy loading).
 func (p *Plugin) loadCommitStats(hash string) tea.Cmd {
-	epoch := p.epoch
+	epoch := p.ctx.Epoch
 	workDir := p.repoRoot
 	return func() tea.Msg {
 		commit, err := GetCommitDetail(workDir, hash)
@@ -95,7 +95,7 @@ func (p *Plugin) loadCommitStats(hash string) tea.Cmd {
 
 // loadFilteredCommits fetches commits with current filter options.
 func (p *Plugin) loadFilteredCommits() tea.Cmd {
-	epoch := p.epoch
+	epoch := p.ctx.Epoch
 	workDir := p.repoRoot
 	opts := HistoryFilterOpts{
 		Author: p.historyFilterAuthor,
@@ -113,7 +113,7 @@ func (p *Plugin) loadFilteredCommits() tea.Cmd {
 
 // loadFolderDiff loads a concatenated diff for all files in a folder.
 func (p *Plugin) loadFolderDiff(entry *FileEntry) tea.Cmd {
-	epoch := p.epoch
+	epoch := p.ctx.Epoch
 	workDir := p.repoRoot
 	folderPath := entry.Path
 	children := entry.Children
@@ -129,7 +129,7 @@ func (p *Plugin) loadFolderDiff(entry *FileEntry) tea.Cmd {
 
 // loadFullFolderDiff loads a concatenated diff for full-screen view.
 func (p *Plugin) loadFullFolderDiff(entry *FileEntry) tea.Cmd {
-	epoch := p.epoch
+	epoch := p.ctx.Epoch
 	workDir := p.repoRoot
 	children := entry.Children
 	return func() tea.Msg {
@@ -144,7 +144,7 @@ func (p *Plugin) loadFullFolderDiff(entry *FileEntry) tea.Cmd {
 
 // loadCommitFileDiff loads diff for a file in a commit.
 func (p *Plugin) loadCommitFileDiff(hash, path string) tea.Cmd {
-	epoch := p.epoch
+	epoch := p.ctx.Epoch
 	workDir := p.repoRoot
 	return func() tea.Msg {
 		rawDiff, err := GetCommitDiff(workDir, hash, path)
@@ -159,7 +159,7 @@ func (p *Plugin) loadCommitFileDiff(hash, path string) tea.Cmd {
 
 // loadCommitDetailForPreview loads commit detail for inline preview.
 func (p *Plugin) loadCommitDetailForPreview(hash string) tea.Cmd {
-	epoch := p.epoch
+	epoch := p.ctx.Epoch
 	workDir := p.repoRoot
 	return func() tea.Msg {
 		commit, err := GetCommitDetail(workDir, hash)

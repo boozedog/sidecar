@@ -40,7 +40,7 @@ func TestLoadPreview(t *testing.T) {
 	}
 
 	// Load preview
-	cmd := LoadPreview(tmpDir, "test.txt")
+	cmd := LoadPreview(tmpDir, "test.txt", 0)
 	msg := cmd()
 
 	result, ok := msg.(PreviewLoadedMsg)
@@ -75,7 +75,7 @@ func TestLoadPreview_Binary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd := LoadPreview(tmpDir, "data.bin")
+	cmd := LoadPreview(tmpDir, "data.bin", 0)
 	msg := cmd()
 
 	result := msg.(PreviewLoadedMsg)
@@ -95,7 +95,7 @@ func TestLoadPreview_Image(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd := LoadPreview(tmpDir, "image.png")
+	cmd := LoadPreview(tmpDir, "image.png", 0)
 	msg := cmd()
 
 	result := msg.(PreviewLoadedMsg)
@@ -118,7 +118,7 @@ func TestLoadPreview_LargeFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd := LoadPreview(tmpDir, "large.txt")
+	cmd := LoadPreview(tmpDir, "large.txt", 0)
 	msg := cmd()
 
 	result := msg.(PreviewLoadedMsg)
@@ -131,7 +131,7 @@ func TestLoadPreview_LargeFile(t *testing.T) {
 func TestLoadPreview_NotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	cmd := LoadPreview(tmpDir, "nonexistent.txt")
+	cmd := LoadPreview(tmpDir, "nonexistent.txt", 0)
 	msg := cmd()
 
 	result := msg.(PreviewLoadedMsg)
@@ -177,7 +177,7 @@ func Hello() string {
 		t.Fatal(err)
 	}
 
-	cmd := LoadPreview(tmpDir, "test.go")
+	cmd := LoadPreview(tmpDir, "test.go", 0)
 	msg := cmd()
 
 	result := msg.(PreviewLoadedMsg)

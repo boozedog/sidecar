@@ -150,6 +150,9 @@ func (r *Registry) Reinit(newWorkDir string) []tea.Cmd {
 	// Update context with new working directory
 	r.ctx.WorkDir = newWorkDir
 
+	// Increment epoch to invalidate all pending async messages from previous project
+	r.ctx.Epoch++
+
 	// Reinitialize all plugins with the new context
 	for _, p := range r.plugins {
 		if err := r.safeInit(p); err != nil {

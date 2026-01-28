@@ -457,7 +457,7 @@ func (p *Plugin) processPendingClickAction() (*Plugin, tea.Cmd) {
 			if idx < len(p.tabs) {
 				// Update previewFile so PreviewLoadedMsg is accepted
 				p.previewFile = p.tabs[idx].Path
-				return p, LoadPreview(p.ctx.WorkDir, p.tabs[idx].Path)
+				return p, LoadPreview(p.ctx.WorkDir, p.tabs[idx].Path, p.ctx.Epoch)
 			}
 		} else if len(p.tabs) > 1 {
 			// Fallback: if we don't know which tab was clicked but user clicked
@@ -471,7 +471,7 @@ func (p *Plugin) processPendingClickAction() (*Plugin, tea.Cmd) {
 			if newTab < len(p.tabs) {
 				// Update previewFile so PreviewLoadedMsg is accepted
 				p.previewFile = p.tabs[newTab].Path
-				return p, LoadPreview(p.ctx.WorkDir, p.tabs[newTab].Path)
+				return p, LoadPreview(p.ctx.WorkDir, p.tabs[newTab].Path, p.ctx.Epoch)
 			}
 		}
 	}
@@ -490,7 +490,7 @@ func (p *Plugin) loadCurrentTreeItemPreview() tea.Cmd {
 	}
 	// Update previewFile so PreviewLoadedMsg is accepted
 	p.previewFile = node.Path
-	return LoadPreview(p.ctx.WorkDir, node.Path)
+	return LoadPreview(p.ctx.WorkDir, node.Path, p.ctx.Epoch)
 }
 
 // calculateInlineEditorMouseCoords converts screen coordinates to editor-relative coordinates.
@@ -634,6 +634,6 @@ func (p *Plugin) selectTreeItem(idx int) (*Plugin, tea.Cmd) {
 		return p, nil
 	}
 
-	return p, LoadPreview(p.ctx.WorkDir, node.Path)
+	return p, LoadPreview(p.ctx.WorkDir, node.Path, p.ctx.Epoch)
 }
 

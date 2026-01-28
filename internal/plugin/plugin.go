@@ -65,3 +65,17 @@ type OpenFileMsg struct {
 // PluginFocusedMsg is sent to a plugin when it becomes the active plugin.
 // Plugins can use this to refresh data or update their state on focus.
 type PluginFocusedMsg struct{}
+
+// EpochMessage is implemented by async messages that need staleness detection.
+// Messages from async operations should embed an Epoch field and implement this interface.
+type EpochMessage interface {
+	GetEpoch() uint64
+}
+
+// IsStale returns true if the message's epoch doesn't match the current context epoch.
+// Use this in Update() handlers to discard messages from previous projects:
+//
+//	if plugin.IsStale(p.ctx, msg) { return p, nil }
+func IsStale(ctx *Context, msg EpochMessage) bool {
+	return ctx != nil && msg.GetEpoch() != ctx.Epoch
+}

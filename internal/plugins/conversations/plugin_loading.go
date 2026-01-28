@@ -25,6 +25,12 @@ import (
 // Caches worktree paths and names to avoid git commands on every refresh (td-e74a4aaa).
 // Serialized to prevent concurrent goroutines from accumulating file descriptors (td-023577).
 func (p *Plugin) loadSessions() tea.Cmd {
+	// Capture epoch for stale detection on project switch
+	var epoch uint64
+	if p.ctx != nil {
+		epoch = p.ctx.Epoch
+	}
+
 	// Capture current cache state for goroutine (td-0e43c080: avoid race)
 	cachedPaths := p.cachedWorktreePaths
 	cachedNames := p.cachedWorktreeNames
@@ -55,7 +61,7 @@ func (p *Plugin) loadSessions() tea.Cmd {
 		}()
 
 		if len(adapters) == 0 {
-			return SessionsLoadedMsg{}
+			return SessionsLoadedMsg{Epoch: epoch}
 		}
 
 		// Check worktree cache (td-e74a4aaa)
@@ -184,7 +190,7 @@ func (p *Plugin) loadSessions() tea.Cmd {
 		fdmonitor.Check(nil) // Rate-limited, logs warning if threshold exceeded
 
 		// Return cache data only when updated (td-0e43c080: Update() stores safely)
-		msg := SessionsLoadedMsg{Sessions: sessions}
+		msg := SessionsLoadedMsg{Epoch: epoch, Sessions: sessions}
 		if cacheUpdated {
 			msg.WorktreePaths = worktreePaths
 			msg.WorktreeNames = worktreeNames
@@ -196,12 +202,18 @@ func (p *Plugin) loadSessions() tea.Cmd {
 // refreshSessions updates only specific sessions in-place (td-2b8ebe).
 // Falls back to full loadSessions() if adapters don't support targeted refresh.
 func (p *Plugin) refreshSessions(sessionIDs []string) tea.Cmd {
+	// Capture epoch for stale detection on project switch
+	var epoch uint64
+	if p.ctx != nil {
+		epoch = p.ctx.Epoch
+	}
+
 	adapters := p.adapters
 	currentSessions := p.sessions
 
 	return func() tea.Msg {
 		if len(adapters) == 0 {
-			return SessionsLoadedMsg{}
+			return SessionsLoadedMsg{Epoch: epoch}
 		}
 
 		// Build lookup of current sessions by ID for in-place update
@@ -245,7 +257,7 @@ func (p *Plugin) refreshSessions(sessionIDs []string) tea.Cmd {
 		}
 
 		if !changed {
-			return SessionsLoadedMsg{Sessions: updated}
+			return SessionsLoadedMsg{Epoch: epoch, Sessions: updated}
 		}
 
 		// Re-sort by UpdatedAt descending
@@ -253,20 +265,26 @@ func (p *Plugin) refreshSessions(sessionIDs []string) tea.Cmd {
 			return updated[i].UpdatedAt.After(updated[j].UpdatedAt)
 		})
 
-		return SessionsLoadedMsg{Sessions: updated}
+		return SessionsLoadedMsg{Epoch: epoch, Sessions: updated}
 	}
 }
 
 // loadMessages loads messages for a session with pagination support (td-313ea851).
 func (p *Plugin) loadMessages(sessionID string) tea.Cmd {
+	// Capture epoch for stale detection on project switch
+	var epoch uint64
+	if p.ctx != nil {
+		epoch = p.ctx.Epoch
+	}
+
 	offset := p.messageOffset
 	return func() tea.Msg {
 		if len(p.adapters) == 0 {
-			return MessagesLoadedMsg{}
+			return MessagesLoadedMsg{Epoch: epoch}
 		}
 		adapter := p.adapterForSession(sessionID)
 		if adapter == nil {
-			return MessagesLoadedMsg{}
+			return MessagesLoadedMsg{Epoch: epoch}
 		}
 		messages, err := adapter.Messages(sessionID)
 		if err != nil {
@@ -294,6 +312,7 @@ func (p *Plugin) loadMessages(sessionID string) tea.Cmd {
 		}
 
 		return MessagesLoadedMsg{
+			Epoch:      epoch,
 			SessionID:  sessionID,
 			Messages:   messages,
 			TotalCount: totalCount,
@@ -392,13 +411,18 @@ func (p *Plugin) listenForWatchEvents() tea.Cmd {
 	if p.watchChan == nil {
 		return nil
 	}
+	// Capture epoch for stale detection on project switch
+	var epoch uint64
+	if p.ctx != nil {
+		epoch = p.ctx.Epoch
+	}
 	return func() tea.Msg {
 		evt, ok := <-p.watchChan
 		if !ok {
 			// Channel closed
 			return nil
 		}
-		return WatchEventMsg{SessionID: evt.SessionID}
+		return WatchEventMsg{Epoch: epoch, SessionID: evt.SessionID}
 	}
 }
 

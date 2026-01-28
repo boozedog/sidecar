@@ -38,12 +38,16 @@ type ContentSearchDebounceMsg struct {
 
 // ContentSearchResultsMsg carries search results back to the plugin.
 type ContentSearchResultsMsg struct {
+	Epoch        uint64                // Epoch when request was issued (for stale detection)
 	Results      []SessionSearchResult // Search results by session
 	Error        error                 // Error if search failed
 	Query        string                // The query these results are for (td-5b9928)
 	TotalMatches int                   // Total matches found before truncation (td-8e1a2b)
 	Truncated    bool                  // True if results were truncated (td-8e1a2b)
 }
+
+// GetEpoch implements plugin.EpochMessage.
+func (m ContentSearchResultsMsg) GetEpoch() uint64 { return m.Epoch }
 
 // NewContentSearchState creates a new content search state with defaults.
 func NewContentSearchState() *ContentSearchState {

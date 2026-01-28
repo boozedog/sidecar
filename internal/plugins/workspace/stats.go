@@ -11,13 +11,14 @@ import (
 
 // loadStats returns a command to load git stats for a worktree.
 func (p *Plugin) loadStats(path string) tea.Cmd {
+	epoch := p.ctx.Epoch // Capture epoch for stale detection
 	return func() tea.Msg {
 		name := filepath.Base(path)
 		stats, err := computeStats(path)
 		if err != nil {
 			return StatsErrorMsg{WorkspaceName: name, Err: err}
 		}
-		return StatsLoadedMsg{WorkspaceName: name, Stats: stats}
+		return StatsLoadedMsg{Epoch: epoch, WorkspaceName: name, Stats: stats}
 	}
 }
 

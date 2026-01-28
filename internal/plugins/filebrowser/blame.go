@@ -32,12 +32,16 @@ type BlameState struct {
 
 // BlameLoadedMsg is sent when blame data is loaded.
 type BlameLoadedMsg struct {
+	Epoch uint64 // Epoch when request was issued (for stale detection)
 	Lines []BlameLine
 	Error error
 }
 
+// GetEpoch implements plugin.EpochMessage.
+func (m BlameLoadedMsg) GetEpoch() uint64 { return m.Epoch }
+
 // RunGitBlame runs git blame and returns the parsed output.
-func RunGitBlame(workDir, filePath string) tea.Cmd {
+func RunGitBlame(workDir, filePath string, epoch uint64) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -46,11 +50,11 @@ func RunGitBlame(workDir, filePath string) tea.Cmd {
 		cmd.Dir = workDir
 		output, err := cmd.Output()
 		if err != nil {
-			return BlameLoadedMsg{Error: err}
+			return BlameLoadedMsg{Epoch: epoch, Error: err}
 		}
 
 		lines := parseBlameOutput(string(output))
-		return BlameLoadedMsg{Lines: lines}
+		return BlameLoadedMsg{Epoch: epoch, Lines: lines}
 	}
 }
 

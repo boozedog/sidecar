@@ -988,6 +988,7 @@ func (p *Plugin) createWorktreeWithResume(msg ResumeConversationMsg) tea.Cmd {
 
 // startAgentWithResumeCmd starts an agent in a worktree with a resume command instead of normal startup.
 func (p *Plugin) startAgentWithResumeCmd(wt *Worktree, agentType AgentType, skipPerms bool, resumeCmd string) tea.Cmd {
+	epoch := p.ctx.Epoch // Capture epoch for stale detection
 	return func() tea.Msg {
 		sessionName := tmuxSessionPrefix + sanitizeName(wt.Name)
 
@@ -997,6 +998,7 @@ func (p *Plugin) startAgentWithResumeCmd(wt *Worktree, agentType AgentType, skip
 			// Session exists - should not happen for new resume worktree
 			paneID := getPaneID(sessionName)
 			return AgentStartedMsg{
+				Epoch:         epoch,
 				WorkspaceName: wt.Name,
 				SessionName:   sessionName,
 				PaneID:        paneID,
@@ -1015,7 +1017,7 @@ func (p *Plugin) startAgentWithResumeCmd(wt *Worktree, agentType AgentType, skip
 
 		cmd := exec.Command("tmux", args...)
 		if err := cmd.Run(); err != nil {
-			return AgentStartedMsg{Err: fmt.Errorf("create session: %w", err)}
+			return AgentStartedMsg{Epoch: epoch, Err: fmt.Errorf("create session: %w", err)}
 		}
 
 		// Set history limit for scrollback capture
@@ -1040,13 +1042,14 @@ func (p *Plugin) startAgentWithResumeCmd(wt *Worktree, agentType AgentType, skip
 		if err := sendCmd.Run(); err != nil {
 			// Try to kill the session if we failed to start the agent
 			exec.Command("tmux", "kill-session", "-t", sessionName).Run()
-			return AgentStartedMsg{Err: fmt.Errorf("start agent with resume: %w", err)}
+			return AgentStartedMsg{Epoch: epoch, Err: fmt.Errorf("start agent with resume: %w", err)}
 		}
 
 		// Capture pane ID for interactive mode support
 		paneID := getPaneID(sessionName)
 
 		return AgentStartedMsg{
+			Epoch:         epoch,
 			WorkspaceName: wt.Name,
 			SessionName:   sessionName,
 			PaneID:        paneID,
