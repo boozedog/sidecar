@@ -99,7 +99,8 @@ type Plugin struct {
 	diffHorizOff   int          // Horizontal scroll for side-by-side
 	parsedDiff     *ParsedDiff  // Parsed diff for enhanced rendering
 	diffReturnMode ViewMode     // View mode to return to on esc
-	diffLoaded     bool         // True once diff load completes (distinguishes loading vs empty)
+	diffLoaded      bool         // True once diff load completes (distinguishes loading vs empty)
+	diffWrapEnabled bool         // Wrap long lines instead of truncating
 
 	// Push status state
 	pushStatus              *PushStatus
@@ -284,6 +285,7 @@ func (p *Plugin) Init(ctx *plugin.Context) error {
 		p.sidebarWidth = saved
 	}
 	p.showCommitGraph = state.GetGitGraphEnabled()
+	p.diffWrapEnabled = state.GetLineWrapEnabled()
 
 	return nil
 }
@@ -844,12 +846,14 @@ func (p *Plugin) Commands() []plugin.Command {
 		{ID: "toggle-sidebar", Name: "Panel", Description: "Toggle sidebar visibility", Category: plugin.CategoryView, Context: "git-commit-preview", Priority: 4},
 		// git-status-diff context (inline diff pane)
 		{ID: "toggle-diff-view", Name: "View", Description: "Toggle unified/split diff view", Category: plugin.CategoryView, Context: "git-status-diff", Priority: 2},
+		{ID: "toggle-wrap", Name: "Wrap", Description: "Toggle line wrapping", Category: plugin.CategoryView, Context: "git-status-diff", Priority: 3},
 		{ID: "toggle-sidebar", Name: "Panel", Description: "Toggle sidebar visibility", Category: plugin.CategoryView, Context: "git-status-diff", Priority: 3},
 		// git-diff context
 		{ID: "close-diff", Name: "Close", Description: "Close diff view", Category: plugin.CategoryView, Context: "git-diff", Priority: 1},
 		{ID: "scroll", Name: "Scroll", Description: "Scroll diff content", Category: plugin.CategoryNavigation, Context: "git-diff", Priority: 2},
 		{ID: "toggle-sidebar", Name: "Panel", Description: "Toggle sidebar visibility", Category: plugin.CategoryView, Context: "git-diff", Priority: 2},
 		{ID: "toggle-diff-view", Name: "View", Description: "Toggle unified/split diff view", Category: plugin.CategoryView, Context: "git-diff", Priority: 3},
+		{ID: "toggle-wrap", Name: "Wrap", Description: "Toggle line wrapping", Category: plugin.CategoryView, Context: "git-diff", Priority: 3},
 		{ID: "open-in-file-browser", Name: "Browse", Description: "Open file in file browser", Category: plugin.CategoryNavigation, Context: "git-diff", Priority: 4},
 		// git-commit context
 		{ID: "execute-commit", Name: "Commit", Description: "Create commit with message", Category: plugin.CategoryGit, Context: "git-commit", Priority: 1},

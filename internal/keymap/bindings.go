@@ -98,6 +98,7 @@ func DefaultBindings() []Binding {
 		{Key: "u", Command: "unstage-file", Context: "git-status-diff"},
 		{Key: "v", Command: "toggle-diff-view", Context: "git-status-diff"},
 		{Key: "\\", Command: "toggle-sidebar", Context: "git-status-diff"},
+		{Key: "w", Command: "toggle-wrap", Context: "git-status-diff"},
 
 		// Git commit preview context
 		{Key: "j", Command: "scroll-down", Context: "git-commit-preview"},
@@ -127,6 +128,7 @@ func DefaultBindings() []Binding {
 		{Key: "c", Command: "commit", Context: "git-diff"},
 		{Key: "v", Command: "toggle-diff-view", Context: "git-diff"},
 		{Key: "\\", Command: "toggle-sidebar", Context: "git-diff"},
+		{Key: "w", Command: "toggle-wrap", Context: "git-diff"},
 
 		// Git push menu context
 		{Key: "p", Command: "push", Context: "git-push-menu"},
@@ -256,6 +258,7 @@ func DefaultBindings() []Binding {
 		{Key: "y", Command: "yank-contents", Context: "file-browser-preview"},
 		{Key: "Y", Command: "yank-path", Context: "file-browser-preview"},
 		{Key: "\\", Command: "toggle-sidebar", Context: "file-browser-preview"},
+		{Key: "w", Command: "toggle-wrap", Context: "file-browser-preview"},
 
 		// File browser tree search context
 		{Key: "esc", Command: "cancel", Context: "file-browser-search"},

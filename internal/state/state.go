@@ -12,6 +12,7 @@ type State struct {
 	GitDiffMode      string `json:"gitDiffMode"`                // "unified" or "side-by-side"
 	WorkspaceDiffMode string `json:"workspaceDiffMode,omitempty"` // "unified" or "side-by-side"
 	GitGraphEnabled  bool   `json:"gitGraphEnabled,omitempty"`  // Show commit graph in sidebar
+	LineWrapEnabled  bool   `json:"lineWrapEnabled,omitempty"`  // Wrap long lines instead of truncating
 
 	// Pane width preferences (percentage of total width, 0 = use default)
 	FileBrowserTreeWidth   int `json:"fileBrowserTreeWidth,omitempty"`
@@ -179,6 +180,27 @@ func SetGitGraphEnabled(enabled bool) error {
 		current = &State{}
 	}
 	current.GitGraphEnabled = enabled
+	mu.Unlock()
+	return Save()
+}
+
+// GetLineWrapEnabled returns whether line wrapping is enabled.
+func GetLineWrapEnabled() bool {
+	mu.RLock()
+	defer mu.RUnlock()
+	if current == nil {
+		return false
+	}
+	return current.LineWrapEnabled
+}
+
+// SetLineWrapEnabled saves the line wrap preference.
+func SetLineWrapEnabled(enabled bool) error {
+	mu.Lock()
+	if current == nil {
+		current = &State{}
+	}
+	current.LineWrapEnabled = enabled
 	mu.Unlock()
 	return Save()
 }

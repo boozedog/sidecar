@@ -56,7 +56,8 @@ var (
 // RenderLineDiff renders a parsed diff in unified line-by-line format with line numbers.
 // horizontalOffset scrolls the content horizontally (0 = no scroll).
 // highlighter is optional - if nil, no syntax highlighting is applied.
-func RenderLineDiff(diff *ParsedDiff, width, startLine, maxLines, horizontalOffset int, highlighter *SyntaxHighlighter) string {
+// wrapEnabled wraps long lines instead of truncating them.
+func RenderLineDiff(diff *ParsedDiff, width, startLine, maxLines, horizontalOffset int, highlighter *SyntaxHighlighter, wrapEnabled bool) string {
 	if diff == nil || diff.Binary {
 		if diff != nil && diff.Binary {
 			return styles.Muted.Render(" Binary file differs")
@@ -144,13 +145,35 @@ func RenderLineDiff(diff *ParsedDiff, width, startLine, maxLines, horizontalOffs
 				lineNoStyle.Render(oldNo),
 				lineNoStyle.Render(newNo))
 
-			// Render content with appropriate style and horizontal offset
-			content := renderDiffContentWithOffset(line, contentWidth, horizontalOffset, highlighter)
-
-			sb.WriteString(lineNos)
-			sb.WriteString(content)
-			sb.WriteString("\n")
-			rendered++
+			// Render content with appropriate style
+			var content string
+			if wrapEnabled {
+				// Pass large width to avoid premature truncation; wrapping is done below
+				content = renderDiffContent(line, contentWidth*10, highlighter)
+				// Wrap long lines using lipgloss Width
+				wrapped := lipgloss.NewStyle().Width(contentWidth).Render(content)
+				wrappedLines := strings.Split(wrapped, "\n")
+				lineNosPad := strings.Repeat(" ", lineNoWidth*2+4) // blank padding for continuation lines
+				for wi, wl := range wrappedLines {
+					if rendered >= maxLines {
+						break
+					}
+					if wi == 0 {
+						sb.WriteString(lineNos)
+					} else {
+						sb.WriteString(lineNosPad)
+					}
+					sb.WriteString(wl)
+					sb.WriteString("\n")
+					rendered++
+				}
+			} else {
+				content = renderDiffContentWithOffset(line, contentWidth, horizontalOffset, highlighter)
+				sb.WriteString(lineNos)
+				sb.WriteString(content)
+				sb.WriteString("\n")
+				rendered++
+			}
 		}
 
 		if rendered >= maxLines {
@@ -163,7 +186,8 @@ func RenderLineDiff(diff *ParsedDiff, width, startLine, maxLines, horizontalOffs
 
 // RenderSideBySide renders a parsed diff in side-by-side format.
 // highlighter is optional - if nil, no syntax highlighting is applied.
-func RenderSideBySide(diff *ParsedDiff, width, startLine, maxLines, horizontalOffset int, highlighter *SyntaxHighlighter) string {
+// wrapEnabled wraps long lines instead of truncating them.
+func RenderSideBySide(diff *ParsedDiff, width, startLine, maxLines, horizontalOffset int, highlighter *SyntaxHighlighter, wrapEnabled bool) string {
 	if diff == nil || diff.Binary {
 		if diff != nil && diff.Binary {
 			return styles.Muted.Render(" Binary file differs")
@@ -226,14 +250,17 @@ func RenderSideBySide(diff *ParsedDiff, width, startLine, maxLines, horizontalOf
 				if pair.left.OldLineNo > 0 {
 					leftLineNo = fmt.Sprintf("%d", pair.left.OldLineNo)
 				}
-				// Highlight full content first to preserve syntax context, then apply offset
-				leftRendered = renderSideBySideContent(pair.left.Content, pair.left.Type, contentWidth+horizontalOffset, highlighter)
-				// Note: ansi.TruncateLeft used directly here - cache would need plugin access
-				if horizontalOffset > 0 {
-					leftRendered = truncateLeftCached(leftRendered, horizontalOffset)
+				if wrapEnabled {
+					// Pass large width to avoid premature truncation; caller wraps via lipgloss.Width()
+					leftRendered = renderSideBySideContent(pair.left.Content, pair.left.Type, contentWidth*10, highlighter)
+				} else {
+					// Highlight full content first to preserve syntax context, then apply offset
+					leftRendered = renderSideBySideContent(pair.left.Content, pair.left.Type, contentWidth+horizontalOffset, highlighter)
+					if horizontalOffset > 0 {
+						leftRendered = truncateLeftCached(leftRendered, horizontalOffset)
+					}
 				}
 			}
-			leftRendered = padToWidth(leftRendered, contentWidth)
 
 			// Right side (new)
 			rightLineNo := " "
@@ -242,28 +269,75 @@ func RenderSideBySide(diff *ParsedDiff, width, startLine, maxLines, horizontalOf
 				if pair.right.NewLineNo > 0 {
 					rightLineNo = fmt.Sprintf("%d", pair.right.NewLineNo)
 				}
-				// Highlight full content first to preserve syntax context, then apply offset
-				rightRendered = renderSideBySideContent(pair.right.Content, pair.right.Type, contentWidth+horizontalOffset, highlighter)
-				// Note: ansi.TruncateLeft used directly here - cache would need plugin access
-				if horizontalOffset > 0 {
-					rightRendered = truncateLeftCached(rightRendered, horizontalOffset)
+				if wrapEnabled {
+					// Pass large width to avoid premature truncation; caller wraps via lipgloss.Width()
+					rightRendered = renderSideBySideContent(pair.right.Content, pair.right.Type, contentWidth*10, highlighter)
+				} else {
+					// Highlight full content first to preserve syntax context, then apply offset
+					rightRendered = renderSideBySideContent(pair.right.Content, pair.right.Type, contentWidth+horizontalOffset, highlighter)
+					if horizontalOffset > 0 {
+						rightRendered = truncateLeftCached(rightRendered, horizontalOffset)
+					}
 				}
 			}
-			rightRendered = padToWidth(rightRendered, contentWidth)
 
-			leftPanel := fmt.Sprintf("%s │%s",
-				lineNoStyle.Render(leftLineNo),
-				leftRendered)
+			if wrapEnabled {
+				// Wrap both sides and align heights
+				wrapStyle := lipgloss.NewStyle().Width(contentWidth)
+				leftWrapped := wrapStyle.Render(leftRendered)
+				rightWrapped := wrapStyle.Render(rightRendered)
+				leftLines := strings.Split(leftWrapped, "\n")
+				rightLines := strings.Split(rightWrapped, "\n")
+				maxH := len(leftLines)
+				if len(rightLines) > maxH {
+					maxH = len(rightLines)
+				}
+				lineNoPad := strings.Repeat(" ", lineNoWidth)
+				sep := sideBySideBorder.Render(" │ ")
+				for vi := 0; vi < maxH; vi++ {
+					if rendered >= maxLines {
+						break
+					}
+					lLine := ""
+					if vi < len(leftLines) {
+						lLine = leftLines[vi]
+					}
+					rLine := ""
+					if vi < len(rightLines) {
+						rLine = rightLines[vi]
+					}
+					lLine = padToWidth(lLine, contentWidth)
+					rLine = padToWidth(rLine, contentWidth)
+					if vi == 0 {
+						sb.WriteString(fmt.Sprintf("%s │%s", lineNoStyle.Render(leftLineNo), lLine))
+						sb.WriteString(sep)
+						sb.WriteString(fmt.Sprintf("%s │%s", lineNoStyle.Render(rightLineNo), rLine))
+					} else {
+						sb.WriteString(fmt.Sprintf("%s │%s", lineNoPad, lLine))
+						sb.WriteString(sep)
+						sb.WriteString(fmt.Sprintf("%s │%s", lineNoPad, rLine))
+					}
+					sb.WriteString("\n")
+					rendered++
+				}
+			} else {
+				leftRendered = padToWidth(leftRendered, contentWidth)
+				rightRendered = padToWidth(rightRendered, contentWidth)
 
-			rightPanel := fmt.Sprintf("%s │%s",
-				lineNoStyle.Render(rightLineNo),
-				rightRendered)
+				leftPanel := fmt.Sprintf("%s │%s",
+					lineNoStyle.Render(leftLineNo),
+					leftRendered)
 
-			sb.WriteString(leftPanel)
-			sb.WriteString(sideBySideBorder.Render(" │ "))
-			sb.WriteString(rightPanel)
-			sb.WriteString("\n")
-			rendered++
+				rightPanel := fmt.Sprintf("%s │%s",
+					lineNoStyle.Render(rightLineNo),
+					rightRendered)
+
+				sb.WriteString(leftPanel)
+				sb.WriteString(sideBySideBorder.Render(" │ "))
+				sb.WriteString(rightPanel)
+				sb.WriteString("\n")
+				rendered++
+			}
 			lineNum++
 		}
 	}
@@ -607,7 +681,7 @@ func RenderFileHeader(filename, stats string, width int) string {
 
 // RenderMultiFileDiff renders a multi-file diff with file headers.
 // Returns the rendered content and updates file position info.
-func RenderMultiFileDiff(mfd *MultiFileDiff, mode DiffViewMode, width, startLine, maxLines, horizontalOffset int) string {
+func RenderMultiFileDiff(mfd *MultiFileDiff, mode DiffViewMode, width, startLine, maxLines, horizontalOffset int, wrapEnabled bool) string {
 	if mfd == nil || len(mfd.Files) == 0 {
 		return styles.Muted.Render(" No diff content")
 	}
@@ -636,7 +710,7 @@ func RenderMultiFileDiff(mfd *MultiFileDiff, mode DiffViewMode, width, startLine
 		}
 
 		// Render file's diff content
-		fileContent := renderSingleFileDiff(file.Diff, mode, width, startLine-currentLine, maxLines-rendered, horizontalOffset, highlighter)
+		fileContent := renderSingleFileDiff(file.Diff, mode, width, startLine-currentLine, maxLines-rendered, horizontalOffset, highlighter, wrapEnabled)
 		fileLines := strings.Split(fileContent, "\n")
 
 		for _, line := range fileLines {
@@ -671,7 +745,7 @@ func RenderMultiFileDiff(mfd *MultiFileDiff, mode DiffViewMode, width, startLine
 }
 
 // renderSingleFileDiff renders a single file's diff without the file header.
-func renderSingleFileDiff(diff *ParsedDiff, mode DiffViewMode, width, startLine, maxLines, horizontalOffset int, highlighter *SyntaxHighlighter) string {
+func renderSingleFileDiff(diff *ParsedDiff, mode DiffViewMode, width, startLine, maxLines, horizontalOffset int, highlighter *SyntaxHighlighter, wrapEnabled bool) string {
 	if startLine < 0 {
 		startLine = 0
 	}
@@ -680,9 +754,9 @@ func renderSingleFileDiff(diff *ParsedDiff, mode DiffViewMode, width, startLine,
 	}
 
 	if mode == DiffViewSideBySide {
-		return RenderSideBySide(diff, width, startLine, maxLines, horizontalOffset, highlighter)
+		return RenderSideBySide(diff, width, startLine, maxLines, horizontalOffset, highlighter, wrapEnabled)
 	}
-	return RenderLineDiff(diff, width, startLine, maxLines, horizontalOffset, highlighter)
+	return RenderLineDiff(diff, width, startLine, maxLines, horizontalOffset, highlighter, wrapEnabled)
 }
 
 // TotalLines returns the total number of rendered lines for a multi-file diff.

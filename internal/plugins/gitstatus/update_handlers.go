@@ -507,6 +507,13 @@ func (p *Plugin) updateStatusDiffPane(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 			p.diffPaneViewMode = DiffViewUnified
 		}
 
+	case "w":
+		// Toggle line wrapping for inline diff pane
+		p.diffWrapEnabled = !p.diffWrapEnabled
+		_ = state.SetLineWrapEnabled(p.diffWrapEnabled)
+		p.diffPaneHorizScroll = 0
+		p.diffPaneScroll = 0
+
 	case "tab", "shift+tab":
 		// Switch focus to sidebar (if visible)
 		if p.sidebarVisible {
@@ -667,6 +674,13 @@ func (p *Plugin) updateDiff(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 			_ = state.SetGitDiffMode("unified")
 		}
 		p.diffHorizOff = 0
+
+	case "w":
+		// Toggle line wrapping
+		p.diffWrapEnabled = !p.diffWrapEnabled
+		_ = state.SetLineWrapEnabled(p.diffWrapEnabled)
+		p.diffHorizOff = 0
+		p.diffScroll = 0
 
 	case "\\":
 		// Toggle sidebar visibility

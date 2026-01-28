@@ -49,7 +49,7 @@ func (p *Plugin) renderDiffContent(width, height int) string {
 		} else {
 			mode = gitstatus.DiffViewUnified
 		}
-		diffContent := gitstatus.RenderMultiFileDiff(p.multiFileDiff, mode, width, p.previewOffset, contentHeight, 0)
+		diffContent := gitstatus.RenderMultiFileDiff(p.multiFileDiff, mode, width, p.previewOffset, contentHeight, 0, false)
 		if header != "" {
 			return header + "\n" + diffContent
 		}
@@ -76,9 +76,9 @@ func (p *Plugin) renderDiffContent(width, height int) string {
 	// Render based on view mode
 	var diffContent string
 	if p.diffViewMode == DiffViewSideBySide {
-		diffContent = gitstatus.RenderSideBySide(parsed, width, p.previewOffset, contentHeight, 0, highlighter)
+		diffContent = gitstatus.RenderSideBySide(parsed, width, p.previewOffset, contentHeight, 0, highlighter, false)
 	} else {
-		diffContent = gitstatus.RenderLineDiff(parsed, width, p.previewOffset, contentHeight, 0, highlighter)
+		diffContent = gitstatus.RenderLineDiff(parsed, width, p.previewOffset, contentHeight, 0, highlighter, false)
 	}
 
 	if header != "" {

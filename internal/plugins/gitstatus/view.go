@@ -225,14 +225,14 @@ func (p *Plugin) renderDiffModal() string {
 				parsed, _ = ParseUnifiedDiff(p.diffRaw)
 			}
 			if parsed != nil {
-				sb.WriteString(RenderSideBySide(parsed, contentWidth, p.diffScroll, visibleLines, p.diffHorizOff, highlighter))
+				sb.WriteString(RenderSideBySide(parsed, contentWidth, p.diffScroll, visibleLines, p.diffHorizOff, highlighter, p.diffWrapEnabled))
 			} else {
 				sb.WriteString(styles.Muted.Render("Unable to parse diff for side-by-side view"))
 			}
 		} else {
 			// Unified view
 			if p.parsedDiff != nil {
-				sb.WriteString(RenderLineDiff(p.parsedDiff, contentWidth, p.diffScroll, visibleLines, p.diffHorizOff, highlighter))
+				sb.WriteString(RenderLineDiff(p.parsedDiff, contentWidth, p.diffScroll, visibleLines, p.diffHorizOff, highlighter, p.diffWrapEnabled))
 			} else {
 				// Fall back to raw diff rendering
 				lines := strings.Split(p.diffRaw, "\n")
@@ -376,22 +376,25 @@ func (p *Plugin) renderFullDiffContent(visibleHeight int) string {
 			parsed, _ = ParseUnifiedDiff(p.diffRaw)
 		}
 		if parsed != nil {
-			diffContent = RenderSideBySide(parsed, diffWidth, p.diffScroll, contentHeight, p.diffHorizOff, highlighter)
+			diffContent = RenderSideBySide(parsed, diffWidth, p.diffScroll, contentHeight, p.diffHorizOff, highlighter, p.diffWrapEnabled)
 		}
 	} else {
 		if p.parsedDiff != nil {
-			diffContent = RenderLineDiff(p.parsedDiff, diffWidth, p.diffScroll, contentHeight, p.diffHorizOff, highlighter)
+			diffContent = RenderLineDiff(p.parsedDiff, diffWidth, p.diffScroll, contentHeight, p.diffHorizOff, highlighter, p.diffWrapEnabled)
 		}
 	}
 
-	// Truncate lines to prevent wrapping
-	lines := strings.Split(diffContent, "\n")
-	for i, line := range lines {
-		if lipgloss.Width(line) > diffWidth {
-			lines[i] = truncateStyledLine(line, diffWidth-3) + "..."
+	// Truncate lines to prevent wrapping (skip when wrap is enabled)
+	if !p.diffWrapEnabled {
+		lines := strings.Split(diffContent, "\n")
+		for i, line := range lines {
+			if lipgloss.Width(line) > diffWidth {
+				lines[i] = truncateStyledLine(line, diffWidth-3) + "..."
+			}
 		}
+		diffContent = strings.Join(lines, "\n")
 	}
-	sb.WriteString(strings.Join(lines, "\n"))
+	sb.WriteString(diffContent)
 
 	return sb.String()
 }

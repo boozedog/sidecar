@@ -750,6 +750,7 @@ func (p *Plugin) renderPreviewPane(visibleHeight int) string {
 
 	// Style for truncating lines with ANSI codes
 	lineStyle := lipgloss.NewStyle().MaxWidth(maxLineWidth)
+	wrapStyle := lipgloss.NewStyle().Width(maxLineWidth)
 
 	// Reserve 1 line for truncation message if needed
 	contentEnd := end
@@ -757,7 +758,12 @@ func (p *Plugin) renderPreviewPane(visibleHeight int) string {
 		contentEnd = end - 1
 	}
 
+	visualLinesRendered := 0
 	for i := start; i < contentEnd; i++ {
+		if p.previewWrapEnabled && visualLinesRendered >= visibleHeight {
+			break
+		}
+
 		// Check if this line is selected for text selection highlighting
 		if p.isLineSelected(i) && showLineNumbers {
 			// Line number with selection background
@@ -779,6 +785,7 @@ func (p *Plugin) renderPreviewPane(visibleHeight int) string {
 				padding := strings.Repeat(" ", p.previewWidth-4-contentWidth)
 				sb.WriteString(injectSelectionBackground(padding))
 			}
+			visualLinesRendered++
 		} else {
 			// Get line content
 			var lineContent string
@@ -795,19 +802,46 @@ func (p *Plugin) renderPreviewPane(visibleHeight int) string {
 				lineContent = lines[i]
 			}
 
-			line := lineStyle.Render(lineContent)
+			if p.previewWrapEnabled {
+				wrapped := wrapStyle.Render(lineContent)
+				wrappedLines := strings.Split(wrapped, "\n")
+				lineNumPad := strings.Repeat(" ", lineNumWidth)
+				for wi, wl := range wrappedLines {
+					if visualLinesRendered >= visibleHeight {
+						break
+					}
+					if showLineNumbers {
+						if wi == 0 {
+							lineNum := styles.FileBrowserLineNumber.Render(fmt.Sprintf("%4d ", i+1))
+							sb.WriteString(lineNum)
+						} else {
+							sb.WriteString(lineNumPad)
+						}
+					}
+					sb.WriteString(wl)
+					if visualLinesRendered < visibleHeight-1 || p.isTruncated {
+						sb.WriteString("\n")
+					}
+					visualLinesRendered++
+				}
+			} else {
+				line := lineStyle.Render(lineContent)
 
-			// Render with or without line numbers
-			if showLineNumbers {
-				lineNum := styles.FileBrowserLineNumber.Render(fmt.Sprintf("%4d ", i+1))
-				sb.WriteString(lineNum)
+				// Render with or without line numbers
+				if showLineNumbers {
+					lineNum := styles.FileBrowserLineNumber.Render(fmt.Sprintf("%4d ", i+1))
+					sb.WriteString(lineNum)
+				}
+				sb.WriteString(line)
+				visualLinesRendered++
 			}
-			sb.WriteString(line)
 		}
 
-		// Don't add newline after last line
-		if i < contentEnd-1 || p.isTruncated {
-			sb.WriteString("\n")
+		// Don't add newline after last line (non-wrap path)
+		if !p.previewWrapEnabled {
+			if i < contentEnd-1 || p.isTruncated {
+				sb.WriteString("\n")
+			}
 		}
 	}
 

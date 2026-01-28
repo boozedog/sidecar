@@ -133,6 +133,9 @@ type Plugin struct {
 	activeTab int
 	tabHits   []tabHit
 
+	// Line wrapping state
+	previewWrapEnabled bool // Wrap long lines instead of truncating
+
 	// Markdown rendering state
 	markdownRenderer   *markdown.Renderer // Shared Glamour renderer
 	markdownRenderMode bool               // true=rendered, false=raw
@@ -285,6 +288,7 @@ func (p *Plugin) Init(ctx *plugin.Context) error {
 	if saved := state.GetFileBrowserTreeWidth(); saved > 0 {
 		p.treeWidth = saved
 	}
+	p.previewWrapEnabled = state.GetLineWrapEnabled()
 	return nil
 }
 
@@ -778,6 +782,7 @@ func (p *Plugin) Commands() []plugin.Command {
 		{ID: "next-tab", Name: "Tab→", Description: "Next tab", Category: plugin.CategoryNavigation, Context: "file-browser-preview", Priority: 3},
 		{ID: "blame", Name: "Blame", Description: "Show git blame", Category: plugin.CategoryView, Context: "file-browser-preview", Priority: 3},
 		{ID: "search-content", Name: "Search", Description: "Search file content", Category: plugin.CategorySearch, Context: "file-browser-preview", Priority: 3},
+		{ID: "toggle-wrap", Name: "Wrap", Description: "Toggle line wrapping", Category: plugin.CategoryView, Context: "file-browser-preview", Priority: 3},
 		{ID: "toggle-markdown", Name: "Render", Description: "Toggle markdown rendering", Category: plugin.CategoryActions, Context: "file-browser-preview", Priority: 4},
 		{ID: "close-tab", Name: "Close", Description: "Close active tab", Category: plugin.CategoryActions, Context: "file-browser-preview", Priority: 4},
 		{ID: "back", Name: "Back", Description: "Return to file tree", Category: plugin.CategoryNavigation, Context: "file-browser-preview", Priority: 5},

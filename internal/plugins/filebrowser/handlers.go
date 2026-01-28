@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	appmsg "github.com/marcus/sidecar/internal/msg"
 	"github.com/marcus/sidecar/internal/plugin"
+	"github.com/marcus/sidecar/internal/state"
 )
 
 func (p *Plugin) handleKey(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
@@ -541,6 +542,12 @@ func (p *Plugin) handlePreviewKey(key string) (plugin.Plugin, tea.Cmd) {
 		if p.isMarkdownFile() {
 			p.toggleMarkdownRender()
 		}
+
+	case "w":
+		// Toggle line wrapping
+		p.previewWrapEnabled = !p.previewWrapEnabled
+		_ = state.SetLineWrapEnabled(p.previewWrapEnabled)
+		p.previewScroll = 0
 
 	case "B":
 		// Show git blame for current preview file

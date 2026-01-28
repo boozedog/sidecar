@@ -107,7 +107,7 @@ func TestRenderLineDiff_WithHighlighter(t *testing.T) {
 	}
 
 	h := NewSyntaxHighlighter("test.go")
-	result := RenderLineDiff(diff, 80, 0, 20, 0, h)
+	result := RenderLineDiff(diff, 80, 0, 20, 0, h, false)
 	if result == "" {
 		t.Error("expected non-empty result with highlighter")
 	}
@@ -133,7 +133,7 @@ func TestRenderSideBySide_WithHighlighter(t *testing.T) {
 	}
 
 	h := NewSyntaxHighlighter("test.go")
-	result := RenderSideBySide(diff, 120, 0, 20, 0, h)
+	result := RenderSideBySide(diff, 120, 0, 20, 0, h, false)
 	if result == "" {
 		t.Error("expected non-empty result with highlighter")
 	}

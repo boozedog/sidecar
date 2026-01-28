@@ -647,19 +647,21 @@ func (p *Plugin) renderDiffPane(visibleHeight int) string {
 	highlighter := p.getHighlighter(p.selectedDiffFile)
 	var diffContent string
 	if p.diffPaneViewMode == DiffViewSideBySide {
-		diffContent = RenderSideBySide(p.diffPaneParsedDiff, diffWidth, p.diffPaneScroll, contentHeight, p.diffPaneHorizScroll, highlighter)
+		diffContent = RenderSideBySide(p.diffPaneParsedDiff, diffWidth, p.diffPaneScroll, contentHeight, p.diffPaneHorizScroll, highlighter, p.diffWrapEnabled)
 	} else {
-		diffContent = RenderLineDiff(p.diffPaneParsedDiff, diffWidth, p.diffPaneScroll, contentHeight, p.diffPaneHorizScroll, highlighter)
+		diffContent = RenderLineDiff(p.diffPaneParsedDiff, diffWidth, p.diffPaneScroll, contentHeight, p.diffPaneHorizScroll, highlighter, p.diffWrapEnabled)
 	}
-	// Force truncate each line to prevent wrapping
-	lines := strings.Split(diffContent, "\n")
-	for i, line := range lines {
-		if lipgloss.Width(line) > diffWidth {
-			// Truncate the line to fit
-			lines[i] = truncateStyledLine(line, diffWidth-3) + "..."
+	// Force truncate each line to prevent wrapping (skip when wrap is enabled)
+	if !p.diffWrapEnabled {
+		lines := strings.Split(diffContent, "\n")
+		for i, line := range lines {
+			if lipgloss.Width(line) > diffWidth {
+				lines[i] = truncateStyledLine(line, diffWidth-3) + "..."
+			}
 		}
+		diffContent = strings.Join(lines, "\n")
 	}
-	sb.WriteString(strings.Join(lines, "\n"))
+	sb.WriteString(diffContent)
 
 	return sb.String()
 }
