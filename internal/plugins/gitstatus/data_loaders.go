@@ -143,11 +143,12 @@ func (p *Plugin) loadFullFolderDiff(entry *FileEntry) tea.Cmd {
 }
 
 // loadCommitFileDiff loads diff for a file in a commit.
-func (p *Plugin) loadCommitFileDiff(hash, path string) tea.Cmd {
+// parentHash should be the first parent hash for merge commits, or "" for regular commits.
+func (p *Plugin) loadCommitFileDiff(hash, path, parentHash string) tea.Cmd {
 	epoch := p.ctx.Epoch
 	workDir := p.repoRoot
 	return func() tea.Msg {
-		rawDiff, err := GetCommitDiff(workDir, hash, path)
+		rawDiff, err := GetCommitDiff(workDir, hash, path, parentHash)
 		if err != nil {
 			return ErrorMsg{Err: err}
 		}

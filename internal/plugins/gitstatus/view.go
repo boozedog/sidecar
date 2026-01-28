@@ -207,8 +207,10 @@ func (p *Plugin) renderDiffModal() string {
 	sb.WriteString("\n")
 
 	// Content
-	if p.diffContent == "" {
+	if p.diffContent == "" && !p.diffLoaded {
 		sb.WriteString(styles.Muted.Render("Loading diff..."))
+	} else if p.diffContent == "" && p.diffLoaded {
+		sb.WriteString(styles.Muted.Render("No changes"))
 	} else {
 		// Visible lines = pane height - header (2 lines)
 		visibleLines := paneHeight - 2
@@ -351,7 +353,11 @@ func (p *Plugin) renderFullDiffContent(visibleHeight int) string {
 	sb.WriteString("\n\n")
 
 	if p.diffContent == "" && p.diffRaw == "" {
-		sb.WriteString(styles.Muted.Render("Loading diff..."))
+		if p.diffLoaded {
+			sb.WriteString(styles.Muted.Render("No changes"))
+		} else {
+			sb.WriteString(styles.Muted.Render("Loading diff..."))
+		}
 		return sb.String()
 	}
 

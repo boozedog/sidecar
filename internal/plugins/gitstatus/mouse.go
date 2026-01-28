@@ -167,6 +167,7 @@ func (p *Plugin) handleMouseDoubleClick(action mouse.MouseAction) (*Plugin, tea.
 				p.diffFile = entry.Path
 				p.diffCommit = ""
 				p.diffScroll = 0
+				p.diffLoaded = false
 				if entry.IsFolder {
 					return p, p.loadFullFolderDiff(entry)
 				}
@@ -185,7 +186,12 @@ func (p *Plugin) handleMouseDoubleClick(action mouse.MouseAction) (*Plugin, tea.
 				p.diffFile = file.Path
 				p.diffCommit = p.previewCommit.Hash
 				p.diffScroll = 0
-				return p, p.loadCommitFileDiff(p.previewCommit.Hash, file.Path)
+				p.diffLoaded = false
+				parentHash := ""
+				if p.previewCommit.IsMerge && len(p.previewCommit.ParentHashes) > 0 {
+					parentHash = p.previewCommit.ParentHashes[0]
+				}
+				return p, p.loadCommitFileDiff(p.previewCommit.Hash, file.Path, parentHash)
 			}
 		}
 		return p, nil
@@ -494,6 +500,7 @@ func (p *Plugin) handleDiffMouse(msg tea.MouseMsg) (*Plugin, tea.Cmd) {
 					p.diffContent = ""
 					p.diffRaw = ""
 					p.parsedDiff = nil
+					p.diffLoaded = false
 					p.viewMode = ViewModeStatus
 					return p, p.autoLoadCommitPreview()
 				}
@@ -506,6 +513,7 @@ func (p *Plugin) handleDiffMouse(msg tea.MouseMsg) (*Plugin, tea.Cmd) {
 					p.diffContent = ""
 					p.diffRaw = ""
 					p.parsedDiff = nil
+					p.diffLoaded = false
 					p.viewMode = ViewModeStatus
 					return p, p.autoLoadDiff()
 				}

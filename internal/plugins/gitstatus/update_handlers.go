@@ -185,6 +185,7 @@ func (p *Plugin) updateStatus(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 			p.diffFile = entry.Path
 			p.diffCommit = ""
 			p.diffScroll = 0
+			p.diffLoaded = false
 			if entry.IsFolder {
 				return p, p.loadFullFolderDiff(entry)
 			}
@@ -526,6 +527,7 @@ func (p *Plugin) updateStatusDiffPane(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 			p.diffFile = entry.Path
 			p.diffCommit = ""
 			p.diffScroll = 0
+			p.diffLoaded = false
 			return p, p.loadDiff(entry.Path, entry.Staged, entry.Status)
 		}
 	}
@@ -577,7 +579,12 @@ func (p *Plugin) updateCommitPreviewPane(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd
 			p.diffFile = file.Path
 			p.diffCommit = c.Hash
 			p.diffScroll = 0
-			return p, p.loadCommitFileDiff(c.Hash, file.Path)
+			p.diffLoaded = false
+			parentHash := ""
+			if c.IsMerge && len(c.ParentHashes) > 0 {
+				parentHash = c.ParentHashes[0]
+			}
+			return p, p.loadCommitFileDiff(c.Hash, file.Path, parentHash)
 		}
 
 	case "tab", "shift+tab":
@@ -621,6 +628,7 @@ func (p *Plugin) updateDiff(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
 		p.diffContent = ""
 		p.diffRaw = ""
 		p.parsedDiff = nil
+		p.diffLoaded = false
 		p.diffHorizOff = 0
 		p.diffCommit = ""
 		p.diffFile = ""

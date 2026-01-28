@@ -99,6 +99,7 @@ type Plugin struct {
 	diffHorizOff   int          // Horizontal scroll for side-by-side
 	parsedDiff     *ParsedDiff  // Parsed diff for enhanced rendering
 	diffReturnMode ViewMode     // View mode to return to on esc
+	diffLoaded     bool         // True once diff load completes (distinguishes loading vs empty)
 
 	// Push status state
 	pushStatus              *PushStatus
@@ -403,6 +404,7 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		}
 		p.diffContent = msg.Content
 		p.diffRaw = msg.Raw
+		p.diffLoaded = true
 		// Always parse diff for built-in rendering (even if delta is available)
 		// This allows toggling between delta and built-in rendering at runtime
 		p.parsedDiff, _ = ParseUnifiedDiff(msg.Raw)

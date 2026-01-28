@@ -179,8 +179,15 @@ func GetCommitDetail(workDir, hash string) (*Commit, error) {
 }
 
 // GetCommitDiff returns the diff for a specific file in a commit.
-func GetCommitDiff(workDir, hash, path string) (string, error) {
-	args := []string{"show", hash, "--", path}
+// For merge commits, parentHash should be the first parent so we diff against
+// it instead of using git show's combined diff (which is empty for clean merges).
+func GetCommitDiff(workDir, hash, path string, parentHash string) (string, error) {
+	var args []string
+	if parentHash != "" {
+		args = []string{"diff", parentHash, hash, "--", path}
+	} else {
+		args = []string{"show", hash, "--", path}
+	}
 
 	cmd := exec.Command("git", args...)
 	cmd.Dir = workDir
