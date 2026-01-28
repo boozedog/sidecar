@@ -109,6 +109,60 @@ Without calling `ensureModal()` in the key handler, the first keypress after ope
 the modal will be dropped because the modal hasn't been created yet (View runs
 after Update in bubbletea).
 
+### Modal keyboard shortcuts and footer hints
+
+Modals need their own focus context, commands, and bindings to get footer hints. Without this, the footer shows the parent view's commands while the modal is open.
+
+**1. Return a dedicated context from `FocusContext()`:**
+```go
+func (p *Plugin) FocusContext() string {
+    switch p.viewMode {
+    case ViewModeError:
+        return "git-error"
+    case ViewModePushMenu:
+        return "git-push-menu"
+    default:
+        return "git-status"
+    }
+}
+```
+
+**2. Add commands for the modal context in `Commands()`:**
+```go
+{ID: "dismiss", Name: "Dismiss", Context: "git-error", Priority: 1},
+{ID: "yank-error", Name: "Yank", Context: "git-error", Priority: 2},
+```
+
+**3. Add bindings in `bindings.go`:**
+```go
+{Key: "y", Command: "yank-error", Context: "git-error"},
+{Key: "esc", Command: "dismiss", Context: "git-error"},
+```
+
+**4. Intercept custom keys before `modal.HandleKey`:**
+
+The modal library handles Tab, Enter, and Esc internally. To add shortcuts like yank, intercept them before delegating:
+```go
+func (p *Plugin) updateMyModal(msg tea.KeyMsg) (plugin.Plugin, tea.Cmd) {
+    p.ensureMyModal()
+    if p.myModal == nil {
+        return p, nil
+    }
+    // Custom shortcuts first
+    if msg.String() == "y" {
+        return p, p.yankToClipboard()
+    }
+    // Then delegate to modal
+    action, cmd := p.myModal.HandleKey(msg)
+    if action == "dismiss" || action == "cancel" {
+        return p.dismissModal()
+    }
+    return p, cmd
+}
+```
+
+The footer automatically renders hints for the active context. No manual footer rendering needed.
+
 ### Modal notes
 - `HandleKey` and `HandleMouse` already handle Tab, Shift+Tab, Enter, and Esc.
 - Backdrop clicks return "cancel" by default; use `WithCloseOnBackdropClick(false)` to disable.
@@ -230,6 +284,27 @@ func (p *Plugin) FocusContext() string {
 {Key: "s", Command: "stage-file", Context: "git-status"},
 ```
 
+### Multiple contexts (view modes)
+
+When your plugin has different modes (status view, diff view, modals), return different context strings from `FocusContext()`. Each context gets its own set of footer hints and key bindings.
+
+```go
+func (p *Plugin) FocusContext() string {
+    switch p.viewMode {
+    case ViewModeDiff:
+        return "git-diff"
+    case ViewModeCommit:
+        return "git-commit"
+    case ViewModeError:
+        return "git-error"
+    default:
+        return "git-status"
+    }
+}
+```
+
+Define commands for each context separately in `Commands()`. The footer only shows commands matching the active context.
+
 ### Bindings vs handlers
 - Most bindings exist to show footer hints and are handled in the plugin Update().
 - Some commands are intercepted at the app level (quit, next plugin, palette, diagnostics, switch project, refresh).
@@ -241,6 +316,19 @@ func (p *Plugin) FocusContext() string {
 - Keep command names short (one word when possible) to avoid footer truncation.
 - Plugins must not render their own footer or hint line in View.
 - Match established patterns: Tab and Shift+Tab to switch panes, backslash to toggle sidebar, Esc to close modals, q to quit or go back depending on context.
+
+### Footer rendering flow
+```
+footerHints()
+    ├── pluginFooterHints(activePlugin, context)
+    │   └── Commands() filtered by FocusContext(), sorted by Priority
+    └── globalFooterHints()
+        └── App-level hints (plugins, help, quit)
+
+renderHintLineTruncated(hints, availableWidth)
+    └── Renders left-to-right until width exceeded
+        (plugin hints first, then global)
+```
 
 ### Priority guidelines
 - **1**: Primary actions (Stage, Commit, Open)

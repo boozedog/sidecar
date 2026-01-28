@@ -40,6 +40,7 @@ const (
 	ViewModeBranchPicker                    // Branch selection modal
 	ViewModeConfirmStashPop                 // Confirm stash pop modal
 	ViewModePullConflict                    // Pull conflict resolution modal
+	ViewModeError                           // Generic error modal for git operation failures
 )
 
 // FocusPane represents which pane is active in the three-pane view.
@@ -144,6 +145,13 @@ type Plugin struct {
 	// Mouse support
 	mouseHandler *mouse.Handler
 
+	// Error modal state
+	errorModal       *modal.Modal
+	errorModalWidth  int
+	errorModalHeight int
+	errorTitle       string // e.g. "Push Failed", "Fetch Failed"
+	errorDetail      string // full git command output
+
 	// Discard confirm state
 	discardFile       *FileEntry   // File being confirmed for discard
 	discardReturnMode ViewMode     // Mode to return to when modal closes
@@ -198,6 +206,12 @@ type Plugin struct {
 func (p *Plugin) clearPullConflictModal() {
 	p.pullConflictModal = nil
 	p.pullConflictWidth = 0
+}
+
+func (p *Plugin) clearErrorModal() {
+	p.errorModal = nil
+	p.errorModalWidth = 0
+	p.errorModalHeight = 0
 }
 
 // New creates a new git status plugin.
@@ -320,6 +334,8 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			return p.updateConfirmStashPop(msg)
 		case ViewModeBranchPicker:
 			return p.updateBranchPicker(msg)
+		case ViewModeError:
+			return p.updateErrorModal(msg)
 		}
 
 	case tea.MouseMsg:
@@ -341,6 +357,8 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			return p.handlePullConflictMouse(msg)
 		case ViewModeConfirmDiscard:
 			return p.handleDiscardMouse(msg)
+		case ViewModeError:
+			return p.handleErrorModalMouse(msg)
 		}
 
 	case app.RefreshMsg:
@@ -567,7 +585,7 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		p.pushInProgress = false
 		p.pushError = msg.Err.Error()
 		p.pushPreservedCommitHash = "" // Clear stale hash on error
-		// Reload recent commits to update push status in case of partial push
+		p.showErrorModal("Push Failed", msg.Err)
 		return p, p.loadRecentCommits()
 
 	case PushSuccessClearMsg:
@@ -619,7 +637,7 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		return p, tea.Batch(p.refresh(), p.loadRecentCommits())
 
 	case BranchErrorMsg:
-		// TODO: Show error in UI
+		p.showErrorModal("Branch Error", msg.Err)
 		return p, nil
 
 	case FetchSuccessMsg:
@@ -632,6 +650,7 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 	case FetchErrorMsg:
 		p.fetchInProgress = false
 		p.fetchError = msg.Err.Error()
+		p.showErrorModal("Fetch Failed", msg.Err)
 		return p, nil
 
 	case PullSuccessMsg:
@@ -657,6 +676,11 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			}
 		}
 		p.pullError = msg.Err.Error()
+		p.showErrorModal("Pull Failed", msg.Err)
+		return p, nil
+
+	case StashErrorMsg:
+		p.showErrorModal("Stash Failed", msg.Err)
 		return p, nil
 
 	case PullAbortedMsg:
@@ -741,6 +765,8 @@ func (p *Plugin) View(width, height int) string {
 		content = p.renderConfirmStashPop()
 	case ViewModeBranchPicker:
 		content = p.renderBranchPicker()
+	case ViewModeError:
+		content = p.renderErrorModal()
 	default:
 		// Use three-pane layout for status view
 		content = p.renderThreePaneView()
@@ -838,6 +864,9 @@ func (p *Plugin) Commands() []plugin.Command {
 		// git-pull-conflict context
 		{ID: "abort-pull", Name: "Abort", Description: "Abort merge/rebase", Category: plugin.CategoryGit, Context: "git-pull-conflict", Priority: 1},
 		{ID: "dismiss", Name: "Dismiss", Description: "Dismiss and resolve manually", Category: plugin.CategoryNavigation, Context: "git-pull-conflict", Priority: 2},
+		// git-error context (error modal)
+		{ID: "dismiss", Name: "Dismiss", Description: "Dismiss error", Category: plugin.CategoryNavigation, Context: "git-error", Priority: 1},
+		{ID: "yank-error", Name: "Yank", Description: "Copy error to clipboard", Category: plugin.CategoryActions, Context: "git-error", Priority: 2},
 	}
 }
 
@@ -854,6 +883,8 @@ func (p *Plugin) FocusContext() string {
 		return "git-pull-menu"
 	case ViewModePullConflict:
 		return "git-pull-conflict"
+	case ViewModeError:
+		return "git-error"
 	default:
 		if p.activePane == PaneDiff {
 			// Commit preview pane has different context than file diff pane
