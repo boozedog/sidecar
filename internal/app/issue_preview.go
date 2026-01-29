@@ -7,6 +7,47 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// IssueSearchResult holds a single search result from td search.
+type IssueSearchResult struct {
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	Status   string `json:"status"`
+	Type     string `json:"type"`
+	Priority string `json:"priority"`
+}
+
+// tdSearchResultWrapper wraps td search JSON output: {"Issue": {...}, "Score": N}.
+type tdSearchResultWrapper struct {
+	Issue IssueSearchResult `json:"Issue"`
+	Score int               `json:"Score"`
+}
+
+// IssueSearchResultMsg carries search results back to the app.
+type IssueSearchResultMsg struct {
+	Query   string
+	Results []IssueSearchResult
+	Error   error
+}
+
+// issueSearchCmd runs `td search <query> --json -n 10` asynchronously.
+func issueSearchCmd(query string) tea.Cmd {
+	return func() tea.Msg {
+		out, err := exec.Command("td", "search", query, "--json", "-n", "10").Output()
+		if err != nil {
+			return IssueSearchResultMsg{Query: query, Error: err}
+		}
+		var wrappers []tdSearchResultWrapper
+		if err := json.Unmarshal(out, &wrappers); err != nil {
+			return IssueSearchResultMsg{Query: query, Error: err}
+		}
+		results := make([]IssueSearchResult, len(wrappers))
+		for i, w := range wrappers {
+			results[i] = w.Issue
+		}
+		return IssueSearchResultMsg{Query: query, Results: results}
+	}
+}
+
 // IssuePreviewData holds lightweight issue data fetched via CLI.
 type IssuePreviewData struct {
 	ID          string   `json:"id"`

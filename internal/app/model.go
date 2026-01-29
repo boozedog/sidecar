@@ -176,6 +176,12 @@ type Model struct {
 	issueInputModalWidth   int
 	issueInputMouseHandler *mouse.Handler
 
+	// Issue input auto-complete
+	issueSearchResults []IssueSearchResult
+	issueSearchQuery   string // last query sent to td search
+	issueSearchLoading bool
+	issueSearchCursor  int // selected result index (-1 = none/input focused)
+
 	// Issue preview - preview phase
 	showIssuePreview         bool
 	issuePreviewData         *IssuePreviewData
@@ -1031,14 +1037,18 @@ func (m *Model) clearThemeSwitcherModal() {
 // initIssueInput initializes the issue input modal.
 func (m *Model) initIssueInput() {
 	ti := textinput.New()
-	ti.Placeholder = "Issue ID (e.g. td-001)"
+	ti.Placeholder = "Issue ID or search text"
 	ti.Focus()
 	ti.CharLimit = 50
-	ti.Width = 40
+	ti.Width = 50
 	m.issueInputInput = ti
 	m.issueInputModal = nil
 	m.issueInputModalWidth = 0
-	m.issueInputMouseHandler = nil
+	m.issueInputMouseHandler = mouse.NewHandler()
+	m.issueSearchResults = nil
+	m.issueSearchQuery = ""
+	m.issueSearchLoading = false
+	m.issueSearchCursor = -1
 }
 
 // resetIssueInput resets the issue input modal state.
@@ -1047,6 +1057,10 @@ func (m *Model) resetIssueInput() {
 	m.issueInputModal = nil
 	m.issueInputModalWidth = 0
 	m.issueInputMouseHandler = nil
+	m.issueSearchResults = nil
+	m.issueSearchQuery = ""
+	m.issueSearchLoading = false
+	m.issueSearchCursor = -1
 }
 
 // resetIssuePreview resets the issue preview modal state.

@@ -23,7 +23,7 @@ func (m *Model) renderIssueInputOverlay(content string) string {
 }
 
 func (m *Model) ensureIssueInputModal() {
-	modalW := 50
+	modalW := 60
 	if modalW > m.width-4 {
 		modalW = m.width - 4
 	}
@@ -34,20 +34,60 @@ func (m *Model) ensureIssueInputModal() {
 		return
 	}
 	m.issueInputModalWidth = modalW
-	m.issueInputModal = modal.New("Open Issue",
+	b := modal.New("Open Issue",
 		modal.WithWidth(modalW),
 		modal.WithHints(false),
 	).
-		AddSection(modal.Input("issue-id", &m.issueInputInput)).
-		AddSection(modal.Custom(func(contentWidth int, focusID, hoverID string) modal.RenderedSection {
-			var b strings.Builder
-			b.WriteString("\n")
-			b.WriteString(styles.KeyHint.Render("enter"))
-			b.WriteString(styles.Muted.Render(" open  "))
-			b.WriteString(styles.KeyHint.Render("esc"))
-			b.WriteString(styles.Muted.Render(" cancel"))
-			return modal.RenderedSection{Content: b.String()}
+		AddSection(modal.Input("issue-id", &m.issueInputInput))
+
+	// Show search results dropdown
+	if m.issueSearchLoading {
+		b = b.AddSection(modal.Text(styles.Muted.Render("Searching...")))
+	} else if len(m.issueSearchResults) > 0 {
+		searchResults := m.issueSearchResults
+		searchCursor := m.issueSearchCursor
+		b = b.AddSection(modal.Custom(func(contentWidth int, focusID, hoverID string) modal.RenderedSection {
+			var sb strings.Builder
+			for i, r := range searchResults {
+				if i >= 10 {
+					break
+				}
+				line := fmt.Sprintf("  %s  %s", r.ID, r.Title)
+				if len(line) > contentWidth-2 {
+					line = line[:contentWidth-5] + "..."
+				}
+				if i == searchCursor {
+					sb.WriteString(styles.ListItemSelected.Render(line))
+				} else {
+					sb.WriteString(styles.ListItemNormal.Render(line))
+				}
+				if i < len(searchResults)-1 && i < 9 {
+					sb.WriteString("\n")
+				}
+			}
+			return modal.RenderedSection{Content: sb.String()}
 		}, nil))
+	}
+
+	// Hint line
+	hasResults := len(m.issueSearchResults) > 0
+	b = b.AddSection(modal.Custom(func(contentWidth int, focusID, hoverID string) modal.RenderedSection {
+		var sb strings.Builder
+		sb.WriteString("\n")
+		sb.WriteString(styles.KeyHint.Render("enter"))
+		sb.WriteString(styles.Muted.Render(" open  "))
+		if hasResults {
+			sb.WriteString(styles.KeyHint.Render("↑↓"))
+			sb.WriteString(styles.Muted.Render(" select  "))
+			sb.WriteString(styles.KeyHint.Render("tab"))
+			sb.WriteString(styles.Muted.Render(" fill  "))
+		}
+		sb.WriteString(styles.KeyHint.Render("esc"))
+		sb.WriteString(styles.Muted.Render(" cancel"))
+		return modal.RenderedSection{Content: sb.String()}
+	}, nil))
+
+	m.issueInputModal = b
 }
 
 func (m *Model) renderIssuePreviewOverlay(content string) string {

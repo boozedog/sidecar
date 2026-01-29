@@ -378,6 +378,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.issuePreviewModal = nil
 		m.issuePreviewModalWidth = 0
 		return m, nil
+
+	case IssueSearchResultMsg:
+		// Discard stale results
+		if msg.Query != m.issueSearchQuery || !m.showIssueInput {
+			return m, nil
+		}
+		m.issueSearchLoading = false
+		if msg.Error == nil {
+			m.issueSearchResults = msg.Results
+		}
+		m.issueInputModal = nil
+		m.issueInputModalWidth = 0
+		return m, nil
 	}
 
 	// Forward other messages to ALL plugins (not just active)
@@ -976,7 +989,12 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.showIssueInput {
 		switch msg.Type {
 		case tea.KeyEnter:
-			issueID := strings.TrimSpace(m.issueInputInput.Value())
+			var issueID string
+			if m.issueSearchCursor >= 0 && m.issueSearchCursor < len(m.issueSearchResults) {
+				issueID = m.issueSearchResults[m.issueSearchCursor].ID
+			} else {
+				issueID = strings.TrimSpace(m.issueInputInput.Value())
+			}
 			if issueID != "" {
 				m.resetIssueInput()
 				// Check if active plugin is TD monitor — go directly to rich modal
@@ -993,9 +1011,38 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.issuePreviewError = nil
 				m.issuePreviewModal = nil
 				m.issuePreviewModalWidth = 0
+				m.issuePreviewMouseHandler = mouse.NewHandler()
 				return m, fetchIssuePreviewCmd(issueID)
 			}
 			return m, nil
+		case tea.KeyUp:
+			if len(m.issueSearchResults) > 0 {
+				m.issueSearchCursor--
+				if m.issueSearchCursor < -1 {
+					m.issueSearchCursor = -1
+				}
+				m.issueInputModal = nil
+				m.issueInputModalWidth = 0
+				return m, nil
+			}
+		case tea.KeyDown:
+			if len(m.issueSearchResults) > 0 {
+				m.issueSearchCursor++
+				if m.issueSearchCursor >= len(m.issueSearchResults) {
+					m.issueSearchCursor = len(m.issueSearchResults) - 1
+				}
+				m.issueInputModal = nil
+				m.issueInputModalWidth = 0
+				return m, nil
+			}
+		case tea.KeyTab:
+			if m.issueSearchCursor >= 0 && m.issueSearchCursor < len(m.issueSearchResults) {
+				m.issueInputInput.SetValue(m.issueSearchResults[m.issueSearchCursor].ID)
+				m.issueInputInput.CursorEnd()
+				m.issueInputModal = nil
+				m.issueInputModalWidth = 0
+				return m, nil
+			}
 		}
 
 		if isMouseEscapeSequence(msg) {
@@ -1003,13 +1050,25 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 		// Forward key to text input, then clear modal cache so it rebuilds
-		// in View() with a fresh pointer to this copy's issueInputInput.
-		// (The modal's inputSection stores a *textinput.Model; without clearing,
-		// the pointer becomes stale across bubbletea's value-copy Update cycles.)
 		var cmd tea.Cmd
 		m.issueInputInput, cmd = m.issueInputInput.Update(msg)
 		m.issueInputModal = nil
 		m.issueInputModalWidth = 0
+
+		// Trigger search if input changed (min 2 chars)
+		newValue := strings.TrimSpace(m.issueInputInput.Value())
+		if newValue != m.issueSearchQuery && len(newValue) >= 2 {
+			m.issueSearchQuery = newValue
+			m.issueSearchLoading = true
+			m.issueSearchResults = nil
+			m.issueSearchCursor = -1
+			return m, tea.Batch(cmd, issueSearchCmd(newValue))
+		}
+		if len(newValue) < 2 {
+			m.issueSearchResults = nil
+			m.issueSearchQuery = ""
+			m.issueSearchCursor = -1
+		}
 		return m, cmd
 	}
 
@@ -2079,6 +2138,10 @@ func (m *Model) handleIssueInputMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if m.issueInputMouseHandler == nil {
 		m.issueInputMouseHandler = mouse.NewHandler()
 	}
+	// Pre-render to sync hit regions and focusIDs on the (potentially rebuilt) modal.
+	// The issue input modal is nilled on every keystroke to fix a stale text-input
+	// pointer, so the modal object seen here may lack focusIDs from a prior Render.
+	m.issueInputModal.Render(m.width, m.height, m.issueInputMouseHandler)
 	action := m.issueInputModal.HandleMouse(msg, m.issueInputMouseHandler)
 	if action == "cancel" {
 		m.resetIssueInput()
@@ -2096,6 +2159,9 @@ func (m *Model) handleIssuePreviewMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if m.issuePreviewMouseHandler == nil {
 		m.issuePreviewMouseHandler = mouse.NewHandler()
 	}
+	// Pre-render to sync hit regions and focusIDs on the modal, which may have
+	// been rebuilt (e.g. after data/error arrival cleared the cache).
+	m.issuePreviewModal.Render(m.width, m.height, m.issuePreviewMouseHandler)
 	action := m.issuePreviewModal.HandleMouse(msg, m.issuePreviewMouseHandler)
 	switch action {
 	case "cancel":
