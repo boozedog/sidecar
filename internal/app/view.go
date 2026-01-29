@@ -123,7 +123,7 @@ func (m Model) renderQuitConfirmOverlay(content string) string {
 
 // ensureProjectSwitcherModal builds/rebuilds the project switcher modal.
 func (m *Model) ensureProjectSwitcherModal() {
-	modalW := 60
+	modalW := 72
 	if modalW > m.width-4 {
 		modalW = m.width - 4
 	}
@@ -242,7 +242,12 @@ func (m *Model) projectSwitcherListSection() modal.Section {
 				b.WriteString(styles.Muted.Render(" (current)"))
 			}
 			b.WriteString("\n")
-			b.WriteString(styles.Muted.Render("  " + project.Path))
+			pathDisplay := project.Path
+			maxPathLen := contentWidth - 4
+			if len(pathDisplay) > maxPathLen {
+				pathDisplay = "..." + pathDisplay[len(pathDisplay)-maxPathLen+3:]
+			}
+			b.WriteString(styles.Muted.Render("  " + pathDisplay))
 			if i < scrollOffset+visibleCount-1 && i < len(projects)-1 {
 				b.WriteString("\n")
 			}

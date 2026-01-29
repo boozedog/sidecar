@@ -42,11 +42,12 @@ func (m *Model) ensureThemeSwitcherModal() {
 		modal.WithWidth(modalW),
 		modal.WithHints(false),
 	).
+		AddSection(modal.When(m.themeSwitcherHasProject, m.themeSwitcherScopeSection())).
 		AddSection(modal.Input(themeSwitcherFilterID, &m.themeSwitcherInput, modal.WithSubmitOnEnter(false))).
 		AddSection(m.themeSwitcherCountSection()).
 		AddSection(modal.Spacer()).
 		AddSection(m.themeSwitcherListSection()).
-		AddSection(modal.When(m.themeSwitcherHasProject, m.themeSwitcherScopeSection())).
+		AddSection(modal.Spacer()).
 		AddSection(m.themeSwitcherHintsSection())
 }
 
@@ -244,21 +245,22 @@ func (m *Model) themeSwitcherScopeSection() modal.Section {
 	return modal.Custom(func(contentWidth int, focusID, hoverID string) modal.RenderedSection {
 		var sb strings.Builder
 
-		scopeGlobal := "Set globally"
-		scopeProject := "Set for this project"
+		activeStyle := lipgloss.NewStyle().Foreground(styles.Primary).Bold(true)
+
+		scopeGlobal := "Global"
+		scopeProject := "This project"
 		if m.themeSwitcherScope == "project" {
-			sb.WriteString(styles.Muted.Render("  scope: "))
 			sb.WriteString(styles.Muted.Render(scopeGlobal))
-			sb.WriteString(styles.Muted.Render(" | "))
-			sb.WriteString(lipgloss.NewStyle().Foreground(styles.Primary).Bold(true).Render(scopeProject))
+			sb.WriteString(styles.Muted.Render("  "))
+			sb.WriteString(activeStyle.Render(scopeProject))
 		} else {
-			sb.WriteString(styles.Muted.Render("  scope: "))
-			sb.WriteString(lipgloss.NewStyle().Foreground(styles.Primary).Bold(true).Render(scopeGlobal))
-			sb.WriteString(styles.Muted.Render(" | "))
+			sb.WriteString(activeStyle.Render(scopeGlobal))
+			sb.WriteString(styles.Muted.Render("  "))
 			sb.WriteString(styles.Muted.Render(scopeProject))
 		}
-		sb.WriteString("\n")
-		sb.WriteString(styles.Subtle.Render("  (projects with own themes unaffected)"))
+		sb.WriteString(styles.Muted.Render("    "))
+		sb.WriteString(styles.KeyHint.Render("←/→"))
+		sb.WriteString(styles.Muted.Render(" switch"))
 
 		return modal.RenderedSection{Content: sb.String()}
 	}, nil)
@@ -281,10 +283,6 @@ func (m *Model) themeSwitcherHintsSection() modal.Section {
 			sb.WriteString(styles.Muted.Render(" navigate  "))
 			sb.WriteString(styles.KeyHint.Render("tab"))
 			sb.WriteString(styles.Muted.Render(" community  "))
-			if m.currentProjectConfig() != nil {
-				sb.WriteString(styles.KeyHint.Render("←/→"))
-				sb.WriteString(styles.Muted.Render(" scope  "))
-			}
 			sb.WriteString(styles.KeyHint.Render("esc"))
 			sb.WriteString(styles.Muted.Render(" cancel"))
 		}

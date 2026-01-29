@@ -1137,7 +1137,11 @@ func (m *Model) initThemeSwitcher() {
 	m.themeSwitcherSelectedIdx = 0
 	m.themeSwitcherOriginal = styles.GetCurrentThemeName()
 	m.themeSwitcherCommunityName = ""
-	m.themeSwitcherScope = "global" // default scope
+	if m.currentProjectConfig() != nil {
+		m.themeSwitcherScope = "project"
+	} else {
+		m.themeSwitcherScope = "global"
+	}
 	m.clearThemeSwitcherModal()
 
 	if freshCfg, err := config.Load(); err == nil {
