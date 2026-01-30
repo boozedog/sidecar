@@ -18,12 +18,12 @@ Sidecar puts your entire development workflow in one shell: plan tasks with [td]
 curl -fsSL https://raw.githubusercontent.com/marcus/sidecar/main/scripts/setup.sh | bash
 ```
 
-Or see [Getting Started](docs/getting-started.md) for manual installation.
+**Also available via:** `brew install marcus/tap/sidecar` · [Binary downloads](https://github.com/marcus/sidecar/releases) · [Manual install](docs/getting-started.md)
 
 ## Requirements
 
-- Go 1.21+
 - macOS, Linux, or WSL
+- Go 1.21+ (only if building from source)
 
 ## Quick Start
 

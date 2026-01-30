@@ -10,6 +10,8 @@ Guide for creating new sidecar releases.
 - GitHub CLI authenticated (`gh auth status`)
 - **No `replace` directives in go.mod** (`grep replace go.mod` should be empty)
 - **Beware of go.work**: A parent `go.work` file can silently use local dependencies instead of published versions. Always use `GOWORK=off` when updating dependencies and testing builds.
+- **GoReleaser configured** (`.goreleaser.yml` in repo root)
+- **`HOMEBREW_TAP_TOKEN` secret** exists in GitHub repo settings (used by GoReleaser to update the Homebrew tap)
 
 ## Release Process
 
@@ -85,35 +87,28 @@ git tag vX.Y.Z -m "Brief description of release"
 git push origin main && git push origin vX.Y.Z
 ```
 
-### 8. Create GitHub Release
+### 8. GitHub Release (Automated)
 
-```bash
-gh release create vX.Y.Z --title "vX.Y.Z" --notes "$(cat <<'EOF'
-## What's New
-
-### Feature Name
-- Description of feature
-
-### Bug Fixes
-- Fix description
-
-EOF
-)"
-```
-
-Or create interactively:
-```bash
-gh release create vX.Y.Z --title "vX.Y.Z" --notes ""
-# Then edit on GitHub
-```
+Push the tag (step 7). GitHub Actions will run GoReleaser automatically, which:
+- Creates the GitHub Release with changelog
+- Builds and attaches binaries for darwin/linux (amd64/arm64)
+- Generates checksums
+- Updates the Homebrew tap (`marcus/tap/sidecar`)
 
 ### 9. Verify
 
 ```bash
-# Check release exists
+# Check that GitHub Actions workflow succeeded
+gh run list --workflow=release.yml --limit=1
+
+# Check release exists with binaries attached
 gh release view vX.Y.Z
 
-# Test that users can install (critical!)
+# Test Homebrew install
+brew install marcus/tap/sidecar
+sidecar --version
+
+# Test that users can install from source (critical!)
 GOWORK=off go install github.com/marcus/sidecar/cmd/sidecar@vX.Y.Z
 
 # Verify binary shows correct version
@@ -166,6 +161,20 @@ If a release was published with bugs:
    ```
 4. Keep the git tag to preserve history
 
+If the GitHub Actions GoReleaser workflow fails, you can re-run it manually (requires goreleaser installed locally):
+```bash
+goreleaser release --clean
+```
+
+## Install Methods
+
+Users can install sidecar in several ways:
+
+1. **Setup script**: `curl -fsSL https://raw.githubusercontent.com/marcus/sidecar/main/setup.sh | bash`
+2. **Homebrew**: `brew install marcus/tap/sidecar`
+3. **Download binary**: grab the appropriate binary from the [GitHub Releases](https://github.com/marcus/sidecar/releases) page
+4. **From source**: `go install github.com/marcus/sidecar/cmd/sidecar@latest`
+
 ## Checklist
 
 - [ ] Tests pass
@@ -176,6 +185,8 @@ If a release was published with bugs:
 - [ ] **CHANGELOG.md updated** with new version entry
 - [ ] Version number follows semver
 - [ ] Tag created and pushed
-- [ ] GitHub release created with notes
+- [ ] **GitHub Actions workflow completed** successfully
+- [ ] **Binaries attached** to the GitHub release
+- [ ] **Homebrew tap updated** (`brew install marcus/tap/sidecar` installs new version)
 - [ ] **Installation verified** (`GOWORK=off go install ...@vX.Y.Z`)
 - [ ] Update notification verified

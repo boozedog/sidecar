@@ -6,6 +6,12 @@
 curl -fsSL https://raw.githubusercontent.com/marcus/sidecar/main/scripts/setup.sh | bash
 ```
 
+Or install via Homebrew:
+
+```bash
+brew install marcus/tap/sidecar
+```
+
 The script will ask what you want to install:
 - **Both td and sidecar** (recommended) - td provides task management for AI workflows
 - **sidecar only** - works standalone without td
@@ -14,6 +20,7 @@ The script will ask what you want to install:
 
 - macOS, Linux, or Windows (WSL)
 - Terminal access
+- Go 1.21+ (only if building from source — Homebrew and binary installs don't require Go)
 
 ## What the Setup Script Does
 
@@ -45,6 +52,14 @@ curl -fsSL https://raw.githubusercontent.com/marcus/sidecar/main/scripts/setup.s
 # Force reinstall even if up-to-date
 curl -fsSL https://raw.githubusercontent.com/marcus/sidecar/main/scripts/setup.sh | bash -s -- --yes --force
 ```
+
+## Binary Download
+
+Download pre-built binaries directly from [GitHub Releases](https://github.com/marcus/sidecar/releases). Available for macOS and Linux (amd64 and arm64).
+
+1. Download the archive for your platform
+2. Extract: `tar -xzf sidecar_*.tar.gz`
+3. Move to PATH: `mv sidecar /usr/local/bin/` (or `~/go/bin/`)
 
 ## Manual Installation
 

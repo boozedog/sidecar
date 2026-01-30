@@ -2397,3 +2397,118 @@ html[data-theme='dark'] .table-of-contents__link:hover {
   margin: 0;
   line-height: 1.5;
 }
+
+/* Install methods link */
+.sc-installMethodsLink {
+  background: none;
+  border: none;
+  color: var(--ifm-font-color-secondary);
+  font-size: 13px;
+  font-family: var(--ifm-font-family-monospace);
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s;
+}
+
+.sc-installMethodsLink:hover {
+  color: var(--ifm-color-primary);
+}
+
+/* Install methods modal */
+.sc-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.sc-modal {
+  background: var(--ifm-background-color, #1a1d23);
+  border: 1px solid var(--sc-border, rgba(255, 255, 255, 0.1));
+  border-radius: 16px;
+  max-width: 640px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.sc-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px 0;
+}
+
+.sc-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.sc-modal-close {
+  background: none;
+  border: none;
+  color: var(--ifm-font-color-secondary);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.sc-modal-close:hover {
+  color: var(--ifm-font-color-base);
+}
+
+.sc-modal-body {
+  padding: 20px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sc-install-method h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-family: var(--ifm-font-family-monospace);
+  color: var(--ifm-color-primary);
+}
+
+.sc-install-method .sc-installBlock {
+  margin: 0;
+}
+
+.sc-install-desc {
+  font-size: 14px;
+  margin: 0;
+  color: var(--ifm-font-color-secondary);
+}
+
+.sc-install-desc a {
+  color: var(--ifm-color-primary);
+}
+
+/* Bottom CTA alt text */
+.sc-bottomCtaAlt {
+  font-size: 13px;
+  color: var(--ifm-font-color-secondary);
+  margin-top: 16px;
+}
+
+.sc-installMethodsInline {
+  background: none;
+  border: none;
+  color: var(--ifm-color-primary);
+  font-size: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.sc-installMethodsInline:hover {
+  color: var(--ifm-color-primary-light);
+}

@@ -100,6 +100,24 @@ detect_platform() {
 
 PLATFORM=$(detect_platform)
 
+detect_arch() {
+    case "$(uname -m)" in
+        x86_64|amd64) echo "amd64" ;;
+        aarch64|arm64) echo "arm64" ;;
+        *) echo "unsupported" ;;
+    esac
+}
+
+ARCH=$(detect_arch)
+
+detect_os() {
+    case "$(uname -s)" in
+        Darwin) echo "darwin" ;;
+        Linux) echo "linux" ;;
+        *) echo "" ;;
+    esac
+}
+
 if [[ "$PLATFORM" == "unsupported" ]]; then
     echo -e "${RED}Unsupported platform. This script supports macOS, Linux, and WSL.${NC}"
     exit 1
@@ -377,6 +395,61 @@ get_go_bin() {
     fi
 }
 
+# Try to install a pre-built binary from GitHub Releases
+# Returns 0 on success, 1 on failure (caller should fall back to go install)
+install_binary() {
+    local repo="$1"
+    local binary_name="$2"
+    local version="$3"
+    local os arch
+
+    os=$(detect_os)
+    arch=$(detect_arch)
+
+    if [[ -z "$os" || "$arch" == "unsupported" ]]; then
+        return 1
+    fi
+
+    # Strip 'v' prefix for archive name
+    local ver="${version#v}"
+    local archive_name="${binary_name}_${ver}_${os}_${arch}.tar.gz"
+    local url="https://github.com/${repo}/releases/download/${version}/${archive_name}"
+
+    local tmpdir
+    tmpdir=$(mktemp -d)
+    trap "rm -rf '$tmpdir'" RETURN
+
+    # Download archive
+    if ! curl -fsSL "$url" -o "$tmpdir/$archive_name" 2>/dev/null; then
+        return 1
+    fi
+
+    # Extract
+    if ! tar -xzf "$tmpdir/$archive_name" -C "$tmpdir" 2>/dev/null; then
+        return 1
+    fi
+
+    # Find the binary
+    if [[ ! -f "$tmpdir/$binary_name" ]]; then
+        return 1
+    fi
+
+    # Determine install location
+    local install_dir=""
+    if [[ -d "/usr/local/bin" ]] && [[ -w "/usr/local/bin" ]]; then
+        install_dir="/usr/local/bin"
+    elif command -v go &> /dev/null; then
+        install_dir=$(get_go_bin)
+    else
+        install_dir="$HOME/.local/bin"
+        mkdir -p "$install_dir"
+    fi
+
+    cp "$tmpdir/$binary_name" "$install_dir/$binary_name"
+    chmod +x "$install_dir/$binary_name"
+    return 0
+}
+
 # Main installation flow
 main() {
     # Try to get gum for better UI
@@ -412,7 +485,7 @@ main() {
             style_warning "  Go:      ! $GO_VERSION (need 1.21+)"
         fi
     else
-        style_error "  Go:      ✗ not installed"
+        echo "  Go:      - not installed (optional with binary install)"
     fi
 
     # td status
@@ -474,90 +547,58 @@ main() {
         install_sidecar=true
     fi
 
-    # Check Go
-    if [[ -z "$GO_VERSION" ]]; then
-        echo ""
-        style_warning "Go is required but not installed."
-        echo ""
+    # Check Go (only required if binary download unavailable)
+    local has_go=false
+    if [[ -n "$GO_VERSION" ]] && version_gte "$GO_VERSION" "1.21"; then
+        has_go=true
+    fi
 
-        # Detect available package manager
-        local go_install_cmd=""
-        if command -v brew &> /dev/null; then
-            go_install_cmd="brew install go"
-        elif command -v nix-env &> /dev/null; then
-            go_install_cmd="nix-env -iA nixpkgs.go"
-        elif command -v apt &> /dev/null; then
-            go_install_cmd="sudo apt update && sudo apt install -y golang"
-        elif command -v dnf &> /dev/null; then
-            go_install_cmd="sudo dnf install -y golang"
-        elif command -v pacman &> /dev/null; then
-            go_install_cmd="sudo pacman -S --noconfirm go"
-        fi
-
-        if [[ -n "$go_install_cmd" ]]; then
-            echo "Will run:"
-            echo "  $go_install_cmd"
-            echo ""
-            if confirm "Run this command?"; then
-                spin "Installing Go..." bash -c "$go_install_cmd"
-                GO_VERSION=$(get_go_version)
-            else
-                echo ""
-                echo "Please install Go manually and run this script again."
-                exit 1
-            fi
-        else
-            echo "Please install Go 1.21+ and run this script again."
-            echo "  macOS:         brew install go"
-            echo "  Nix:           nix-env -iA nixpkgs.go"
-            echo "  Ubuntu/Debian: sudo apt install golang"
-            echo "  Fedora/RHEL:   sudo dnf install golang"
-            echo "  Arch:          sudo pacman -S go"
-            echo "  Other:         https://go.dev/dl/"
-            exit 1
-        fi
-    elif ! version_gte "$GO_VERSION" "1.21"; then
-        style_error "Go $GO_VERSION is too old. Please upgrade to Go 1.21 or newer."
+    if ! $has_go && [[ "$ARCH" == "unsupported" ]]; then
+        echo ""
+        style_error "No pre-built binary for your architecture and Go is not installed."
+        echo "Please install Go 1.21+ and run this script again."
         exit 1
     fi
 
-    # Check PATH
-    local go_bin
-    go_bin=$(get_go_bin)
+    if $has_go; then
+        # Ensure go/bin is in PATH
+        local go_bin
+        go_bin=$(get_go_bin)
 
-    if ! check_go_path; then
-        echo ""
-        style_warning "$go_bin is not in your PATH"
-        echo ""
-
-        local shell_rc
-        shell_rc=$(get_shell_rc)
-
-        local path_cmd
-        local source_cmd
-        if is_fish_shell; then
-            path_cmd="fish_add_path -gm $go_bin"
-            source_cmd="source $shell_rc"
-        else
-            path_cmd="export PATH=\"$go_bin:\$PATH\""
-            source_cmd="source $shell_rc"
-        fi
-
-        echo "Will add to $shell_rc:"
-        echo "  $path_cmd"
-        echo ""
-
-        if confirm "Add to PATH?"; then
-            echo "" >> "$shell_rc"
-            echo "$path_cmd" >> "$shell_rc"
-            export PATH="$go_bin:$PATH"
-            style_success "Added to $shell_rc"
+        if ! check_go_path; then
             echo ""
-            echo "Note: Run '$source_cmd' to apply in current shell."
-        else
+            style_warning "$go_bin is not in your PATH"
             echo ""
-            echo "Please add $go_bin to your PATH manually."
+
+            local shell_rc
+            shell_rc=$(get_shell_rc)
+
+            local path_cmd
+            local source_cmd
+            if is_fish_shell; then
+                path_cmd="fish_add_path -gm $go_bin"
+                source_cmd="source $shell_rc"
+            else
+                path_cmd="export PATH=\"$go_bin:\$PATH\""
+                source_cmd="source $shell_rc"
+            fi
+
+            echo "Will add to $shell_rc:"
             echo "  $path_cmd"
+            echo ""
+
+            if confirm "Add to PATH?"; then
+                echo "" >> "$shell_rc"
+                echo "$path_cmd" >> "$shell_rc"
+                export PATH="$go_bin:$PATH"
+                style_success "Added to $shell_rc"
+                echo ""
+                echo "Note: Run '$source_cmd' to apply in current shell."
+            else
+                echo ""
+                echo "Please add $go_bin to your PATH manually."
+                echo "  $path_cmd"
+            fi
         fi
     fi
 
@@ -633,15 +674,20 @@ main() {
         if [[ -z "$SIDECAR_VERSION" ]] || $FORCE_FLAG || [[ "$SIDECAR_VERSION" != "$LATEST_SIDECAR" ]]; then
             local sc_version="${LATEST_SIDECAR:-latest}"
 
-            echo "Will run:"
-            echo "  go install github.com/marcus/sidecar/cmd/sidecar@${sc_version}"
-            echo ""
-
-            if confirm "Install sidecar?"; then
-                echo "Installing sidecar (this may take a minute)..."
-                go install -ldflags "-X main.Version=${sc_version}" "github.com/marcus/sidecar/cmd/sidecar@${sc_version}"
-                SIDECAR_VERSION=$(get_sidecar_version)
-                style_success "sidecar installed: $SIDECAR_VERSION"
+            if confirm "Install sidecar ${sc_version}?"; then
+                echo "Installing sidecar..."
+                if [[ "$sc_version" != "latest" ]] && install_binary "marcus/sidecar" "sidecar" "$sc_version"; then
+                    SIDECAR_VERSION=$(get_sidecar_version)
+                    style_success "sidecar installed: $SIDECAR_VERSION"
+                elif command -v go &> /dev/null; then
+                    echo "Installing from source..."
+                    go install -ldflags "-X main.Version=${sc_version}" "github.com/marcus/sidecar/cmd/sidecar@${sc_version}"
+                    SIDECAR_VERSION=$(get_sidecar_version)
+                    style_success "sidecar installed: $SIDECAR_VERSION"
+                else
+                    style_error "Installation failed. Install Go or download from:"
+                    echo "  https://github.com/marcus/sidecar/releases"
+                fi
             fi
         else
             style_success "sidecar is up to date ($SIDECAR_VERSION)"

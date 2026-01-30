@@ -30,7 +30,24 @@ AI coding agents are powerful but opaque. When Claude Code or Cursor makes chang
 curl -fsSL https://raw.githubusercontent.com/marcus/sidecar/main/scripts/setup.sh | bash
 ```
 
-**Requirements:** macOS, Linux, or WSL. Go 1.21+ if building from source.
+**Requirements:** macOS, Linux, or WSL.
+
+<details>
+<summary>Alternative install methods</summary>
+
+**Homebrew:**
+```bash
+brew install marcus/tap/sidecar
+```
+
+**Binary download:** Grab a pre-built binary from [GitHub Releases](https://github.com/marcus/sidecar/releases).
+
+**From source** (requires Go 1.21+):
+```bash
+go install github.com/marcus/sidecar/cmd/sidecar@latest
+```
+
+</details>
 
 ## Quick Start
 
@@ -281,11 +298,10 @@ sidecar --version            # Print version and exit
 
 Sidecar checks for new versions on startup and shows a notification when updates are available. Press `!` to view the diagnostics modal with the update command.
 
-**Manual update:**
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/marcus/sidecar/main/scripts/setup.sh | bash
-```
+**Update methods:**
+- **Setup script:** `curl -fsSL https://raw.githubusercontent.com/marcus/sidecar/main/scripts/setup.sh | bash`
+- **Homebrew:** `brew upgrade sidecar`
+- **Binary:** Download the latest from [GitHub Releases](https://github.com/marcus/sidecar/releases)
 
 ## What's Next?
 

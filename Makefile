@@ -1,4 +1,4 @@
-.PHONY: build install install-dev test clean check-clean tag release
+.PHONY: build install install-dev test clean check-clean tag goreleaser-snapshot
 
 # Default target
 all: build
@@ -50,16 +50,7 @@ endif
 	fi
 	@echo "Creating tag $(VERSION)"
 	git tag -a $(VERSION) -m "Release $(VERSION)"
-	@echo "Tag $(VERSION) created. Run 'make release VERSION=$(VERSION)' to push."
-
-# Push tag to origin
-# Usage: make release VERSION=v0.1.0
-release:
-ifndef VERSION
-	$(error VERSION is required. Usage: make release VERSION=v0.1.0)
-endif
-	git push origin $(VERSION)
-	@echo "Released $(VERSION)"
+	@echo "Tag $(VERSION) created. Run 'git push origin $(VERSION)' to trigger the release."
 
 # Show version that would be used
 version:
@@ -73,9 +64,13 @@ fmt:
 lint:
 	golangci-lint run
 
-# Build for multiple platforms
+# Build for multiple platforms (local testing only — GoReleaser handles release builds)
 build-all:
 	GOOS=darwin GOARCH=amd64 go build -o bin/sidecar-darwin-amd64 ./cmd/sidecar
 	GOOS=darwin GOARCH=arm64 go build -o bin/sidecar-darwin-arm64 ./cmd/sidecar
 	GOOS=linux GOARCH=amd64 go build -o bin/sidecar-linux-amd64 ./cmd/sidecar
 	GOOS=linux GOARCH=arm64 go build -o bin/sidecar-linux-arm64 ./cmd/sidecar
+
+# Test GoReleaser locally (creates snapshot build without publishing)
+goreleaser-snapshot:
+	goreleaser release --snapshot --clean

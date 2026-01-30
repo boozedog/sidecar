@@ -32,6 +32,7 @@ const MINI_FEATURES = [
 // - Or: curl -fsSL get.sidecar.dev | sh
 // Popular projects use: sh.rustup.rs, get.docker.com, brew.sh, etc.
 const INSTALL_COMMAND = 'curl -fsSL https://raw.githubusercontent.com/marcus/sidecar/main/scripts/setup.sh | bash';
+const BREW_COMMAND = 'brew install marcus/tap/sidecar';
 
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false);
@@ -878,6 +879,7 @@ import useBaseUrl from '@docusaurus/useBaseUrl';
 export default function Home() {
   const { siteConfig } = useDocusaurusContext();
   const [activeTab, setActiveTab] = useState('td');
+  const [showInstallMethods, setShowInstallMethods] = useState(false);
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
@@ -932,6 +934,12 @@ export default function Home() {
               <div className="sc-heroNote">
                 <span className="sc-heroNoteHighlight">Free & Open Source</span> (MIT)
               </div>
+              <button
+                className="sc-installMethodsLink"
+                onClick={() => setShowInstallMethods(true)}
+              >
+                Other install methods →
+              </button>
             </div>
           </div>
         </div>
@@ -1310,6 +1318,9 @@ export default function Home() {
                 <i className="icon-github" /> GitHub
               </a>
             </div>
+            <p className="sc-bottomCtaAlt">
+              Also available via <button className="sc-installMethodsInline" onClick={() => setShowInstallMethods(true)}>Homebrew, binary download, or source</button>
+            </p>
           </div>
         </section>
 
@@ -1340,6 +1351,49 @@ export default function Home() {
           </div>
         </section>
       </main>
+        {showInstallMethods && (
+          <div className="sc-modal-overlay" onClick={() => setShowInstallMethods(false)}>
+            <div className="sc-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="sc-modal-header">
+                <h3>Install Sidecar</h3>
+                <button className="sc-modal-close" onClick={() => setShowInstallMethods(false)}>×</button>
+              </div>
+              <div className="sc-modal-body">
+                <div className="sc-install-method">
+                  <h4>Setup Script</h4>
+                  <div className="sc-codeBlock sc-installBlock">
+                    <div className="sc-installCommand">
+                      <span className="sc-lineBlue">$ </span>
+                      <span>{INSTALL_COMMAND}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="sc-install-method">
+                  <h4>Homebrew</h4>
+                  <div className="sc-codeBlock sc-installBlock">
+                    <div className="sc-installCommand">
+                      <span className="sc-lineBlue">$ </span>
+                      <span>{BREW_COMMAND}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="sc-install-method">
+                  <h4>Binary Download</h4>
+                  <p className="sc-install-desc">Download pre-built binaries from <a href="https://github.com/marcus/sidecar/releases">GitHub Releases</a></p>
+                </div>
+                <div className="sc-install-method">
+                  <h4>From Source</h4>
+                  <div className="sc-codeBlock sc-installBlock">
+                    <div className="sc-installCommand">
+                      <span className="sc-lineBlue">$ </span>
+                      <span>go install github.com/marcus/sidecar/cmd/sidecar@latest</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
     </Layout>
   );
 }

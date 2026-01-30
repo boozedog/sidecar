@@ -1,0 +1,46 @@
+version: 2
+
+builds:
+  - main: ./cmd/sidecar
+    binary: sidecar
+    ldflags:
+      - -s -w -X main.Version={{ .Version }}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+
+homebrew_casks:
+  - name: sidecar
+    homepage: https://github.com/marcus/sidecar
+    description: A TUI dashboard for AI coding agents
+    directory: Casks
+    repository:
+      owner: marcus
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
