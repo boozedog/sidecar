@@ -85,6 +85,13 @@ func ResizeTmuxPane(paneID string, width, height int) {
 	_ = exec.Command("tmux", args...).Run()
 }
 
+// SetWindowSizeManual sets the tmux window-size option to "manual" for a session.
+// This prevents tmux from auto-constraining window size based on attached clients,
+// allowing resize-window commands to stick reliably.
+func SetWindowSizeManual(sessionName string) {
+	exec.Command("tmux", "set-option", "-t", sessionName, "window-size", "manual").Run()
+}
+
 // QueryPaneSize queries the current size of a tmux pane.
 func QueryPaneSize(target string) (width, height int, ok bool) {
 	if target == "" {
