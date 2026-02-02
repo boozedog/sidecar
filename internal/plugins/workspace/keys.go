@@ -38,6 +38,8 @@ func (p *Plugin) handleKeyPress(msg tea.KeyMsg) tea.Cmd {
 		return p.handleTypeSelectorKeys(msg)
 	case ViewModeRenameShell:
 		return p.handleRenameShellKeys(msg)
+	case ViewModeFetchPR:
+		return p.handleFetchPRKeys(msg)
 	case ViewModeFilePicker:
 		return p.handleFilePickerKeys(msg)
 	case ViewModeInteractive:
@@ -94,6 +96,66 @@ func (p *Plugin) executeTypeSelectorConfirm() tea.Cmd {
 	// Workspace selected
 	p.clearTypeSelectorModal()
 	return p.openCreateModal()
+}
+
+// handleFetchPRKeys handles keys in the fetch PR modal.
+func (p *Plugin) handleFetchPRKeys(msg tea.KeyMsg) tea.Cmd {
+	p.ensureFetchPRModal()
+	if p.fetchPRModal == nil {
+		return nil
+	}
+
+	// Intercept custom keys before delegating to modal
+	switch msg.String() {
+	case "esc":
+		p.viewMode = ViewModeList
+		p.clearFetchPRState()
+		return nil
+	case "enter":
+		if p.fetchPRLoading || p.fetchPRError != "" {
+			return nil
+		}
+		filtered := p.filteredFetchPRItems()
+		if p.fetchPRCursor >= 0 && p.fetchPRCursor < len(filtered) {
+			pr := filtered[p.fetchPRCursor]
+			p.fetchPRLoading = true // Show loading while creating worktree
+			p.clearFetchPRModal()   // Rebuild to show loading state
+			return p.fetchAndCreateWorktree(pr)
+		}
+		return nil
+	case "j", "down":
+		filtered := p.filteredFetchPRItems()
+		if p.fetchPRCursor < len(filtered)-1 {
+			p.fetchPRCursor++
+			p.adjustFetchPRScroll()
+			p.clearFetchPRModal()
+		}
+		return nil
+	case "k", "up":
+		if p.fetchPRCursor > 0 {
+			p.fetchPRCursor--
+			p.adjustFetchPRScroll()
+			p.clearFetchPRModal()
+		}
+		return nil
+	case "backspace":
+		if len(p.fetchPRFilter) > 0 {
+			p.fetchPRFilter = p.fetchPRFilter[:len(p.fetchPRFilter)-1]
+			p.fetchPRCursor = 0
+			p.fetchPRScrollOffset = 0
+			p.clearFetchPRModal() // Rebuild to reflect filter change
+		}
+		return nil
+	default:
+		// Treat printable characters as filter input
+		if len(msg.String()) == 1 && msg.String()[0] >= 32 && msg.String()[0] < 127 {
+			p.fetchPRFilter += msg.String()
+			p.fetchPRCursor = 0
+			p.fetchPRScrollOffset = 0
+			p.clearFetchPRModal() // Rebuild to reflect filter change
+		}
+		return nil
+	}
 }
 
 // handlePromptPickerKeys handles keys in the prompt picker modal.
@@ -788,6 +850,14 @@ func (p *Plugin) handleListKeys(msg tea.KeyMsg) tea.Cmd {
 			p.taskSearchLoading = true
 			return p.loadOpenTasks()
 		}
+	case "F":
+		// Fetch remote PR as workspace
+		p.viewMode = ViewModeFetchPR
+		p.fetchPRLoading = true
+		p.fetchPRFilter = ""
+		p.fetchPRCursor = 0
+		p.fetchPRError = ""
+		return p.fetchPRList()
 	case "m":
 		// In preview pane on task tab: toggle markdown render mode
 		// Otherwise: start merge workflow

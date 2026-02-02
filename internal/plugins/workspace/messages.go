@@ -232,6 +232,34 @@ type cursorPositionMsg struct {
 // Triggers a fresh poll so captured content reflects the new width/wrapping.
 type paneResizedMsg struct{}
 
+// FetchPRListMsg delivers the list of open PRs from gh CLI.
+type FetchPRListMsg struct {
+	PRs []PRListItem
+	Err error
+}
+
+// FetchPRDoneMsg signals that a PR branch was fetched and worktree created.
+type FetchPRDoneMsg struct {
+	Worktree *Worktree
+	Err      error
+}
+
+// PRListItem represents an open pull request for the fetch modal.
+type PRListItem struct {
+	Number    int       `json:"number"`
+	Title     string    `json:"title"`
+	Branch    string    `json:"headRefName"`
+	Author    prAuthor  `json:"author"`
+	URL       string    `json:"url"`
+	CreatedAt string    `json:"createdAt"`
+	IsDraft   bool      `json:"isDraft"`
+}
+
+// prAuthor represents the author field from gh pr list --json.
+type prAuthor struct {
+	Login string `json:"login"`
+}
+
 // InteractivePasteResultMsg reports clipboard paste results for interactive mode.
 type InteractivePasteResultMsg struct {
 	Err         error

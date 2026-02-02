@@ -1341,6 +1341,7 @@ func isTextInputContext(ctx string) bool {
 		"td-search", "td-form", "td-board-editor", "td-confirm", "td-close-confirm",
 		"workspace-create", "workspace-task-link", "workspace-rename-shell",
 		"workspace-prompt-picker", "workspace-commit-for-merge", "workspace-type-selector",
+		"workspace-fetch-pr",
 		"theme-switcher":
 		return true
 	default:

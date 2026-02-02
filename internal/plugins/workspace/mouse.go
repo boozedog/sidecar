@@ -68,6 +68,10 @@ func (p *Plugin) handleMouse(msg tea.MouseMsg) tea.Cmd {
 		return p.handleAgentChoiceModalMouse(msg)
 	}
 
+	if p.viewMode == ViewModeFetchPR {
+		return p.handleFetchPRModalMouse(msg)
+	}
+
 	if p.viewMode == ViewModeMerge {
 		return p.handleMergeModalMouse(msg)
 	}
@@ -307,6 +311,22 @@ func (p *Plugin) handleAgentChoiceModalMouse(msg tea.MouseMsg) tea.Cmd {
 		return nil
 	case agentChoiceActionID, agentChoiceConfirmID, "agent-choice-attach", "agent-choice-restart":
 		return p.executeAgentChoice()
+	}
+	return nil
+}
+
+func (p *Plugin) handleFetchPRModalMouse(msg tea.MouseMsg) tea.Cmd {
+	p.ensureFetchPRModal()
+	if p.fetchPRModal == nil {
+		return nil
+	}
+
+	action := p.fetchPRModal.HandleMouse(msg, p.mouseHandler)
+	switch action {
+	case "cancel":
+		p.viewMode = ViewModeList
+		p.clearFetchPRState()
+		return nil
 	}
 	return nil
 }

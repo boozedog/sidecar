@@ -77,6 +77,8 @@ func (p *Plugin) View(width, height int) string {
 		return p.renderTypeSelectorModal(width, height)
 	case ViewModeRenameShell:
 		return p.renderRenameShellModal(width, height)
+	case ViewModeFetchPR:
+		return p.renderFetchPRModal(width, height)
 	case ViewModeFilePicker:
 		background := p.renderListView(width, height)
 		return p.renderFilePickerModal(background)

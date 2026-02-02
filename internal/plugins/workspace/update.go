@@ -245,6 +245,35 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			}
 		}
 
+	case FetchPRListMsg:
+		p.fetchPRLoading = false
+		if msg.Err != nil {
+			p.fetchPRError = msg.Err.Error()
+		} else {
+			p.fetchPRItems = msg.PRs
+			p.fetchPRCursor = 0
+		}
+		p.clearFetchPRModal() // Invalidate cache: async content arrived
+
+	case FetchPRDoneMsg:
+		p.fetchPRLoading = false
+		if msg.Err != nil {
+			p.fetchPRError = msg.Err.Error()
+		} else {
+			p.viewMode = ViewModeList
+			p.worktrees = append(p.worktrees, msg.Worktree)
+			// Auto-focus newly fetched worktree
+			p.shellSelected = false
+			p.selectedIdx = len(p.worktrees) - 1
+			p.previewOffset = 0
+			p.autoScrollOutput = true
+			p.resetScrollBaseLineCount()
+			p.saveSelectionState()
+			p.ensureVisible()
+			p.clearFetchPRState()
+			cmds = append(cmds, p.loadSelectedContent())
+		}
+
 	case DeleteDoneMsg:
 		if msg.Err != nil {
 			p.deleteWarnings = []string{fmt.Sprintf("Delete failed: %v", msg.Err)}

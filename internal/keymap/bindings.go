@@ -341,6 +341,11 @@ func DefaultBindings() []Binding {
 		{Key: "\\", Command: "toggle-sidebar", Context: "workspace-list"},
 		{Key: "[", Command: "prev-tab", Context: "workspace-list"},
 		{Key: "]", Command: "next-tab", Context: "workspace-list"},
+		{Key: "F", Command: "fetch-pr", Context: "workspace-list"},
+
+		// Workspace fetch PR context
+		{Key: "esc", Command: "cancel", Context: "workspace-fetch-pr"},
+		{Key: "enter", Command: "fetch", Context: "workspace-fetch-pr"},
 
 		// Workspace preview context
 		{Key: "h", Command: "focus-left", Context: "workspace-preview"},

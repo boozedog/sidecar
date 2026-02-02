@@ -37,6 +37,7 @@ const (
 	ViewModeRenameShell                    // Rename shell modal
 	ViewModeFilePicker                     // Diff file picker modal
 	ViewModeInteractive                    // Interactive mode (tmux input passthrough)
+	ViewModeFetchPR                        // Fetch remote PR modal
 )
 
 // FocusPane represents which pane is active in the split view.

@@ -70,6 +70,11 @@ func (p *Plugin) Commands() []plugin.Command {
 			{ID: "cancel", Name: "Cancel", Description: "Cancel rename", Context: "workspace-rename-shell", Priority: 1},
 			{ID: "confirm", Name: "Rename", Description: "Confirm new name", Context: "workspace-rename-shell", Priority: 2},
 		}
+	case ViewModeFetchPR:
+		return []plugin.Command{
+			{ID: "cancel", Name: "Cancel", Description: "Cancel PR fetch", Context: "workspace-fetch-pr", Priority: 1},
+			{ID: "fetch", Name: "Fetch", Description: "Fetch selected PR", Context: "workspace-fetch-pr", Priority: 2},
+		}
 	case ViewModeFilePicker:
 		return []plugin.Command{
 			{ID: "cancel", Name: "Cancel", Description: "Close file picker", Context: "workspace-file-picker", Priority: 1},
@@ -160,9 +165,10 @@ func (p *Plugin) Commands() []plugin.Command {
 		// Priority 10-14: Agent commands (highest visibility when applicable)
 		cmds := []plugin.Command{
 			{ID: "new-workspace", Name: "New", Description: "Create new workspace", Context: "workspace-list", Priority: 1},
-			{ID: "toggle-view", Name: viewToggleName, Description: "Toggle list/kanban view", Context: "workspace-list", Priority: 2},
-			{ID: "toggle-sidebar", Name: "Sidebar", Description: "Toggle sidebar visibility", Context: "workspace-list", Priority: 3},
-			{ID: "refresh", Name: "Refresh", Description: "Refresh workspace list", Context: "workspace-list", Priority: 4},
+			{ID: "fetch-pr", Name: "Fetch", Description: "Fetch remote PR as workspace", Context: "workspace-list", Priority: 2},
+			{ID: "toggle-view", Name: viewToggleName, Description: "Toggle list/kanban view", Context: "workspace-list", Priority: 3},
+			{ID: "toggle-sidebar", Name: "Sidebar", Description: "Toggle sidebar visibility", Context: "workspace-list", Priority: 4},
+			{ID: "refresh", Name: "Refresh", Description: "Refresh workspace list", Context: "workspace-list", Priority: 5},
 		}
 
 		// Shell-specific commands when shell is selected
@@ -254,6 +260,8 @@ func (p *Plugin) FocusContext() string {
 		return "workspace-rename-shell"
 	case ViewModeTypeSelector:
 		return "workspace-type-selector"
+	case ViewModeFetchPR:
+		return "workspace-fetch-pr"
 	case ViewModeFilePicker:
 		return "workspace-file-picker"
 	default:

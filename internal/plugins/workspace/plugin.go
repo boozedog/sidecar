@@ -310,6 +310,16 @@ type Plugin struct {
 	pendingResumeCmd      string // Resume command to inject after shell creation
 	pendingResumeWorktree string // Worktree name to enter interactive mode after agent starts
 
+	// Fetch PR modal state
+	fetchPRItems        []PRListItem // PRs from gh pr list
+	fetchPRFilter       string       // Filter text
+	fetchPRCursor       int          // Selected index in filtered list
+	fetchPRScrollOffset int          // Scroll offset for PR list
+	fetchPRLoading      bool         // True while gh pr list is running
+	fetchPRError        string       // Error message from gh CLI
+	fetchPRModal        *modal.Modal // Modal instance
+	fetchPRModalWidth   int          // Cached width for rebuild detection
+
 	// Shell manifest for persistence and cross-instance sync (td-f88fdd)
 	shellManifest *ShellManifest
 	shellWatcher  *ShellWatcher

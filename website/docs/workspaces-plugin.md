@@ -462,6 +462,18 @@ Opens confirmation with options:
 | `D` | Quick delete (power user) |
 | `esc` | Cancel |
 
+### Fetching Remote PRs
+
+Press `F` to fetch a pull request created remotely (e.g., via Claude Code on your phone) and create a local workspace from it.
+
+| Key | Action |
+|-----|--------|
+| `F` | Open PR fetch modal |
+
+The modal lists open PRs from GitHub (via `gh pr list`). Filter by typing, select a PR, and press Enter. Sidecar fetches the branch and creates a worktree tracking it, with the PR URL pre-linked. Start an agent with `s` to continue the work locally.
+
+**Requirements:** `gh` CLI installed and authenticated.
+
 ### Push & Remote
 
 | Key | Action |
@@ -665,6 +677,7 @@ All keyboard shortcuts by context:
 | `l`, `→` | Next column / focus preview |
 | `v` | Toggle view mode |
 | `n` | Create workspace |
+| `F` | Fetch remote PR as workspace |
 | `D` | Delete workspace / Delete shell |
 | `p` | Push branch |
 | `d` | Show diff |
