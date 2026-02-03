@@ -537,7 +537,7 @@ func (p *Plugin) handlePreviewKey(key string) (plugin.Plugin, tea.Cmd) {
 			return p, p.fetchGitInfo(p.previewFile)
 		}
 
-	case "y":
+	case "y", "alt+c":
 		// Copy selected text to clipboard, or entire file contents if no selection
 		if p.selection.HasSelection() {
 			return p, p.copySelectedTextToClipboard()
