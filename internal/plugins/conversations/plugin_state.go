@@ -41,6 +41,10 @@ func (p *Plugin) setSelectedSession(sessionID string) {
 	p.clearRenderCache()
 	// Mark hit regions dirty (td-ea784b03)
 	p.hitRegionsDirty = true
+	// Promote selected session to HOT tier for real-time watching (td-dca6fe)
+	if p.tieredManager != nil {
+		p.tieredManager.PromoteSession(sessionID)
+	}
 }
 
 // findSelectedSession returns the currently selected session.

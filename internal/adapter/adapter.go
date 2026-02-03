@@ -43,6 +43,16 @@ const (
 	WatchScopeGlobal
 )
 
+// WatchTier indicates whether a session should be watched with fsnotify or polling.
+type WatchTier int
+
+const (
+	// WatchTierHot uses real-time fsnotify watching (high priority, limited count).
+	WatchTierHot WatchTier = iota
+	// WatchTierCold uses periodic polling (low priority, unlimited count).
+	WatchTierCold
+)
+
 // WatchScopeProvider is an optional interface for adapters to indicate their watch scope (td-7a72b6f7).
 // Adapters that watch global paths (like codex, warp) should implement this to avoid duplicate watchers
 // when the plugin iterates over multiple worktree paths.

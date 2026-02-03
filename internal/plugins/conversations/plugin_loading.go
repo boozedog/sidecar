@@ -13,6 +13,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/marcus/sidecar/internal/adapter"
+	"github.com/marcus/sidecar/internal/adapter/tieredwatcher"
 	"github.com/marcus/sidecar/internal/app"
 	"github.com/marcus/sidecar/internal/fdmonitor"
 )
@@ -321,7 +322,9 @@ func (p *Plugin) loadMessages(sessionID string) tea.Cmd {
 }
 
 // startWatcher starts watching for session changes.
-// Monitors all related worktree paths for live updates across worktrees.
+// Uses tiered watching (td-dca6fe) to reduce FD count:
+// - HOT tier: 1-3 most recently active sessions use real-time fsnotify
+// - COLD tier: All other sessions use periodic polling (every 30s)
 // Global-scoped adapters (codex, warp) only create one watcher to avoid duplicates (td-7a72b6f7).
 func (p *Plugin) startWatcher() tea.Cmd {
 	return func() tea.Msg {
@@ -340,14 +343,17 @@ func (p *Plugin) startWatcher() tea.Cmd {
 			worktreePaths = []string{p.ctx.WorkDir}
 		}
 
+		// Create tiered watcher manager (td-dca6fe)
+		manager := tieredwatcher.NewManager()
+		p.tieredManager = manager
+
 		merged := make(chan adapter.Event, 32)
 		var wg sync.WaitGroup
-		var closers []io.Closer
 		watchCount := 0
 
 		// Watch all worktree paths with each adapter
 		// Global-scoped adapters only watch once to avoid duplicate events (td-7a72b6f7)
-		for _, a := range p.adapters {
+		for adapterID, a := range p.adapters {
 			// Check if adapter has global watch scope
 			isGlobal := false
 			if scopeProvider, ok := a.(adapter.WatchScopeProvider); ok {
@@ -368,11 +374,19 @@ func (p *Plugin) startWatcher() tea.Cmd {
 					}
 					continue
 				}
-				closers = append(closers, closer)
+
+				// Register sessions with tiered manager for COLD tier polling
+				sessions, _ := a.Sessions(wtPath)
+				for _, s := range sessions {
+					// Session ID is already unique per adapter
+					manager.RegisterSession(adapterID, s.ID, "")
+				}
+
 				watchCount++
 				wg.Add(1)
-				go func(c <-chan adapter.Event) {
+				go func(c <-chan adapter.Event, cl io.Closer, aid string) {
 					defer wg.Done()
+					defer cl.Close()
 					for {
 						select {
 						case <-ctx.Done():
@@ -381,18 +395,24 @@ func (p *Plugin) startWatcher() tea.Cmd {
 							if !ok {
 								return
 							}
+							// Promote session to HOT tier on activity (td-dca6fe)
+							if evt.SessionID != "" {
+								manager.PromoteSession(evt.SessionID)
+							}
 							select {
 							case merged <- evt:
 							default:
 							}
 						}
 					}
-				}(ch)
+				}(ch, closer, adapterID)
 			}
 		}
 
 		if watchCount == 0 {
-			return WatchStartedMsg{Channel: nil, Closers: closers}
+			manager.Close()
+			p.tieredManager = nil
+			return WatchStartedMsg{Channel: nil, Closers: nil}
 		}
 
 		// Close merged channel when all source channels are done
@@ -401,7 +421,7 @@ func (p *Plugin) startWatcher() tea.Cmd {
 			close(merged)
 		}()
 
-		return WatchStartedMsg{Channel: merged, Closers: closers}
+		return WatchStartedMsg{Channel: merged, Closers: nil}
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/marcus/sidecar/internal/adapter"
+	"github.com/marcus/sidecar/internal/adapter/tieredwatcher"
 	"github.com/marcus/sidecar/internal/app"
 	"github.com/marcus/sidecar/internal/modal"
 	"github.com/marcus/sidecar/internal/mouse"
@@ -153,6 +154,9 @@ type Plugin struct {
 	watchClosers []io.Closer
 	watchCancel  context.CancelFunc // cancel function for watcher goroutines (td-eb2699b4)
 	stopped      bool
+
+	// Tiered watcher manager for FD reduction (td-dca6fe)
+	tieredManager *tieredwatcher.Manager
 
 	// Event coalescing for watch events
 	coalescer         *EventCoalescer
@@ -415,6 +419,10 @@ func (p *Plugin) resetState() {
 	// Pending scroll state (td-b74d9f)
 	p.pendingScrollMsgID = ""
 	p.pendingScrollActive = false
+
+	// Tiered watcher manager (td-dca6fe)
+	// Close existing manager before resetting (handled by closeWatchers in Stop)
+	p.tieredManager = nil
 }
 
 // Init initializes the plugin with context.
@@ -485,6 +493,11 @@ func (p *Plugin) closeWatchers() {
 		_ = closer.Close()
 	}
 	p.watchClosers = nil
+	// Close tiered manager if present (td-dca6fe)
+	if p.tieredManager != nil {
+		p.tieredManager.Close()
+		p.tieredManager = nil
+	}
 }
 
 // Update handles messages.
