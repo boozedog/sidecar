@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"golang.org/x/term"
 	"github.com/marcus/sidecar/internal/adapter"
 	_ "github.com/marcus/sidecar/internal/adapter/claudecode"
 	_ "github.com/marcus/sidecar/internal/adapter/codex"
@@ -30,11 +29,13 @@ import (
 	"github.com/marcus/sidecar/internal/plugins/conversations"
 	"github.com/marcus/sidecar/internal/plugins/filebrowser"
 	"github.com/marcus/sidecar/internal/plugins/gitstatus"
+	"github.com/marcus/sidecar/internal/plugins/notes"
 	"github.com/marcus/sidecar/internal/plugins/tdmonitor"
 	"github.com/marcus/sidecar/internal/plugins/workspace"
 	"github.com/marcus/sidecar/internal/state"
 	"github.com/marcus/sidecar/internal/styles"
 	"github.com/marcus/sidecar/internal/theme"
+	"golang.org/x/term"
 )
 
 // Version is set at build time via ldflags
@@ -159,6 +160,9 @@ func main() {
 	registry.Register(filebrowser.New())
 	registry.Register(conversations.New())
 	registry.Register(workspace.New())
+	if features.IsEnabled("notes_plugin") {
+		registry.Register(notes.New())
+	}
 
 	// Apply user keymap overrides
 	for key, cmdID := range cfg.Keymap.Overrides {
@@ -169,7 +173,6 @@ func main() {
 	currentVersion := effectiveVersion(Version)
 	initialPluginID := state.GetActivePlugin(workDir)
 	model := app.New(registry, km, cfg, currentVersion, workDir, initialPluginID)
-
 
 	// Guard against non-interactive terminal (e.g. piped stdout)
 	if !term.IsTerminal(int(os.Stdout.Fd())) {

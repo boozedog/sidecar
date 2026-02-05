@@ -12,6 +12,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/marcus/sidecar/internal/app"
+	"github.com/marcus/sidecar/internal/tdroot"
 )
 
 // WorkDirDeletedMsg signals that the current working directory was deleted.
@@ -495,8 +496,8 @@ func (p *Plugin) checkRemoteBranch(wt *Worktree) tea.Cmd {
 		exists := checkRemoteBranchExists(p.ctx.WorkDir, wt.Branch)
 		return RemoteCheckDoneMsg{
 			WorkspaceName: wt.Name,
-			Branch:       wt.Branch,
-			Exists:       exists,
+			Branch:        wt.Branch,
+			Exists:        exists,
 		}
 	}
 }
@@ -540,12 +541,11 @@ func filterBranches(query string, allBranches []string) []string {
 // setupTDRoot creates a .td-root file in the worktree pointing to the main repo.
 // This allows td commands in the worktree to use the main repo's database.
 func (p *Plugin) setupTDRoot(worktreePath string) error {
-	tdRootPath := filepath.Join(worktreePath, ".td-root")
 	mainPath := app.GetMainWorktreePath(p.ctx.WorkDir)
 	if mainPath == "" {
 		mainPath = p.ctx.WorkDir
 	}
-	return os.WriteFile(tdRootPath, []byte(mainPath+"\n"), 0644)
+	return tdroot.CreateTDRoot(worktreePath, mainPath)
 }
 
 const sidecarTaskFile = ".sidecar-task"
@@ -637,7 +637,7 @@ func (p *Plugin) linkTask(wt *Worktree, taskID string) tea.Cmd {
 		if err := cmd.Run(); err != nil {
 			return TaskLinkedMsg{
 				WorkspaceName: wt.Name,
-				Err:          fmt.Errorf("task not found: %s", taskID),
+				Err:           fmt.Errorf("task not found: %s", taskID),
 			}
 		}
 
@@ -646,13 +646,13 @@ func (p *Plugin) linkTask(wt *Worktree, taskID string) tea.Cmd {
 		if err := os.WriteFile(taskPath, []byte(taskID+"\n"), 0644); err != nil {
 			return TaskLinkedMsg{
 				WorkspaceName: wt.Name,
-				Err:          fmt.Errorf("write .sidecar-task: %w", err),
+				Err:           fmt.Errorf("write .sidecar-task: %w", err),
 			}
 		}
 
 		return TaskLinkedMsg{
 			WorkspaceName: wt.Name,
-			TaskID:       taskID,
+			TaskID:        taskID,
 		}
 	}
 }
@@ -664,13 +664,13 @@ func (p *Plugin) unlinkTask(wt *Worktree) tea.Cmd {
 		if err := os.Remove(taskPath); err != nil && !os.IsNotExist(err) {
 			return TaskLinkedMsg{
 				WorkspaceName: wt.Name,
-				Err:          fmt.Errorf("remove .sidecar-task: %w", err),
+				Err:           fmt.Errorf("remove .sidecar-task: %w", err),
 			}
 		}
 
 		return TaskLinkedMsg{
 			WorkspaceName: wt.Name,
-			TaskID:       "", // Empty means unlinked
+			TaskID:        "", // Empty means unlinked
 		}
 	}
 }

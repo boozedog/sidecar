@@ -578,3 +578,43 @@ func (m *Model) SetDimensions(width, height int) tea.Cmd {
 		return PaneResizedMsg{}
 	}
 }
+
+// ResizeAndPollImmediate updates dimensions and triggers an immediate resize and poll.
+// Unlike SetDimensions, this bypasses debouncing for use with WindowSizeMsg.
+// The resize and poll are batched so the view updates immediately after resize.
+func (m *Model) ResizeAndPollImmediate(width, height int) tea.Cmd {
+	if width == m.Width && height == m.Height {
+		return nil
+	}
+
+	m.Width = width
+	m.Height = height
+
+	if !m.IsActive() {
+		return nil
+	}
+
+	target := m.GetTarget()
+	if target == "" {
+		return nil
+	}
+
+	// Resize command
+	resizeCmd := func() tea.Msg {
+		actualWidth, actualHeight, ok := QueryPaneSize(target)
+		if ok && actualWidth == width && actualHeight == height {
+			return nil
+		}
+		ResizeTmuxPane(target, width, height)
+		return PaneResizedMsg{}
+	}
+
+	// Immediate poll command
+	m.State.PollGeneration++
+	gen := m.State.PollGeneration
+	pollCmd := func() tea.Msg {
+		return PollTickMsg{Target: target, Generation: gen}
+	}
+
+	return tea.Batch(resizeCmd, pollCmd)
+}

@@ -185,8 +185,7 @@ func (p *Plugin) renderNormalPanes() string {
 	}
 
 	// Render visible divider between panes
-	// MarginTop(1) in renderDivider shifts it down, so use paneHeight directly
-	divider := p.renderDivider(paneHeight)
+	divider := ui.RenderDivider(paneHeight)
 
 	// Join panes horizontally with divider in between
 	panes := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, divider, rightPane)
@@ -273,26 +272,6 @@ func (p *Plugin) renderNormalPanes() string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Top, parts...)
-}
-
-// renderDivider renders the vertical divider between panes.
-func (p *Plugin) renderDivider(height int) string {
-	// Use a subtle vertical bar as the divider
-	// MarginTop(1) shifts it down to align with pane content (below top border)
-	dividerStyle := lipgloss.NewStyle().
-		Foreground(styles.BorderNormal).
-		MarginTop(1)
-
-	// Build vertical bar (height-2 to stop above bottom border)
-	var sb strings.Builder
-	for i := 0; i < height-2; i++ {
-		sb.WriteString("│")
-		if i < height-3 {
-			sb.WriteString("\n")
-		}
-	}
-
-	return dividerStyle.Render(sb.String())
 }
 
 // renderContentSearchBar renders the content search input bar for preview pane.

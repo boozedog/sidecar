@@ -33,12 +33,11 @@ func inputFocusedStyle() lipgloss.Style {
 		Padding(0, 1)
 }
 
-
 // Panel dimension constants for consistent width calculations.
 // These must stay in sync with styles.RenderGradientBorder.
 const (
-	panelBorderWidth  = 2 // Left + right border (1 each)
-	panelPaddingWidth = 2 // Left + right padding (1 each)
+	panelBorderWidth  = 2                                    // Left + right border (1 each)
+	panelPaddingWidth = 2                                    // Left + right padding (1 each)
 	panelOverhead     = panelBorderWidth + panelPaddingWidth // Total overhead: 4
 )
 
@@ -203,7 +202,7 @@ func (p *Plugin) renderListView(width, height int) string {
 	}
 
 	// Render visible divider between panes
-	divider := p.renderDivider(paneHeight)
+	divider := ui.RenderDivider(paneHeight)
 
 	// Join horizontally
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftPane, divider, rightPane)
@@ -768,23 +767,4 @@ func (p *Plugin) renderShellEntryForSession(shell *ShellSession, selected bool, 
 	}
 	content := line1 + "\n" + line2
 	return styles.ListItemNormal.Width(width).Render(content)
-}
-
-// renderDivider renders the vertical divider between panes.
-func (p *Plugin) renderDivider(height int) string {
-	// Use a subtle vertical bar as the divider with theme color
-	// MarginTop(1) shifts it down to align with pane content (below top border)
-	dividerStyle := lipgloss.NewStyle().
-		Foreground(styles.BorderNormal).
-		MarginTop(1)
-
-	// Build vertical bar (height-2 to stop above bottom border)
-	var sb strings.Builder
-	for i := 0; i < height-2; i++ {
-		sb.WriteString("│")
-		if i < height-3 {
-			sb.WriteString("\n")
-		}
-	}
-	return dividerStyle.Render(sb.String())
 }

@@ -35,7 +35,8 @@ type PluginsConfig struct {
 	GitStatus     GitStatusPluginConfig     `json:"git-status"`
 	TDMonitor     TDMonitorPluginConfig     `json:"td-monitor"`
 	Conversations ConversationsPluginConfig `json:"conversations"`
-	Workspace     WorkspacePluginConfig      `json:"workspace"`
+	Workspace     WorkspacePluginConfig     `json:"workspace"`
+	Notes         NotesPluginConfig         `json:"notes"`
 }
 
 // GitStatusPluginConfig configures the git status plugin.
@@ -74,6 +75,14 @@ type WorkspacePluginConfig struct {
 	InteractiveCopyKey string `json:"interactiveCopyKey,omitempty"`
 	// InteractivePasteKey is the keybinding to paste clipboard in interactive mode. Default: "alt+v".
 	InteractivePasteKey string `json:"interactivePasteKey,omitempty"`
+}
+
+// NotesPluginConfig configures the notes plugin.
+type NotesPluginConfig struct {
+	// DefaultEditor sets the default editor mode when pressing Enter on a note.
+	// Values: "builtin" (default), "vim", "nvim", or any $EDITOR value.
+	// When set to "vim"/"nvim", Enter opens the note in inline vim instead of built-in editor.
+	DefaultEditor string `json:"defaultEditor,omitempty"`
 }
 
 // KeymapConfig holds key binding overrides.

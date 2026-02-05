@@ -9,20 +9,21 @@ import (
 
 // State holds persistent user preferences.
 type State struct {
-	GitDiffMode      string `json:"gitDiffMode"`                // "unified" or "side-by-side"
+	GitDiffMode       string `json:"gitDiffMode"`                 // "unified" or "side-by-side"
 	WorkspaceDiffMode string `json:"workspaceDiffMode,omitempty"` // "unified" or "side-by-side"
-	GitGraphEnabled  bool   `json:"gitGraphEnabled,omitempty"`  // Show commit graph in sidebar
-	LineWrapEnabled  bool   `json:"lineWrapEnabled,omitempty"`  // Wrap long lines instead of truncating
+	GitGraphEnabled   bool   `json:"gitGraphEnabled,omitempty"`   // Show commit graph in sidebar
+	LineWrapEnabled   bool   `json:"lineWrapEnabled,omitempty"`   // Wrap long lines instead of truncating
 
 	// Pane width preferences (percentage of total width, 0 = use default)
 	FileBrowserTreeWidth   int `json:"fileBrowserTreeWidth,omitempty"`
 	GitStatusSidebarWidth  int `json:"gitStatusSidebarWidth,omitempty"`
 	ConversationsSideWidth int `json:"conversationsSideWidth,omitempty"`
-	WorkspaceSidebarWidth   int `json:"workspaceSidebarWidth,omitempty"`
+	WorkspaceSidebarWidth  int `json:"workspaceSidebarWidth,omitempty"`
 
 	// Plugin-specific state (keyed by working directory path)
 	FileBrowser  map[string]FileBrowserState `json:"fileBrowser,omitempty"`
-	Workspace    map[string]WorkspaceState    `json:"workspace,omitempty"`
+	Workspace    map[string]WorkspaceState   `json:"workspace,omitempty"`
+	Notes        map[string]NotesState       `json:"notes,omitempty"`
 	ActivePlugin map[string]string           `json:"activePlugin,omitempty"`
 
 	// Worktree state: maps main repo path -> last active worktree path
@@ -51,9 +52,16 @@ type FileBrowserState struct {
 
 // WorkspaceState holds persistent workspace plugin state.
 type WorkspaceState struct {
-	WorkspaceName      string            `json:"workspaceName,omitempty"`      // Name of selected workspace
+	WorkspaceName     string            `json:"workspaceName,omitempty"`     // Name of selected workspace
 	ShellTmuxName     string            `json:"shellTmuxName,omitempty"`     // TmuxName of selected shell (empty = workspace selected)
 	ShellDisplayNames map[string]string `json:"shellDisplayNames,omitempty"` // TmuxName -> display name
+}
+
+// NotesState holds persistent notes plugin state.
+type NotesState struct {
+	ListWidth    int    `json:"listWidth,omitempty"`    // Width of list pane
+	LastNoteID   string `json:"lastNoteID,omitempty"`   // Last selected note ID
+	ShowArchived bool   `json:"showArchived,omitempty"` // Whether to show archived notes
 }
 
 var (
@@ -397,6 +405,47 @@ func ClearLastWorktreePath(mainRepoPath string) error {
 		return nil
 	}
 	delete(current.LastWorktreePath, mainRepoPath)
+	mu.Unlock()
+	return Save()
+}
+
+// GetNotesState returns the saved notes state for a given working directory.
+func GetNotesState(workdir string) NotesState {
+	mu.RLock()
+	defer mu.RUnlock()
+	if current == nil || current.Notes == nil {
+		return NotesState{}
+	}
+	return current.Notes[workdir]
+}
+
+// SetNotesState saves the notes state for a given working directory.
+func SetNotesState(workdir string, notesState NotesState) error {
+	mu.Lock()
+	if current == nil {
+		current = &State{}
+	}
+	if current.Notes == nil {
+		current.Notes = make(map[string]NotesState)
+	}
+	current.Notes[workdir] = notesState
+	mu.Unlock()
+	return Save()
+}
+
+// SetNotesListWidth saves just the notes list width for a given working directory.
+func SetNotesListWidth(width int) error {
+	mu.Lock()
+	if current == nil {
+		current = &State{}
+	}
+	if current.Notes == nil {
+		current.Notes = make(map[string]NotesState)
+	}
+	// Use empty workdir as global setting
+	notesState := current.Notes[""]
+	notesState.ListWidth = width
+	current.Notes[""] = notesState
 	mu.Unlock()
 	return Save()
 }

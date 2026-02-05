@@ -184,6 +184,13 @@ var (
 
 	StatusPending = lipgloss.NewStyle().
 			Foreground(TextMuted)
+
+	// Note status indicator styles
+	StatusArchived = lipgloss.NewStyle().
+			Foreground(Info)
+
+	StatusDeletedNote = lipgloss.NewStyle().
+				Foreground(Error)
 )
 
 // List item styles

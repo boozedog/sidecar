@@ -537,7 +537,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// This ensures characters like `, ~, ?, !, @, q, 1-5 reach tmux instead of triggering app shortcuts
 	// Ctrl+C is forwarded to tmux (to interrupt running processes) instead of showing quit dialog
 	// User can exit interactive mode with Ctrl+\ first, then quit normally
-	if m.activeContext == "workspace-interactive" || m.activeContext == "file-browser-inline-edit" {
+	if m.activeContext == "workspace-interactive" || m.activeContext == "file-browser-inline-edit" || m.activeContext == "notes-inline-edit" {
 		// Forward ALL keys to plugin (exit keys and ctrl+c handled by plugin)
 		if p := m.ActivePlugin(); p != nil {
 			newPlugin, cmd := p.Update(msg)
@@ -1166,7 +1166,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			break
 		}
 		return m, m.PrevPlugin()
-	case "1", "2", "3", "4", "5":
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		// Number keys for direct plugin switching
 		// Block in text input contexts (user is typing numbers)
 		if isTextInputContext(m.activeContext) {
@@ -1328,6 +1328,8 @@ func isRootContext(ctx string) bool {
 		return true
 	case "td-monitor", "td-board":
 		return true
+	case "notes-list":
+		return true
 	default:
 		return false
 	}
@@ -1347,7 +1349,10 @@ func isTextInputContext(ctx string) bool {
 		"workspace-create", "workspace-task-link", "workspace-rename-shell",
 		"workspace-prompt-picker", "workspace-commit-for-merge", "workspace-type-selector",
 		"workspace-fetch-pr",
-		"theme-switcher":
+		"theme-switcher",
+		"notes-search",
+		"notes-editor",
+		"notes-task-modal":
 		return true
 	default:
 		return false

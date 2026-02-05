@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/marcus/sidecar/internal/styles"
+	"github.com/marcus/sidecar/internal/ui"
 )
 
 // renderMain renders the main git status view.
@@ -301,7 +302,7 @@ func (p *Plugin) renderDiffTwoPane() string {
 	// Apply gradient border styles (consistent with renderThreePaneView)
 	leftPane := styles.RenderPanel(sidebarContent, p.sidebarWidth, paneHeight, sidebarActive)
 
-	divider := p.renderDivider(paneHeight)
+	divider := ui.RenderDivider(paneHeight)
 
 	rightPane := styles.RenderPanel(diffContent, p.diffPaneWidth, paneHeight, diffActive)
 

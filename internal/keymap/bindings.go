@@ -376,6 +376,70 @@ func DefaultBindings() []Binding {
 
 		// Workspace interactive context bindings are registered dynamically
 		// by the workspace plugin Init() to reflect configured keys.
+
+		// Notes list context
+		{Key: "j", Command: "cursor-down", Context: "notes-list"},
+		{Key: "k", Command: "cursor-up", Context: "notes-list"},
+		{Key: "down", Command: "cursor-down", Context: "notes-list"},
+		{Key: "up", Command: "cursor-up", Context: "notes-list"},
+		{Key: "G", Command: "cursor-bottom", Context: "notes-list"},
+		{Key: "n", Command: "new-note", Context: "notes-list"},
+		{Key: "X", Command: "delete-note", Context: "notes-list"},
+		{Key: "x", Command: "show-deleted", Context: "notes-list"},
+		{Key: "p", Command: "toggle-pin", Context: "notes-list"},
+		{Key: "A", Command: "archive-note", Context: "notes-list"},
+		{Key: "a", Command: "show-archived", Context: "notes-list"},
+		{Key: "u", Command: "undo", Context: "notes-list"},
+		{Key: "r", Command: "refresh", Context: "notes-list"},
+		{Key: "enter", Command: "edit-note", Context: "notes-list"},
+		{Key: "/", Command: "search", Context: "notes-list"},
+		{Key: "T", Command: "to-task", Context: "notes-list"},
+		{Key: "I", Command: "show-info", Context: "notes-list"},
+		{Key: "y", Command: "yank-content", Context: "notes-list"},
+		{Key: "Y", Command: "yank-title", Context: "notes-list"},
+		{Key: "esc", Command: "back-to-active", Context: "notes-list"},
+		{Key: "e", Command: "vim-edit", Context: "notes-list"},
+		{Key: "E", Command: "external-editor", Context: "notes-list"},
+
+		// Notes info modal context
+		{Key: "esc", Command: "close", Context: "notes-info"},
+		{Key: "enter", Command: "close", Context: "notes-info"},
+
+		// Notes search context
+		{Key: "esc", Command: "cancel", Context: "notes-search"},
+		{Key: "enter", Command: "select", Context: "notes-search"},
+		{Key: "down", Command: "cursor-down", Context: "notes-search"},
+		{Key: "up", Command: "cursor-up", Context: "notes-search"},
+		{Key: "ctrl+n", Command: "cursor-down", Context: "notes-search"},
+		{Key: "ctrl+p", Command: "cursor-up", Context: "notes-search"},
+
+		// Notes preview context (read-only view)
+		{Key: "alt+c", Command: "copy-note", Context: "notes-preview"},
+		{Key: "e", Command: "vim-edit", Context: "notes-preview"},
+		{Key: "E", Command: "external-editor", Context: "notes-preview"},
+
+		// Notes editor context
+		{Key: "tab", Command: "switch-pane", Context: "notes-editor"},
+		{Key: "esc", Command: "back", Context: "notes-editor"},
+		{Key: "ctrl+s", Command: "save", Context: "notes-editor"},
+		{Key: "E", Command: "external-editor", Context: "notes-editor"},
+		{Key: "alt+c", Command: "copy-note", Context: "notes-editor"},
+		{Key: "up", Command: "cursor-up", Context: "notes-editor"},
+		{Key: "down", Command: "cursor-down", Context: "notes-editor"},
+		{Key: "left", Command: "cursor-left", Context: "notes-editor"},
+		{Key: "right", Command: "cursor-right", Context: "notes-editor"},
+		{Key: "ctrl+n", Command: "cursor-down", Context: "notes-editor"},
+		{Key: "ctrl+p", Command: "cursor-up", Context: "notes-editor"},
+		{Key: "home", Command: "line-start", Context: "notes-editor"},
+		{Key: "end", Command: "line-end", Context: "notes-editor"},
+		{Key: "ctrl+a", Command: "line-start", Context: "notes-editor"},
+		{Key: "ctrl+e", Command: "line-end", Context: "notes-editor"},
+
+		// Notes task modal context
+		{Key: "enter", Command: "create-task", Context: "notes-task-modal"},
+		{Key: "esc", Command: "cancel", Context: "notes-task-modal"},
+		{Key: "tab", Command: "next-field", Context: "notes-task-modal"},
+		{Key: "shift+tab", Command: "prev-field", Context: "notes-task-modal"},
 	}
 }
 

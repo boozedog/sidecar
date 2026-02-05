@@ -32,12 +32,20 @@ var (
 		Default:     true,
 		Description: "Enable inline file editing via tmux in the files plugin",
 	}
+
+	// NotesPlugin enables the notes plugin for capturing quick notes.
+	NotesPlugin = Feature{
+		Name:        "notes_plugin",
+		Default:     false,
+		Description: "Enable the notes plugin for capturing quick notes",
+	}
 )
 
 // allFeatures is the registry of all known features.
 var allFeatures = []Feature{
 	TmuxInteractiveInput,
 	TmuxInlineEdit,
+	NotesPlugin,
 }
 
 // defaultValues provides O(1) lookup for feature defaults.

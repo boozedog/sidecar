@@ -9,7 +9,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/marcus/sidecar/internal/app"
-	"github.com/marcus/sidecar/internal/ui"
 	"github.com/marcus/sidecar/internal/image"
 	"github.com/marcus/sidecar/internal/markdown"
 	"github.com/marcus/sidecar/internal/modal"
@@ -17,6 +16,7 @@ import (
 	"github.com/marcus/sidecar/internal/plugin"
 	"github.com/marcus/sidecar/internal/state"
 	"github.com/marcus/sidecar/internal/tty"
+	"github.com/marcus/sidecar/internal/ui"
 )
 
 const (
@@ -240,8 +240,8 @@ type Plugin struct {
 	inlineEditFile       string     // Path of file being edited
 	inlineEditOrigMtime  time.Time  // Original file mtime (to detect changes)
 	inlineEditEditor     string     // Editor command used (vim, nano, emacs, etc.)
-	inlineEditorDragging bool      // True when mouse is being dragged in editor (for text selection)
-	lastDragForwardTime  time.Time // Throttle: last time a drag event was forwarded to tmux
+	inlineEditorDragging bool       // True when mouse is being dragged in editor (for text selection)
+	lastDragForwardTime  time.Time  // Throttle: last time a drag event was forwarded to tmux
 
 	// Exit confirmation state (when clicking away from editor)
 	showExitConfirmation bool        // True when confirmation dialog is shown
@@ -260,9 +260,9 @@ type Plugin struct {
 func New() *Plugin {
 	return &Plugin{
 		mouseHandler:  mouse.NewHandler(),
-		imageRenderer: image.New(), // Detect terminal graphics protocol once
-		treeVisible:   true,        // Tree pane visible by default
-		showIgnored:   true,        // Show git-ignored files by default
+		imageRenderer: image.New(),  // Detect terminal graphics protocol once
+		treeVisible:   true,         // Tree pane visible by default
+		showIgnored:   true,         // Show git-ignored files by default
 		inlineEditor:  tty.New(nil), // Initialize inline editor with default config
 	}
 }
@@ -478,8 +478,9 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		case tea.WindowSizeMsg:
 			p.width = msg.Width
 			p.height = msg.Height
-			// Update inline editor dimensions
-			return p, p.inlineEditor.SetDimensions(p.calculateInlineEditorWidth(), p.calculateInlineEditorHeight())
+			// Update inline editor dimensions - use ResizeAndPollImmediate
+			// to bypass debounce and trigger immediate poll for smooth resize
+			return p, p.inlineEditor.ResizeAndPollImmediate(p.calculateInlineEditorWidth(), p.calculateInlineEditorHeight())
 
 		case tea.MouseMsg:
 			// Route mouse through handleMouse for click-away detection

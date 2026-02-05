@@ -9,6 +9,7 @@ import (
 	"github.com/marcus/sidecar/internal/styles"
 	"github.com/marcus/sidecar/internal/ui"
 )
+
 // renderTwoPane renders the two-pane layout with sessions on the left and messages on the right.
 func (p *Plugin) renderTwoPane() string {
 	// Check if hit regions need rebuilding (td-ea784b03)
@@ -98,7 +99,7 @@ func (p *Plugin) renderTwoPane() string {
 	leftPane := styles.RenderPanel(sidebarContent, sidebarWidth, paneHeight, sidebarActive)
 
 	// Render visible divider
-	divider := p.renderDivider(paneHeight)
+	divider := ui.RenderDivider(paneHeight)
 
 	rightPane := styles.RenderPanel(mainContent, mainWidth, paneHeight, mainActive)
 
@@ -255,23 +256,6 @@ func (p *Plugin) calculateTurnHeight(turn Turn, maxWidth int) int {
 		height++
 	}
 	return height
-}
-
-// renderDivider renders the visible divider between panes.
-func (p *Plugin) renderDivider(height int) string {
-	dividerStyle := lipgloss.NewStyle().
-		Foreground(styles.BorderNormal).
-		MarginTop(1) // Shifts down to align with pane content
-
-	// Build vertical bar (height-2 to stop above bottom border)
-	var sb strings.Builder
-	for i := 0; i < height-2; i++ {
-		sb.WriteString("│")
-		if i < height-3 {
-			sb.WriteString("\n")
-		}
-	}
-	return dividerStyle.Render(sb.String())
 }
 
 // renderSidebarPane renders the session list for the sidebar.
@@ -1308,4 +1292,3 @@ func (p *Plugin) renderConversationFlow(contentWidth, height int) []string {
 
 	return allLines[start:end]
 }
-
