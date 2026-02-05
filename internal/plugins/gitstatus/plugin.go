@@ -839,6 +839,8 @@ func (p *Plugin) Commands() []plugin.Command {
 		// git-status-commits context (recent commits in sidebar)
 		{ID: "view-commit", Name: "View", Description: "View commit details", Category: plugin.CategoryView, Context: "git-status-commits", Priority: 1},
 		{ID: "push", Name: "Push", Description: "Push commits to remote", Category: plugin.CategoryGit, Context: "git-status-commits", Priority: 2},
+		{ID: "pull", Name: "Pull", Description: "Pull from remote", Category: plugin.CategoryGit, Context: "git-status-commits", Priority: 2},
+		{ID: "fetch", Name: "Fetch", Description: "Fetch from remote", Category: plugin.CategoryGit, Context: "git-status-commits", Priority: 3},
 		{ID: "search-history", Name: "Search", Description: "Search commit messages", Category: plugin.CategorySearch, Context: "git-status-commits", Priority: 2},
 		{ID: "filter-author", Name: "Author", Description: "Filter by author", Category: plugin.CategorySearch, Context: "git-status-commits", Priority: 3},
 		{ID: "filter-path", Name: "Path", Description: "Filter by file path", Category: plugin.CategorySearch, Context: "git-status-commits", Priority: 3},

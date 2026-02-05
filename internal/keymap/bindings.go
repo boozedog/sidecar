@@ -86,6 +86,7 @@ func DefaultBindings() []Binding {
 		{Key: "o", Command: "open-in-github", Context: "git-status-commits"},
 		{Key: "v", Command: "toggle-graph", Context: "git-status-commits"},
 		{Key: "P", Command: "push", Context: "git-status-commits"},
+		{Key: "L", Command: "pull", Context: "git-status-commits"},
 		{Key: "\\", Command: "toggle-sidebar", Context: "git-status-commits"},
 
 		// Git status diff context (inline)
