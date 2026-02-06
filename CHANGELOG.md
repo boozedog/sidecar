@@ -2,6 +2,32 @@
 
 All notable changes to sidecar are documented here.
 
+## [v0.67.0] - 2026-02-06
+
+### Features
+
+- Merge notes plugin behind feature flag
+- Add nightshift to sister projects section
+
+### Bug Fixes
+
+- Fix git search modal shortcut scoping while typing
+- Fix for adding projects
+
+### Improvements
+
+- Refactor text input shortcut gating to plugin capability
+- Show git plugin no repo state
+
+### Dependencies
+
+- Update td to v0.30.0
+
+### Documentation
+
+- Update UI guide for plugin text input capability
+- Updated adapter guide
+
 ## [v0.66.0] - 2026-02-05
 
 ### Features
