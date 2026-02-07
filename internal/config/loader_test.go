@@ -41,9 +41,6 @@ func TestLoadFrom_ValidJSON(t *testing.T) {
 				"enabled": false,
 				"refreshInterval": "5s"
 			}
-		},
-		"ui": {
-			"showFooter": false
 		}
 	}`)
 
@@ -61,9 +58,6 @@ func TestLoadFrom_ValidJSON(t *testing.T) {
 	}
 	if cfg.Plugins.GitStatus.RefreshInterval != 5*time.Second {
 		t.Errorf("got refresh %v, want 5s", cfg.Plugins.GitStatus.RefreshInterval)
-	}
-	if cfg.UI.ShowFooter {
-		t.Error("showFooter should be false")
 	}
 	// Default values should still be present
 	if !cfg.Plugins.TDMonitor.Enabled {

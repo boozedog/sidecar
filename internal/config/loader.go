@@ -38,7 +38,6 @@ type rawConfig struct {
 }
 
 type rawUIConfig struct {
-	ShowFooter       *bool       `json:"showFooter"`
 	ShowClock        *bool       `json:"showClock"`
 	Theme            ThemeConfig `json:"theme"`
 	NerdFontsEnabled *bool       `json:"nerdFontsEnabled"`
@@ -220,9 +219,6 @@ func mergeConfig(cfg *Config, raw *rawConfig) {
 	}
 
 	// UI
-	if raw.UI.ShowFooter != nil {
-		cfg.UI.ShowFooter = *raw.UI.ShowFooter
-	}
 	if raw.UI.ShowClock != nil {
 		cfg.UI.ShowClock = *raw.UI.ShowClock
 	}

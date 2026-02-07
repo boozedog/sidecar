@@ -22,7 +22,6 @@
     "overrides": {}
   },
   "ui": {
-    "showFooter": true,
     "showClock": true,
     "theme": {
       "name": "default",

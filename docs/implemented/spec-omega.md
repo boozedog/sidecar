@@ -255,7 +255,6 @@ Some bindings are key sequences (two or more keys pressed in order), written wit
 | `1-9` | focus-plugin-n | global |
 | `?` | toggle-help | global |
 | `!` | toggle-diagnostics | global |
-| `ctrl+h` | toggle-footer | global |
 | `r` | refresh | global |
 | `j`, `down` | cursor-down | global |
 | `k`, `up` | cursor-up | global |
@@ -500,7 +499,6 @@ func (m Model) viewDiagnostics() string {
 - Context-aware key hints (left)
 - **Status Bar**: Transient notifications (toast messages) center-right (e.g., "Copied to clipboard", "Error: failed to stage").
 - Last refresh timestamp (right)
-- Toggleable with `ctrl+h`
 
 ---
 
@@ -539,7 +537,6 @@ func (m Model) viewDiagnostics() string {
     }
   },
   "ui": {
-    "showFooter": true,
     "showClock": true,
     "theme": {
         "name": "default",

@@ -44,10 +44,7 @@ func (m Model) View() string {
 	}
 
 	// Calculate content area
-	contentHeight := m.height - headerHeight
-	if m.showFooter {
-		contentHeight -= footerHeight
-	}
+	contentHeight := m.height - headerHeight - footerHeight
 	if contentHeight < 0 {
 		contentHeight = 0
 	}
@@ -64,11 +61,9 @@ func (m Model) View() string {
 	content := m.renderContent(m.width, contentHeight)
 	b.WriteString(content)
 
-	// Footer (optional)
-	if m.showFooter {
-		b.WriteString("\n")
-		b.WriteString(m.renderFooter())
-	}
+	// Footer
+	b.WriteString("\n")
+	b.WriteString(m.renderFooter())
 
 	// Overlay modals (priority order via activeModal)
 	bg := b.String()

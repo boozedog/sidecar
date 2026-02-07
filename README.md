@@ -242,7 +242,6 @@ Config file: `~/.config/sidecar/config.json`
     "workspaces": { "enabled": true }
   },
   "ui": {
-    "showFooter": true,
     "showClock": true,
     "theme": {
       "name": "default",

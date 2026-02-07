@@ -259,7 +259,6 @@ Sidecar runs with sensible defaults. Create `~/.config/sidecar/config.json` only
     "workspaces": { "enabled": true }
   },
   "ui": {
-    "showFooter": true,
     "showClock": true,
     "nerdFontsEnabled": false
   }
@@ -270,7 +269,6 @@ Sidecar runs with sensible defaults. Create `~/.config/sidecar/config.json` only
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `showFooter` | `true` | Show keyboard hints in footer bar |
 | `showClock` | `true` | Show clock in header bar |
 | `nerdFontsEnabled` | `false` | Enable Nerd Font glyphs for enhanced visuals |
 

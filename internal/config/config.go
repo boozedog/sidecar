@@ -92,7 +92,6 @@ type KeymapConfig struct {
 
 // UIConfig configures UI appearance.
 type UIConfig struct {
-	ShowFooter       bool        `json:"showFooter"`
 	ShowClock        bool        `json:"showClock"`
 	Theme            ThemeConfig `json:"theme"`
 	NerdFontsEnabled bool        `json:"nerdFontsEnabled"` // enables Nerd Font glyphs (pill tabs, icons, etc.)
@@ -135,7 +134,6 @@ func Default() *Config {
 			Overrides: make(map[string]string),
 		},
 		UI: UIConfig{
-			ShowFooter: true,
 			ShowClock:  true,
 			Theme: ThemeConfig{
 				Name:      "default",

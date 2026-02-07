@@ -110,7 +110,6 @@ type Model struct {
 	diagnosticsModal        *modal.Modal
 	diagnosticsModalWidth   int
 	diagnosticsMouseHandler *mouse.Handler
-	showFooter              bool
 	showClock               bool
 	showPalette      bool
 	showQuitConfirm  bool
@@ -278,7 +277,6 @@ func New(reg *plugin.Registry, km *keymap.Registry, cfg *config.Config, currentV
 		keymap:                km,
 		activePlugin:          activeIdx,
 		activeContext:         "global",
-		showFooter:            cfg.UI.ShowFooter,
 		showClock:             cfg.UI.ShowClock,
 		palette:               palette.New(),
 		ui:                    ui,
@@ -713,10 +711,7 @@ func (m *Model) switchProject(projectPath string) tea.Cmd {
 	// Send WindowSizeMsg to all plugins so they recalculate layout/bounds.
 	// Without this, plugins like td-monitor lose mouse interactivity because
 	// their panel bounds are only calculated on WindowSizeMsg receipt.
-	adjustedHeight := m.height - headerHeight
-	if m.showFooter {
-		adjustedHeight -= footerHeight
-	}
+	adjustedHeight := m.height - headerHeight - footerHeight
 	sizeMsg := tea.WindowSizeMsg{Width: m.width, Height: adjustedHeight}
 	plugins := m.registry.Plugins()
 	for i, p := range plugins {

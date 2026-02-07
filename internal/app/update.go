@@ -59,10 +59,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Forward adjusted WindowSizeMsg to all plugins
 		// Plugins receive the content area size (minus header and footer)
 		// Must match the height passed to Plugin.View() in view.go
-		adjustedHeight := msg.Height - headerHeight
-		if m.showFooter {
-			adjustedHeight -= footerHeight
-		}
+		adjustedHeight := msg.Height - headerHeight - footerHeight
 		adjustedMsg := tea.WindowSizeMsg{
 			Width:  msg.Width,
 			Height: adjustedHeight,
@@ -1255,24 +1252,6 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.initIssueInput()
 			return m, nil
 		}
-	case "ctrl+h":
-		m.showFooter = !m.showFooter
-		// Notify plugins of changed content area height
-		adjustedHeight := m.height - headerHeight
-		if m.showFooter {
-			adjustedHeight -= footerHeight
-		}
-		sizeMsg := tea.WindowSizeMsg{Width: m.width, Height: adjustedHeight}
-		plugins := m.registry.Plugins()
-		var cmds []tea.Cmd
-		for i, p := range plugins {
-			newPlugin, cmd := p.Update(sizeMsg)
-			plugins[i] = newPlugin
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		}
-		return m, tea.Batch(cmds...)
 	case "r":
 		// Forward 'r' to plugin in contexts where it's used for specific actions
 		// or where the user is typing text input

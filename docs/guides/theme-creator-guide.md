@@ -9,7 +9,6 @@ The `ui` section of your config controls visual appearance:
 ```json
 {
   "ui": {
-    "showFooter": true,
     "showClock": true,
     "nerdFontsEnabled": false,
     "theme": { ... }
@@ -19,7 +18,6 @@ The `ui` section of your config controls visual appearance:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `showFooter` | bool | `true` | Show keyboard hints in footer bar |
 | `showClock` | bool | `true` | Show clock in header bar |
 | `nerdFontsEnabled` | bool | `false` | Enable Nerd Font glyphs for enhanced UI |
 
