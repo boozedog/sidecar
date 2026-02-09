@@ -35,12 +35,17 @@ changelog:
       - "^ci:"
       - "^chore:"
 
-homebrew_casks:
+brews:
   - name: sidecar
     homepage: https://github.com/marcus/sidecar
     description: A TUI dashboard for AI coding agents
-    directory: Casks
+    license: MIT
+    directory: Formula
     repository:
       owner: marcus
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    install: |
+      bin.install "sidecar"
+    test: |
+      system "#{bin}/sidecar", "--version"
