@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -38,14 +39,52 @@ type Adapter struct {
 // New creates a new Warp adapter.
 func New() *Adapter {
 	home, _ := os.UserHomeDir()
-	dbPath := filepath.Join(home,
-		"Library/Group Containers/2BBY89MBSN.dev.warp",
-		"Library/Application Support/dev.warp.Warp-Stable",
-		"warp.sqlite")
+	dbPath := findWarpDB(home)
 	return &Adapter{
 		dbPath:       dbPath,
 		sessionIndex: make(map[string]struct{}),
 	}
+}
+
+// findWarpDB searches candidate paths for the Warp SQLite database.
+// Returns the first path that exists, or the primary platform default if none found.
+func findWarpDB(home string) string {
+	candidates := warpDBCandidates(home)
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	if len(candidates) > 0 {
+		return candidates[0]
+	}
+	return filepath.Join(home, ".local", "state", "warp-terminal", "warp.sqlite")
+}
+
+// warpDBCandidates returns platform-ordered candidate paths for the Warp database.
+func warpDBCandidates(home string) []string {
+	var candidates []string
+
+	switch runtime.GOOS {
+	case "darwin":
+		candidates = append(candidates, filepath.Join(home,
+			"Library", "Group Containers", "2BBY89MBSN.dev.warp",
+			"Library", "Application Support", "dev.warp.Warp-Stable",
+			"warp.sqlite"))
+	case "linux":
+		stateHome := os.Getenv("XDG_STATE_HOME")
+		if stateHome == "" {
+			stateHome = filepath.Join(home, ".local", "state")
+		}
+		candidates = append(candidates, filepath.Join(stateHome, "warp-terminal", "warp.sqlite"))
+	case "windows":
+		localAppData := os.Getenv("LOCALAPPDATA")
+		if localAppData != "" {
+			candidates = append(candidates, filepath.Join(localAppData, "warp", "Warp", "data", "warp.sqlite"))
+		}
+	}
+
+	return candidates
 }
 
 // ID returns the adapter identifier.
