@@ -27,6 +27,7 @@ Study these before writing a new adapter:
 - `internal/adapter/claudecode` - Incremental JSONL parsing, targeted refresh
 - `internal/adapter/codex` - Directory cache, two-pass metadata parsing, global watch scope
 - `internal/adapter/cursor` - SQLite/WAL-aware cache invalidation, FD-safe DB access
+- `internal/adapter/pi` - Global scope, JSONL, CWD-based filtering, session classification, message prefix stripping
 
 ## Required Interface
 
@@ -221,6 +222,116 @@ go test ./internal/adapter/<adapter> -bench . -benchmem
 - [ ] Adapter registered via `register.go` and main import
 - [ ] Search uses adapter `Messages()` path
 - [ ] Large-session behavior validated (`FileSize`-driven)
+
+## Session Classification
+
+Adapters can classify sessions by setting `SessionCategory` on `adapter.Session`. The conversations plugin supports category filtering (f menu: i/r/s keys) and a quick toggle (C key).
+
+### Category Constants
+
+Defined in `internal/adapter/adapter.go`:
+- `adapter.SessionCategoryInteractive` — user-initiated interactive sessions
+- `adapter.SessionCategoryCron` — automated/scheduled sessions
+- `adapter.SessionCategorySystem` — system/gateway sessions
+
+### Implementation Guidelines
+
+- Classify during metadata parsing (zero extra I/O) — extract category from the first user message or session header
+- Only set `SessionCategory` if the adapter has meaningful categories. Don't set it if all sessions are the same type
+- If the category filter is active and `SessionCategory` is empty, sessions pass through (non-breaking for adapters that don't classify)
+- Gateway/system messages may need special classification — e.g., "System: WhatsApp gateway connected" is actually interactive, not system. Check for known preamble patterns before defaulting to system category
+
+### Example (from Pi adapter)
+
+```go
+func extractSessionMetadata(firstUserMessage string) (category, cronJobName, sourceChannel string) {
+    if strings.HasPrefix(firstUserMessage, "[cron:") {
+        return adapter.SessionCategoryCron, extractCronJobName(firstUserMessage), ""
+    }
+    if strings.HasPrefix(firstUserMessage, "System:") {
+        if strings.Contains(firstUserMessage, "WhatsApp gateway") {
+            return adapter.SessionCategoryInteractive, "", "whatsapp"
+        }
+        return adapter.SessionCategorySystem, "", ""
+    }
+    return adapter.SessionCategoryInteractive, "", detectSourceChannel(firstUserMessage)
+}
+```
+
+## Rich Metadata Fields
+
+Optional fields on `adapter.Session` for richer display and filtering:
+
+- `CronJobName string` — for cron/scheduled sessions; used as session name when set
+- `SourceChannel string` — for multi-channel adapters (e.g., "telegram", "whatsapp", "direct")
+
+Optional field on `adapter.Message`:
+
+- `SourceLabel string` — per-message source attribution badge (e.g., "[TG] Marcus", "[WA]", "[cron] job-name")
+
+Set these during parsing when the source format contains channel/origin metadata. The conversations plugin and conversation flow UI use these for display.
+
+## Message Content Cleaning
+
+For adapters whose source format embeds structured prefixes in user messages (e.g., channel tags, cron headers), strip them during parsing to keep the conversation view clean.
+
+### Pattern
+
+1. Extract metadata (source label, channel, category) from the raw message prefix
+2. Strip the prefix from `Message.Content` and text `ContentBlocks`
+3. Store the extracted label in `Message.SourceLabel` for badge display
+
+```go
+// In processMessageLine for user messages:
+content, _, _, contentBlocks := parseContent(raw.Message.Content)
+sourceLabel := extractSourceLabel(content)    // "[TG] Marcus"
+content = stripMessagePrefix(content)          // clean body only
+for i := range contentBlocks {
+    if contentBlocks[i].Type == "text" {
+        contentBlocks[i].Text = stripMessagePrefix(contentBlocks[i].Text)
+    }
+}
+msg := adapter.Message{
+    Content:       content,
+    ContentBlocks: contentBlocks,
+    SourceLabel:   sourceLabel,
+}
+```
+
+This keeps `Content` human-readable while preserving origin metadata in `SourceLabel`.
+
+## Global Adapter Gotchas
+
+Lessons learned from building global-scope adapters (Pi, Codex):
+
+### CWD-based Project Filtering
+
+Global adapters (`WatchScopeGlobal`) store sessions in a single directory regardless of project. They must filter by CWD matching `projectRoot` in `Sessions()`:
+
+- Resolve `projectRoot` once per `Sessions()` call (Abs + EvalSymlinks)
+- Use a fast CWD cache that reads only the first JSONL line (session header) to avoid full-file parses for non-matching sessions
+- Match with `filepath.Rel` — a session matches if its CWD is equal to or a subdirectory of the project root
+
+### Category Filter Interaction
+
+- The conversations plugin category filter only filters sessions that HAVE a `SessionCategory` set — empty passes through
+- Don't enable category filter by default in the plugin — it breaks non-classifying adapters
+- When adding classification to a new adapter, test that existing adapters without categories still display correctly
+
+### Project Switching
+
+Global adapters need to handle project switching gracefully:
+
+- The watcher persists across project switches, but `Sessions()` gets called with a new `projectRoot`
+- Directory listing caches with short TTLs (e.g., 500ms) naturally handle this
+- CWD caches keyed by file path are project-agnostic and don't need clearing
+- Session index maps (`sessionID -> path`) should be rebuilt on each `Sessions()` call to reflect the new project filter
+
+### Watcher Persistence
+
+- Global adapter watchers are created once and shared across project switches (the plugin deduplicates by adapter ID + WatchScope)
+- Watch events don't include project context — the coalescer triggers a full `Sessions()` refresh which applies the current project filter
+- Ensure watch goroutines don't hold stale project references
 
 ## Schema References
 
