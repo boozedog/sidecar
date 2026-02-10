@@ -468,10 +468,17 @@ func TestSessionsEmptySession(t *testing.T) {
 func TestCapabilities(t *testing.T) {
 	a := New()
 	caps := a.Capabilities()
-	for _, cap := range []string{"sessions", "messages", "usage", "watch"} {
-		if !caps[adapter.Capability(cap)] {
-			t.Errorf("expected %s capability", cap)
-		}
+	if !caps[adapter.CapSessions] {
+		t.Error("expected sessions capability")
+	}
+	if !caps[adapter.CapMessages] {
+		t.Error("expected messages capability")
+	}
+	if !caps[adapter.CapUsage] {
+		t.Error("expected usage capability")
+	}
+	if !caps[adapter.CapWatch] {
+		t.Error("expected watch capability")
 	}
 }
 
