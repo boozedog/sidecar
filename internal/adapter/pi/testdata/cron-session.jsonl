@@ -1,0 +1,4 @@
+{"type":"session","version":3,"id":"test-cron","timestamp":"2026-02-01T00:00:00Z","cwd":"/test/project"}
+{"type":"model_change","id":"mc1","parentId":null,"timestamp":"2026-02-01T00:00:01Z","provider":"anthropic","modelId":"claude-opus-4-5"}
+{"type":"message","id":"m1","parentId":"mc1","timestamp":"2026-02-01T00:00:02Z","message":{"role":"user","content":[{"type":"text","text":"[cron:abc123 daily-backup] Run the daily backup job"}]}}
+{"type":"message","id":"m2","parentId":"m1","timestamp":"2026-02-01T00:00:03Z","message":{"role":"assistant","content":[{"type":"text","text":"Running backup."}],"model":"claude-opus-4-5","usage":{"input":500,"output":100,"cacheRead":0,"cacheWrite":0,"totalTokens":600,"cost":{"total":0.01}}}}

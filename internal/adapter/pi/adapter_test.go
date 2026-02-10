@@ -634,3 +634,73 @@ func TestShortID(t *testing.T) {
 		}
 	}
 }
+
+func TestClassifySession(t *testing.T) {
+	tests := []struct {
+		name    string
+		message string
+		want    string
+	}{
+		{"cron prefix", "[cron:abc123 daily-backup] Run the daily backup job", adapter.SessionCategoryCron},
+		{"system prefix", "System: check disk usage", adapter.SessionCategorySystem},
+		{"telegram prefix", "[Telegram user123] Hello there", adapter.SessionCategoryInteractive},
+		{"whatsapp prefix", "[WhatsApp user456] Hi", adapter.SessionCategoryInteractive},
+		{"plain message", "Hello, what files are here?", adapter.SessionCategoryInteractive},
+		{"empty message", "", adapter.SessionCategoryInteractive},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := classifySession(tt.message)
+			if got != tt.want {
+				t.Errorf("classifySession(%q) = %q, want %q", tt.message, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSessionCategoryInMetadata(t *testing.T) {
+	a := newTestAdapter(t, "cron-session.jsonl")
+	sessionPath := filepath.Join(a.sessionsDir, "cron-session.jsonl")
+	info, err := os.Stat(sessionPath)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+
+	meta, err := a.sessionMetadata(sessionPath, info)
+	if err != nil {
+		t.Fatalf("sessionMetadata: %v", err)
+	}
+	if meta.SessionCategory != adapter.SessionCategoryCron {
+		t.Errorf("SessionCategory = %q, want %q", meta.SessionCategory, adapter.SessionCategoryCron)
+	}
+}
+
+func TestSessionCategoryInSessions(t *testing.T) {
+	a := newTestAdapter(t, "cron-session.jsonl")
+
+	sessions, err := a.Sessions("/test/project")
+	if err != nil {
+		t.Fatalf("Sessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	if sessions[0].SessionCategory != adapter.SessionCategoryCron {
+		t.Errorf("SessionCategory = %q, want %q", sessions[0].SessionCategory, adapter.SessionCategoryCron)
+	}
+}
+
+func TestSessionCategoryInteractiveDefault(t *testing.T) {
+	a := newTestAdapter(t, "basic-session.jsonl")
+
+	sessions, err := a.Sessions("/test/project")
+	if err != nil {
+		t.Fatalf("Sessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	if sessions[0].SessionCategory != adapter.SessionCategoryInteractive {
+		t.Errorf("SessionCategory = %q, want %q", sessions[0].SessionCategory, adapter.SessionCategoryInteractive)
+	}
+}

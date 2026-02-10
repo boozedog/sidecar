@@ -195,20 +195,21 @@ func (a *Adapter) Sessions(projectRoot string) ([]adapter.Session, error) {
 		newIndex[meta.SessionID] = f.path
 
 		sessions = append(sessions, adapter.Session{
-			ID:           meta.SessionID,
-			Name:         name,
-			AdapterID:    adapterID,
-			AdapterName:  adapterName,
-			AdapterIcon:  adapterIcon,
-			CreatedAt:    meta.FirstMsg,
-			UpdatedAt:    meta.LastMsg,
-			Duration:     meta.LastMsg.Sub(meta.FirstMsg),
-			IsActive:     time.Since(meta.LastMsg) < 5*time.Minute,
-			TotalTokens:  meta.TotalTokens,
-			EstCost:      meta.EstCost,
-			MessageCount: meta.MsgCount,
-			FileSize:     f.info.Size(),
-			Path:         f.path,
+			ID:              meta.SessionID,
+			Name:            name,
+			AdapterID:       adapterID,
+			AdapterName:     adapterName,
+			AdapterIcon:     adapterIcon,
+			CreatedAt:       meta.FirstMsg,
+			UpdatedAt:       meta.LastMsg,
+			Duration:        meta.LastMsg.Sub(meta.FirstMsg),
+			IsActive:        time.Since(meta.LastMsg) < 5*time.Minute,
+			TotalTokens:     meta.TotalTokens,
+			EstCost:         meta.EstCost,
+			MessageCount:    meta.MsgCount,
+			FileSize:        f.info.Size(),
+			Path:            f.path,
+			SessionCategory: meta.SessionCategory,
 		})
 	}
 
@@ -530,6 +531,7 @@ func (a *Adapter) parseSessionMetadataIncremental(path string, base *SessionMeta
 		EstCost:          base.EstCost,
 		PrimaryModel:     base.PrimaryModel,
 		FirstUserMessage: base.FirstUserMessage,
+		SessionCategory:  base.SessionCategory,
 	}
 
 	modelCounts := make(map[string]int, len(baseModelCounts))
@@ -599,11 +601,12 @@ func (a *Adapter) processMetadataLine(line []byte, meta *SessionMetadata, modelC
 		meta.LastMsg = raw.Timestamp
 		meta.MsgCount++
 
-		// Extract first user message for title
+		// Extract first user message for title and classify session
 		if meta.FirstUserMessage == "" && role == "user" {
 			content := extractTextContent(raw.Message.Content)
 			if content != "" {
 				meta.FirstUserMessage = content
+				meta.SessionCategory = classifySession(content)
 			}
 		}
 
@@ -1114,4 +1117,18 @@ func truncateTitle(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen-3] + "..."
+}
+
+// classifySession determines the session category from the first user message.
+func classifySession(firstUserMessage string) string {
+	if strings.HasPrefix(firstUserMessage, "[cron:") {
+		return adapter.SessionCategoryCron
+	}
+	if strings.HasPrefix(firstUserMessage, "System:") {
+		return adapter.SessionCategorySystem
+	}
+	if strings.HasPrefix(firstUserMessage, "[Telegram") || strings.HasPrefix(firstUserMessage, "[WhatsApp") {
+		return adapter.SessionCategoryInteractive
+	}
+	return adapter.SessionCategoryInteractive
 }

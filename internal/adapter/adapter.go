@@ -81,6 +81,13 @@ const (
 	HugeSessionThreshold  = 500 * 1024 * 1024 // 500MB - disable auto-reload
 )
 
+// Session category constants classify how a session was initiated.
+const (
+	SessionCategoryInteractive = "interactive"
+	SessionCategoryCron        = "cron"
+	SessionCategorySystem      = "system"
+)
+
 // Session represents an AI coding session.
 type Session struct {
 	ID           string
@@ -99,6 +106,8 @@ type Session struct {
 	MessageCount int     // Number of user/assistant messages (0 = metadata-only)
 	FileSize     int64   // Session file size in bytes, for performance-aware behavior
 	Path         string  // Absolute path to session file (for tiered watching, td-dca6fe)
+
+	SessionCategory string `json:"sessionCategory,omitempty"` // "interactive", "cron", "system", ""
 
 	// Worktree fields - populated when session is from a different worktree
 	WorktreeName string // Branch name or directory name of the worktree (empty if main or non-worktree)

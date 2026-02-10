@@ -92,4 +92,5 @@ type SessionMetadata struct {
 	EstCost          float64   // total cost from pre-calculated usage.cost.total
 	PrimaryModel     string    // most-used model in session
 	FirstUserMessage string    // content of first user message (used as title)
+	SessionCategory  string    // "interactive", "cron", "system"
 }
