@@ -290,6 +290,10 @@ function ConversationsPane() {
             <span className="sc-bullet sc-bulletGreen" />
             <span>docs-refactor <span className="sc-lineBlue" style={{ fontSize: 9 }}>Kiro</span></span>
           </div>
+          <div className="sc-item">
+            <span className="sc-bullet sc-bulletPink" />
+            <span>deploy-fix <span className="sc-lineGreen" style={{ fontSize: 9 }}>Pi</span></span>
+          </div>
         </div>
       </div>
       <div className="sc-paneMain">
@@ -1016,7 +1020,7 @@ export default function Home() {
                 isHighlighted={activeTab === 'conversations'}
                 onClick={() => handleCardClick('conversations')}
               >
-                All your agents in one timeline—Claude, Cursor, Gemini, Amp, Kiro, and more. Search across sessions, pick up where any agent left off.
+                All your agents in one timeline—Claude, Cursor, Gemini, Amp, Kiro, Pi, and more. Search across sessions, pick up where any agent left off.
               </FeatureCard>
 
               <FeatureCard
@@ -1096,7 +1100,7 @@ export default function Home() {
               MockupComponent={ConversationsMockup}
               features={[
                 'Chronological view across all coding agents',
-                'Claude, Cursor, Gemini, Codex, Amp, Kiro, Opencode, and Warp in one list',
+                'Claude, Cursor, Gemini, Codex, Amp, Kiro, Pi, Opencode, and Warp in one list',
                 'Search across all adapters at once',
                 'Filter by agent, date, or content',
                 'Expand messages and view tool calls',
@@ -1163,7 +1167,7 @@ export default function Home() {
                 icon="layers"
                 title="Multi-Agent Support"
                 color="orange"
-                description="Works with Claude Code, Codex, Gemini CLI, Opencode, Cursor, Amp Code, Kiro, and Warp."
+                description="Works with Claude Code, Codex, Gemini CLI, Opencode, Cursor, Amp Code, Kiro, Pi, and Warp."
               />
               <FeatureListItem
                 icon="git-branch"
@@ -1331,6 +1335,23 @@ export default function Home() {
                 <div className="sc-agentInfo">
                   <h3 className="sc-agentName">Kiro</h3>
                   <p className="sc-agentDesc">Amazon's AI coding assistant</p>
+                </div>
+              </div>
+
+              <div className="sc-agentCard">
+                <div className="sc-agentLogo">
+                  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="32" height="32" rx="6" fill="#2D1B69" />
+                    <circle cx="12" cy="14" r="2.5" fill="#A78BFA" />
+                    <circle cx="20" cy="14" r="2.5" fill="#A78BFA" />
+                    <path d="M10 20c0 0 2 3 6 3s6-3 6-3" stroke="#A78BFA" strokeWidth="2" strokeLinecap="round" />
+                    <circle cx="12" cy="14" r="1" fill="white" />
+                    <circle cx="20" cy="14" r="1" fill="white" />
+                  </svg>
+                </div>
+                <div className="sc-agentInfo">
+                  <h3 className="sc-agentName">Pi</h3>
+                  <p className="sc-agentDesc">Pi AI agent (OpenClaw)</p>
                 </div>
               </div>
 

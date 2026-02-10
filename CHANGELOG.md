@@ -2,6 +2,20 @@
 
 All notable changes to sidecar are documented here.
 
+## [v0.71.0] - 2026-02-09
+
+### Features
+
+- **Pi Adapter**: View Pi AI agent sessions (OpenClaw) in the conversations plugin, with session classification (interactive, cron, system), source channel detection, and CWD-based project matching
+
+### Documentation
+
+- Add Pi to supported agents on website homepage, conversations plugin docs, and intro page
+
+### Dependencies
+
+- Update td to v0.33.0
+
 ## [v0.70.0] - 2026-02-08
 
 ### Features

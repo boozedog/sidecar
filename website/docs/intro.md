@@ -138,7 +138,7 @@ Create isolated branches, launch agents with custom prompts, and watch their pro
 
 **Browse session history from all your AI agents with search and token tracking.**
 
-Unified view of sessions across Claude Code, Cursor, Gemini CLI, OpenCode, Codex, and Warp. Search by message content, expand to see full conversations, and track token usage per session. Useful for reviewing what your agents accomplished or resuming previous work.
+Unified view of sessions across Claude Code, Cursor, Gemini CLI, OpenCode, Codex, Pi, and Warp. Search by message content, expand to see full conversations, and track token usage per session. Useful for reviewing what your agents accomplished or resuming previous work.
 
 ![Conversations](/img/sidecar-conversations.png)
 

@@ -22,6 +22,7 @@ The Conversations plugin automatically detects and displays sessions from:
 | Gemini CLI | ★ | Google's CLI coding agent |
 | Kiro | κ | Amazon's AI coding assistant |
 | OpenCode | ◇ | Open-source coding agent |
+| Pi | 🐾 | Pi AI agent (OpenClaw) |
 | Warp | » | Warp terminal AI |
 
 Sessions from all detected agents appear in a unified list, with icons indicating the source.
