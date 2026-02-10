@@ -49,7 +49,7 @@ func classifyModel(model string) modelTier {
 	switch {
 	case strings.Contains(lower, "opus"):
 		major, minor := extractVersion(lower, "opus")
-		if major >= 4 && minor >= 5 {
+		if major > 4 || (major == 4 && minor >= 5) {
 			return tierOpusNew
 		}
 		return tierOpusOld
@@ -59,7 +59,7 @@ func classifyModel(model string) modelTier {
 
 	case strings.Contains(lower, "haiku"):
 		major, minor := extractVersion(lower, "haiku")
-		if major >= 4 && minor >= 5 {
+		if major > 4 || (major == 4 && minor >= 5) {
 			return tierHaikuNew
 		}
 		if major == 3 && minor == 5 {

@@ -36,7 +36,7 @@ func ComputeSessionSummary(messages []adapter.Message, duration time.Duration) S
 
 	for _, msg := range messages {
 		summary.MessageCount++
-		summary.TotalTokensIn += msg.InputTokens
+		summary.TotalTokensIn += msg.InputTokens + msg.CacheRead + msg.CacheWrite
 		summary.TotalTokensOut += msg.OutputTokens
 		summary.TotalCacheRead += msg.CacheRead
 		summary.TotalCacheWrite += msg.CacheWrite
@@ -102,7 +102,7 @@ func UpdateSessionSummary(summary *SessionSummary, newMessages []adapter.Message
 
 	for _, msg := range newMessages {
 		summary.MessageCount++
-		summary.TotalTokensIn += msg.InputTokens
+		summary.TotalTokensIn += msg.InputTokens + msg.CacheRead + msg.CacheWrite
 		summary.TotalTokensOut += msg.OutputTokens
 		summary.TotalCacheRead += msg.CacheRead
 		summary.TotalCacheWrite += msg.CacheWrite

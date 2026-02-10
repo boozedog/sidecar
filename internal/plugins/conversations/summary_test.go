@@ -108,6 +108,10 @@ func TestComputeSessionSummary_CacheRead(t *testing.T) {
 	if summary.TotalCacheRead != 8000 {
 		t.Errorf("expected TotalCacheRead 8000, got %d", summary.TotalCacheRead)
 	}
+	// TotalTokensIn includes cache tokens for display
+	if summary.TotalTokensIn != 18000 {
+		t.Errorf("expected TotalTokensIn 18000 (10000 + 8000 cache), got %d", summary.TotalTokensIn)
+	}
 	// Cost should be reduced due to cache
 	if summary.TotalCost <= 0 {
 		t.Error("expected positive cost")
@@ -360,8 +364,8 @@ func TestUpdateSessionSummary_Basic(t *testing.T) {
 	if summary.MessageCount != 3 {
 		t.Errorf("expected MessageCount 3, got %d", summary.MessageCount)
 	}
-	if summary.TotalTokensIn != 1500 {
-		t.Errorf("expected TotalTokensIn 1500, got %d", summary.TotalTokensIn)
+	if summary.TotalTokensIn != 1550 {
+		t.Errorf("expected TotalTokensIn 1550 (1000 + 500 + 50 cache), got %d", summary.TotalTokensIn)
 	}
 	if summary.TotalTokensOut != 750 {
 		t.Errorf("expected TotalTokensOut 750, got %d", summary.TotalTokensOut)

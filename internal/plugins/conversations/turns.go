@@ -96,7 +96,7 @@ func GroupMessagesIntoTurns(messages []adapter.Message) []Turn {
 
 		// Add message to current turn
 		currentTurn.Messages = append(currentTurn.Messages, msg)
-		currentTurn.TotalTokensIn += msg.InputTokens
+		currentTurn.TotalTokensIn += msg.InputTokens + msg.CacheRead + msg.CacheWrite
 		currentTurn.TotalTokensOut += msg.OutputTokens
 		currentTurn.ToolCount += len(msg.ToolUses)
 
@@ -191,7 +191,7 @@ func groupMessagesWithOffset(messages []adapter.Message, offset int) []Turn {
 // addMessageToTurn adds a message to a turn, updating all aggregates.
 func addMessageToTurn(t *Turn, msg adapter.Message) {
 	t.Messages = append(t.Messages, msg)
-	t.TotalTokensIn += msg.InputTokens
+	t.TotalTokensIn += msg.InputTokens + msg.CacheRead + msg.CacheWrite
 	t.TotalTokensOut += msg.OutputTokens
 	t.ToolCount += len(msg.ToolUses)
 	for _, tb := range msg.ThinkingBlocks {

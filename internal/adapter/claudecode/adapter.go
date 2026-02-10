@@ -869,7 +869,7 @@ func (a *Adapter) processMetadataLine(line []byte, meta *SessionMetadata, modelC
 
 	if raw.Message != nil && raw.Message.Usage != nil {
 		usage := raw.Message.Usage
-		meta.TotalTokens += usage.InputTokens + usage.OutputTokens
+		meta.TotalTokens += usage.InputTokens + usage.OutputTokens + usage.CacheReadInputTokens + usage.CacheCreationInputTokens
 
 		model := raw.Message.Model
 		if model != "" {
