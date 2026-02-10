@@ -1152,10 +1152,12 @@ func extractSessionMetadata(firstUserMessage string) (category, cronJobName, sou
 		return
 	}
 	if strings.HasPrefix(firstUserMessage, "System:") {
-		category = adapter.SessionCategorySystem
-		// Check for WhatsApp gateway in system messages
-		if strings.Contains(firstUserMessage, "WhatsApp gateway") {
+		if strings.Contains(firstUserMessage, "WhatsApp gateway") || strings.Contains(firstUserMessage, "WhatsApp") {
+			// WhatsApp gateway preamble — real human conversation, not a system command (td-3b259b)
+			category = adapter.SessionCategoryInteractive
 			sourceChannel = "whatsapp"
+		} else {
+			category = adapter.SessionCategorySystem
 		}
 		return
 	}

@@ -644,6 +644,7 @@ func TestClassifySession(t *testing.T) {
 	}{
 		{"cron prefix", "[cron:abc123 daily-backup] Run the daily backup job", adapter.SessionCategoryCron},
 		{"system prefix", "System: check disk usage", adapter.SessionCategorySystem},
+		{"whatsapp gateway system", "System: [2026-02-01 14:02:05 PST] WhatsApp gateway connected.", adapter.SessionCategoryInteractive},
 		{"telegram prefix", "[Telegram user123] Hello there", adapter.SessionCategoryInteractive},
 		{"whatsapp prefix", "[WhatsApp user456] Hi", adapter.SessionCategoryInteractive},
 		{"plain message", "Hello, what files are here?", adapter.SessionCategoryInteractive},
@@ -748,9 +749,9 @@ func TestExtractSessionMetadata(t *testing.T) {
 			adapter.SessionCategoryCron, "GitHub Issues Check (Sidecar + td)", "",
 		},
 		{
-			"whatsapp system",
+			"whatsapp gateway",
 			"System: [2026-02-01 14:02:05 PST] WhatsApp gateway connected.",
-			adapter.SessionCategorySystem, "", "whatsapp",
+			adapter.SessionCategoryInteractive, "", "whatsapp",
 		},
 		{
 			"system non-whatsapp",
@@ -816,8 +817,8 @@ func TestWhatsAppSessionMetadata(t *testing.T) {
 	if sessions[0].SourceChannel != "whatsapp" {
 		t.Errorf("SourceChannel = %q, want %q", sessions[0].SourceChannel, "whatsapp")
 	}
-	if sessions[0].SessionCategory != adapter.SessionCategorySystem {
-		t.Errorf("SessionCategory = %q, want %q", sessions[0].SessionCategory, adapter.SessionCategorySystem)
+	if sessions[0].SessionCategory != adapter.SessionCategoryInteractive {
+		t.Errorf("SessionCategory = %q, want %q", sessions[0].SessionCategory, adapter.SessionCategoryInteractive)
 	}
 }
 
