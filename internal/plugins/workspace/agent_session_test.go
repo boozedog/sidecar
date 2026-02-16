@@ -38,11 +38,13 @@ func writeSessionFile(t *testing.T, dir, name, content string, age time.Duration
 	return path
 }
 
-func TestDetectClaudeSessionStatus_MtimeActive(t *testing.T) {
+func TestDetectClaudeSessionStatus_FreshMtimeAssistant(t *testing.T) {
 	worktreePath := "/test/project/path"
 	_, projectDir := setupClaudeTestDir(t, worktreePath)
 
-	// Session file just written (mtime is now) → should be active
+	// Session file just written (mtime is now), last entry is assistant → active (td-b9cb0b).
+	// Fresh mtime + assistant = possible tool execution (progress entries still being written).
+	// The key improvement: threshold is 5s instead of 30s, so false-active window is brief.
 	writeSessionFile(t, projectDir, "test-session.jsonl",
 		`{"type":"assistant","message":{"role":"assistant","content":"Done!"}}`, 0)
 
@@ -51,7 +53,60 @@ func TestDetectClaudeSessionStatus_MtimeActive(t *testing.T) {
 		t.Fatal("expected ok=true")
 	}
 	if status != StatusActive {
-		t.Errorf("got %v, want StatusActive (file just written)", status)
+		t.Errorf("got %v, want StatusActive (fresh mtime, assistant could be tool_use)", status)
+	}
+}
+
+func TestDetectClaudeSessionStatus_RecentButStaleAssistantTextOnly(t *testing.T) {
+	worktreePath := "/test/project/path"
+	_, projectDir := setupClaudeTestDir(t, worktreePath)
+
+	// Session file modified 10s ago (past 5s threshold), last entry is text-only assistant → done.
+	// Text-only means the agent finished its turn and is idle (td-124b2e).
+	writeSessionFile(t, projectDir, "test-session.jsonl",
+		`{"type":"assistant","message":{"role":"assistant","content":"Done!"}}`, 10*time.Second)
+
+	status, ok := detectClaudeSessionStatus(worktreePath)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if status != StatusDone {
+		t.Errorf("got %v, want StatusDone (stale mtime, text-only assistant = idle)", status)
+	}
+}
+
+func TestDetectClaudeSessionStatus_RecentButStaleAssistantToolUse(t *testing.T) {
+	worktreePath := "/test/project/path"
+	_, projectDir := setupClaudeTestDir(t, worktreePath)
+
+	// Session file modified 10s ago, last entry is assistant with tool_use → waiting.
+	// tool_use means the agent dispatched a tool and needs user approval (td-124b2e).
+	writeSessionFile(t, projectDir, "test-session.jsonl",
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_123","name":"Bash","input":{"command":"ls"}}]}}`, 10*time.Second)
+
+	status, ok := detectClaudeSessionStatus(worktreePath)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if status != StatusWaiting {
+		t.Errorf("got %v, want StatusWaiting (stale mtime, tool_use = needs approval)", status)
+	}
+}
+
+func TestDetectClaudeSessionStatus_FreshMtimeUser(t *testing.T) {
+	worktreePath := "/test/project/path"
+	_, projectDir := setupClaudeTestDir(t, worktreePath)
+
+	// Session file just written, last entry is user → active (agent processing).
+	writeSessionFile(t, projectDir, "test-session.jsonl",
+		`{"type":"user","message":{"role":"user","content":"do something"}}`, 0)
+
+	status, ok := detectClaudeSessionStatus(worktreePath)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if status != StatusActive {
+		t.Errorf("got %v, want StatusActive (fresh mtime, last entry user)", status)
 	}
 }
 
@@ -59,7 +114,7 @@ func TestDetectClaudeSessionStatus_MtimeStaleAssistant(t *testing.T) {
 	worktreePath := "/test/project/path"
 	_, projectDir := setupClaudeTestDir(t, worktreePath)
 
-	// Session file old + last entry assistant → waiting (JSONL fallback)
+	// Session file old + last entry text-only assistant → done (agent idle, td-124b2e)
 	writeSessionFile(t, projectDir, "test-session.jsonl",
 		`{"type":"user","message":{"role":"user","content":"hello"}}
 {"type":"assistant","message":{"role":"assistant","content":"Done!"}}`,
@@ -69,8 +124,8 @@ func TestDetectClaudeSessionStatus_MtimeStaleAssistant(t *testing.T) {
 	if !ok {
 		t.Fatal("expected ok=true")
 	}
-	if status != StatusWaiting {
-		t.Errorf("got %v, want StatusWaiting (stale file, last entry assistant)", status)
+	if status != StatusDone {
+		t.Errorf("got %v, want StatusDone (stale file, text-only assistant = idle)", status)
 	}
 }
 
@@ -78,7 +133,7 @@ func TestDetectClaudeSessionStatus_MtimeStaleUser(t *testing.T) {
 	worktreePath := "/test/project/path"
 	_, projectDir := setupClaudeTestDir(t, worktreePath)
 
-	// Session file old + last entry user → active (agent is thinking, JSONL fallback)
+	// Session file old + last entry user → thinking (stale mtime, no placeholder written)
 	writeSessionFile(t, projectDir, "test-session.jsonl",
 		`{"type":"assistant","message":{"role":"assistant","content":"Hi"}}
 {"type":"user","message":{"role":"user","content":"do something"}}`,
@@ -88,8 +143,46 @@ func TestDetectClaudeSessionStatus_MtimeStaleUser(t *testing.T) {
 	if !ok {
 		t.Fatal("expected ok=true")
 	}
-	if status != StatusActive {
-		t.Errorf("got %v, want StatusActive (stale file, last entry user = thinking)", status)
+	if status != StatusThinking {
+		t.Errorf("got %v, want StatusThinking (stale file, last entry user = thinking)", status)
+	}
+}
+
+func TestDetectClaudeSessionStatus_PlaceholderAssistant(t *testing.T) {
+	worktreePath := "/test/project/path"
+	_, projectDir := setupClaudeTestDir(t, worktreePath)
+
+	// Claude Code writes a placeholder assistant entry with whitespace-only text
+	// when the API stream opens, before extended thinking finishes (td-b9cb0b).
+	writeSessionFile(t, projectDir, "test-session.jsonl",
+		`{"type":"user","message":{"role":"user","content":"do something"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"  "}]}}`, 0)
+
+	status, ok := detectClaudeSessionStatus(worktreePath)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if status != StatusThinking {
+		t.Errorf("got %v, want StatusThinking (placeholder assistant = model thinking)", status)
+	}
+}
+
+func TestDetectClaudeSessionStatus_PlaceholderAssistantStale(t *testing.T) {
+	worktreePath := "/test/project/path"
+	_, projectDir := setupClaudeTestDir(t, worktreePath)
+
+	// Same placeholder but with stale mtime — still thinking (extended thinking can be 55s+).
+	writeSessionFile(t, projectDir, "test-session.jsonl",
+		`{"type":"user","message":{"role":"user","content":"do something"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"  "}]}}`,
+		30*time.Second)
+
+	status, ok := detectClaudeSessionStatus(worktreePath)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if status != StatusThinking {
+		t.Errorf("got %v, want StatusThinking (stale placeholder = still thinking)", status)
 	}
 }
 
@@ -102,20 +195,47 @@ func TestDetectClaudeSessionStatus_SubagentMtime(t *testing.T) {
 		`{"type":"assistant","message":{"role":"assistant","content":"Done!"}}`,
 		2*time.Minute)
 
-	// But a sub-agent file was just written → should be active
+	// Sub-agent file was just written with real assistant content + fresh mtime → active
 	subagentsDir := filepath.Join(projectDir, "test-session", "subagents")
 	if err := os.MkdirAll(subagentsDir, 0755); err != nil {
 		t.Fatalf("failed to create subagents dir: %v", err)
 	}
 	writeSessionFile(t, subagentsDir, "agent-abc123.jsonl",
-		`{"type":"progress","data":{"type":"bash_progress","elapsedTimeSeconds":5}}`, 0)
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Looking at the code..."}]}}`, 0)
 
 	status, ok := detectClaudeSessionStatus(worktreePath)
 	if !ok {
 		t.Fatal("expected ok=true")
 	}
 	if status != StatusActive {
-		t.Errorf("got %v, want StatusActive (sub-agent file recently modified)", status)
+		t.Errorf("got %v, want StatusActive (sub-agent fresh mtime + real assistant)", status)
+	}
+}
+
+func TestDetectClaudeSessionStatus_SubagentStaleMtimeActiveContent(t *testing.T) {
+	worktreePath := "/test/project/path"
+	_, projectDir := setupClaudeTestDir(t, worktreePath)
+
+	// Main session stale, last entry assistant (tool_use dispatched sub-agent)
+	writeSessionFile(t, projectDir, "test-session.jsonl",
+		`{"type":"assistant","message":{"role":"assistant","content":"Done!"}}`,
+		2*time.Minute)
+
+	// Sub-agent file is stale (>5s) but its last JSONL entry is user → still processing (td-b9cb0b)
+	subagentsDir := filepath.Join(projectDir, "test-session", "subagents")
+	if err := os.MkdirAll(subagentsDir, 0755); err != nil {
+		t.Fatalf("failed to create subagents dir: %v", err)
+	}
+	writeSessionFile(t, subagentsDir, "agent-abc123.jsonl",
+		`{"type":"user","message":{"role":"user","content":"Analyze the codebase"}}`,
+		30*time.Second)
+
+	status, ok := detectClaudeSessionStatus(worktreePath)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if status != StatusThinking {
+		t.Errorf("got %v, want StatusThinking (sub-agent stale mtime + last=user = thinking)", status)
 	}
 }
 
@@ -141,8 +261,8 @@ func TestDetectClaudeSessionStatus_BothStale(t *testing.T) {
 	if !ok {
 		t.Fatal("expected ok=true")
 	}
-	if status != StatusWaiting {
-		t.Errorf("got %v, want StatusWaiting (both files stale, last entry assistant)", status)
+	if status != StatusDone {
+		t.Errorf("got %v, want StatusDone (both files stale, text-only assistant = idle)", status)
 	}
 }
 
@@ -150,7 +270,7 @@ func TestDetectClaudeSessionStatus_StaleWithHookProgress(t *testing.T) {
 	worktreePath := "/test/project/path"
 	_, projectDir := setupClaudeTestDir(t, worktreePath)
 
-	// Stale file with hook_progress + system entries after assistant → should fall through to assistant → waiting
+	// Stale file with hook_progress + system entries after assistant → should fall through to text-only assistant → done
 	writeSessionFile(t, projectDir, "test-session.jsonl",
 		`{"type":"user","message":{"role":"user","content":"hello"}}
 {"type":"assistant","message":{"role":"assistant","content":"Done!"}}
@@ -163,8 +283,8 @@ func TestDetectClaudeSessionStatus_StaleWithHookProgress(t *testing.T) {
 	if !ok {
 		t.Fatal("expected ok=true")
 	}
-	if status != StatusWaiting {
-		t.Errorf("got %v, want StatusWaiting (stale, JSONL scans past system/progress to assistant)", status)
+	if status != StatusDone {
+		t.Errorf("got %v, want StatusDone (stale, JSONL scans past system/progress to text-only assistant)", status)
 	}
 }
 
@@ -194,7 +314,7 @@ func TestDetectClaudeSessionStatus_AbandonedSessionSkipped(t *testing.T) {
 	worktreePath := "/test/project/path"
 	_, projectDir := setupClaudeTestDir(t, worktreePath)
 
-	// Older session with real content (assistant = waiting)
+	// Older session with real content (text-only assistant = done)
 	writeSessionFile(t, projectDir, "real-session.jsonl",
 		`{"type":"user","message":{"role":"user","content":"hello"}}
 {"type":"assistant","message":{"role":"assistant","content":"Done!"}}`,
@@ -210,8 +330,8 @@ func TestDetectClaudeSessionStatus_AbandonedSessionSkipped(t *testing.T) {
 	if !ok {
 		t.Fatal("expected ok=true (should skip abandoned, find real session)")
 	}
-	if status != StatusWaiting {
-		t.Errorf("got %v, want StatusWaiting (real session has last entry assistant)", status)
+	if status != StatusDone {
+		t.Errorf("got %v, want StatusDone (real session has text-only assistant = idle)", status)
 	}
 }
 
@@ -289,7 +409,7 @@ func TestDetectClaudeSessionStatus_UnderscoredPath(t *testing.T) {
 	worktreePath := "/test/zenleap_scratch/my_project"
 	_, projectDir := setupClaudeTestDir(t, worktreePath)
 
-	// Old file so mtime doesn't trigger, falls through to JSONL
+	// Old file so mtime doesn't trigger, falls through to JSONL — text-only assistant = done
 	writeSessionFile(t, projectDir, "test-session.jsonl",
 		`{"type":"assistant","message":{"role":"assistant","content":"Done!"}}`,
 		2*time.Minute)
@@ -298,8 +418,8 @@ func TestDetectClaudeSessionStatus_UnderscoredPath(t *testing.T) {
 	if !ok {
 		t.Fatal("detectClaudeSessionStatus() returned ok=false, expected ok=true")
 	}
-	if status != StatusWaiting {
-		t.Errorf("detectClaudeSessionStatus() = %v, want StatusWaiting", status)
+	if status != StatusDone {
+		t.Errorf("detectClaudeSessionStatus() = %v, want StatusDone", status)
 	}
 }
 

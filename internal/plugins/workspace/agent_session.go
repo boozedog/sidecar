@@ -22,11 +22,24 @@ const (
 	codexSessionCacheTTL    = 5 * time.Second
 	codexCwdCacheMaxEntries = 2048
 
-	// sessionActivityThreshold is how recently a session file must have been modified
-	// to consider the agent "active". Research shows: bash_progress entries write every 1s,
-	// agent_progress entries every 0.5-3s, but LLM thinking can produce gaps up to 55s with
-	// no writes. When mtime is stale, we fall back to JSONL content parsing (td-2fca7d).
+	// claudeActivityThreshold is used to detect ongoing tool execution when the last
+	// JSONL entry is "assistant" (which could mean tool_use in progress or turn complete).
+	// Progress entries write every 1-3s during tool execution, so 5s is sufficient.
+	// This is NOT used for the "thinking" case — JSONL content (last entry = user)
+	// handles that directly regardless of mtime (td-b9cb0b).
+	claudeActivityThreshold = 5 * time.Second
+
+	// sessionActivityThreshold is the mtime fast-path threshold for agents that
+	// use mtime-first detection (Codex, Pi, OpenCode, etc). Needs to be long
+	// enough to cover both tool execution and LLM thinking gaps.
 	sessionActivityThreshold = 30 * time.Second
+
+	// subagentMaxStaleness is the maximum time since a sub-agent file was last
+	// modified before we consider it abandoned. Sub-agents write progress entries
+	// during execution and JSONL entries between turns. Even the longest extended
+	// thinking (55s+) combined with tool execution gaps should never exceed 2 minutes.
+	// Beyond this, the sub-agent is definitely finished (td-b9cb0b).
+	subagentMaxStaleness = 2 * time.Minute
 )
 
 type codexSessionCacheEntry struct {
@@ -86,10 +99,77 @@ func anyFileRecentlyModified(dir, suffix string, threshold time.Duration) bool {
 	return false
 }
 
-// detectAgentSessionStatus checks agent session files to determine if an agent
-// is waiting for user input or actively processing.
-// Returns StatusWaiting if last message is from assistant (agent finished, waiting for user).
-// Returns StatusActive if last message is from user (agent is processing response).
+// subagentStatus checks the most recent sub-agent in dir and returns its status.
+// Uses the same detection logic as the main session: JSONL content + mtime (td-b9cb0b).
+//   - fresh mtime + last=user → just submitted → active
+//   - stale mtime + last=user → sub-agent model is thinking → thinking
+//   - placeholder assistant → sub-agent is thinking → thinking
+//   - fresh mtime + real assistant (tool_use or text) → sub-agent executing → active
+//   - stale mtime + real assistant → sub-agent finished → (0, false)
+func subagentStatus(dir string, mtimeThreshold time.Duration) (WorktreeStatus, bool) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0, false
+	}
+
+	// Find the most recently modified sub-agent JSONL file.
+	var mostRecentPath string
+	var mostRecentMtime int64
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if mt := info.ModTime().UnixNano(); mt > mostRecentMtime {
+			mostRecentMtime = mt
+			mostRecentPath = filepath.Join(dir, e.Name())
+		}
+	}
+
+	if mostRecentPath == "" {
+		return 0, false
+	}
+
+	// If the most recent sub-agent hasn't been written to in a long time,
+	// it's definitely finished regardless of JSONL content (td-b9cb0b).
+	if !isFileRecentlyModified(mostRecentPath, subagentMaxStaleness) {
+		return 0, false
+	}
+
+	// Check JSONL content for the sub-agent's state.
+	status, ok := getClaudeSessionStatus(mostRecentPath)
+	if !ok {
+		return 0, false
+	}
+
+	freshMtime := isFileRecentlyModified(mostRecentPath, mtimeThreshold)
+
+	switch status {
+	case StatusActive: // last=user
+		if freshMtime {
+			return StatusActive, true
+		}
+		return StatusThinking, true
+	case StatusThinking: // placeholder assistant
+		return StatusThinking, true
+	case StatusWaiting, StatusDone: // real assistant content (tool_use or text-only)
+		if freshMtime {
+			return StatusActive, true
+		}
+		return 0, false // sub-agent finished
+	}
+
+	return 0, false
+}
+
+// detectAgentSessionStatus checks agent session files to determine agent state.
+// Returns StatusWaiting if agent needs user approval (tool_use pending).
+// Returns StatusDone if agent finished its turn (text-only response, idle).
+// Returns StatusActive if agent is processing (last entry = user, or fresh mtime).
+// Returns StatusThinking if agent is thinking (stale mtime, waiting for model).
 // Returns (0, false) if unable to determine status.
 func detectAgentSessionStatus(agentType AgentType, worktreePath string) (WorktreeStatus, bool) {
 	switch agentType {
@@ -126,14 +206,17 @@ func claudeProjectDirName(absPath string) string {
 	return b.String()
 }
 
-// detectClaudeSessionStatus checks Claude session files using mtime + JSONL fallback.
+// detectClaudeSessionStatus checks Claude session files using JSONL content + mtime.
 // Claude stores sessions in ~/.claude/projects/{path-with-dashes}/*.jsonl
 // Sub-agent sessions in {session-uuid}/subagents/agent-*.jsonl
 //
-// Detection strategy (td-2fca7d):
-//  1. If main session or any sub-agent file was recently modified → active
-//  2. Otherwise, fall back to JSONL content: last user entry → active (thinking),
-//     last assistant entry → waiting (idle)
+// Detection strategy (td-b9cb0b):
+//  1. Always parse JSONL tail for the active/waiting distinction
+//  2. last entry = user → active (agent is thinking, mtime irrelevant)
+//  3. last entry = assistant → could be tool_use (active) or final response (waiting):
+//     - mtime fresh → tool execution in progress (progress entries every 1-3s) → active
+//     - sub-agent mtime fresh → sub-agent running → active
+//     - both stale → agent finished → waiting
 func detectClaudeSessionStatus(worktreePath string) (WorktreeStatus, bool) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -159,31 +242,59 @@ func detectClaudeSessionStatus(worktreePath string) (WorktreeStatus, bool) {
 	}
 
 	for _, sessionFile := range sessionFiles {
-		// Fast path: if the main session file was recently modified, agent is active.
-		if isFileRecentlyModified(sessionFile, sessionActivityThreshold) {
-			slog.Debug("claude session: active (main file mtime)", "file", filepath.Base(sessionFile))
+		// Parse JSONL content for status (td-b9cb0b, td-124b2e).
+		// Returns StatusActive (last=user), StatusThinking (placeholder assistant),
+		// StatusWaiting (assistant with tool_use), or StatusDone (assistant text-only).
+		status, ok := getClaudeSessionStatus(sessionFile)
+		if !ok {
+			// No user/assistant entry found (abandoned session) — try next candidate (td-2fca7d v8).
+			slog.Debug("claude session: skipping abandoned file", "file", filepath.Base(sessionFile))
+			continue
+		}
+
+		// Last entry is user: agent received a prompt, API stream hasn't opened yet.
+		// Fresh mtime → just submitted → active.
+		// Stale mtime (>5s) → model is thinking but no placeholder was written
+		// (happens when response goes straight to tool_use without text) → thinking.
+		if status == StatusActive {
+			if isFileRecentlyModified(sessionFile, claudeActivityThreshold) {
+				slog.Debug("claude session: active (JSONL last=user, fresh mtime)", "file", filepath.Base(sessionFile))
+				return StatusActive, true
+			}
+			slog.Debug("claude session: thinking (JSONL last=user, stale mtime)", "file", filepath.Base(sessionFile))
+			return StatusThinking, true
+		}
+
+		// Last assistant entry is a placeholder (whitespace-only content):
+		// Claude Code writes this when the API stream opens, before thinking finishes.
+		// Model is actively thinking (td-b9cb0b).
+		if status == StatusThinking {
+			slog.Debug("claude session: thinking (placeholder assistant)", "file", filepath.Base(sessionFile))
+			return StatusThinking, true
+		}
+
+		// Last entry is assistant with real content (tool_use or text-only).
+		// Fresh mtime → progress entries still being written → active regardless.
+		if isFileRecentlyModified(sessionFile, claudeActivityThreshold) {
+			slog.Debug("claude session: active (assistant + fresh mtime)", "file", filepath.Base(sessionFile))
 			return StatusActive, true
 		}
 
-		// Check sub-agent files: main session stops receiving agent_progress entries
-		// 20-45s before sub-agents finish, but sub-agent files continue being written
-		// (e.g., bash_progress every 1s during command execution).
+		// Check sub-agent files: main session stops receiving writes when a sub-agent
+		// is dispatched, but sub-agent files continue being written. We apply the
+		// same JSONL + mtime detection to sub-agents so thinking propagates (td-b9cb0b).
 		sessionUUID := strings.TrimSuffix(filepath.Base(sessionFile), ".jsonl")
 		subagentsDir := filepath.Join(projectDir, sessionUUID, "subagents")
-		if anyFileRecentlyModified(subagentsDir, ".jsonl", sessionActivityThreshold) {
-			slog.Debug("claude session: active (sub-agent file mtime)", "file", filepath.Base(sessionFile))
-			return StatusActive, true
+		if subStatus, subOK := subagentStatus(subagentsDir, claudeActivityThreshold); subOK {
+			slog.Debug("claude session: sub-agent override", "status", subStatus, "file", filepath.Base(sessionFile))
+			return subStatus, true
 		}
 
-		// Slow path: all files are stale. Fall back to JSONL content to distinguish
-		// "thinking" (last entry = user, agent is generating) from "idle" (last entry = assistant).
-		status, ok := getLastMessageStatusJSONL(sessionFile, "type", "user", "assistant")
-		if ok {
-			slog.Debug("claude session: status from JSONL fallback", "status", status, "file", filepath.Base(sessionFile))
-			return status, true
-		}
-		// No user/assistant entry found (abandoned session) — try next candidate (td-2fca7d v8).
-		slog.Debug("claude session: skipping abandoned file", "file", filepath.Base(sessionFile))
+		// Stale mtime, no active sub-agents. Content determines final status (td-124b2e):
+		// - StatusWaiting (tool_use) → agent needs user approval
+		// - StatusDone (text-only) → agent finished turn, idle
+		slog.Debug("claude session: idle", "status", status, "file", filepath.Base(sessionFile))
+		return status, true
 	}
 
 	slog.Debug("claude session: no valid session file found", "projectDir", projectDir, "candidates", len(sessionFiles))
@@ -595,13 +706,16 @@ func readTailLines(path string, maxBytes int) ([]string, error) {
 	return lines, nil
 }
 
-// getLastMessageStatusJSONL reads JSONL file and returns status based on the last
-// user or assistant message. Used as a fallback when mtime-based detection is
-// inconclusive (file is stale but agent may be thinking).
-// Returns StatusActive if last significant entry is from user (agent is thinking).
-// Returns StatusWaiting if last significant entry is from assistant (agent is idle).
-// All other entry types (system, progress, file-history-snapshot) are skipped.
-func getLastMessageStatusJSONL(path, typeField, userVal, assistantVal string) (WorktreeStatus, bool) {
+// getClaudeSessionStatus reads the tail of a Claude JSONL session file and returns
+// a status based on the last user/assistant entry.
+//
+// Claude Code writes a placeholder assistant entry with whitespace-only text (e.g. "  ")
+// when the API stream opens, before extended thinking completes → StatusThinking.
+//
+// For real assistant entries, the content blocks determine the status (td-124b2e):
+//   - tool_use blocks present → StatusWaiting (agent dispatched tool, needs user approval)
+//   - text-only blocks → StatusDone (agent finished turn, idle at prompt)
+func getClaudeSessionStatus(path string) (WorktreeStatus, bool) {
 	lines, err := readTailLines(path, sessionStatusTailBytes)
 	if err != nil {
 		return 0, false
@@ -612,22 +726,84 @@ func getLastMessageStatusJSONL(path, typeField, userVal, assistantVal string) (W
 		if line == "" {
 			continue
 		}
-		var msg map[string]interface{}
+		var msg map[string]any
 		if err := json.Unmarshal([]byte(line), &msg); err != nil {
 			continue
 		}
-		msgType, ok := msg[typeField].(string)
+		msgType, ok := msg["type"].(string)
 		if !ok {
 			continue
 		}
 		switch msgType {
-		case userVal:
+		case "user":
 			return StatusActive, true
-		case assistantVal:
-			return StatusWaiting, true
+		case "assistant":
+			if isPlaceholderAssistant(msg) {
+				return StatusThinking, true
+			}
+			if hasToolUse(msg) {
+				return StatusWaiting, true
+			}
+			return StatusDone, true
 		}
 	}
 	return 0, false
+}
+
+// isPlaceholderAssistant checks if an assistant JSONL entry is a placeholder
+// written when the API stream opens. Claude Code writes these with content
+// containing only whitespace text blocks before thinking/generation completes.
+func isPlaceholderAssistant(entry map[string]any) bool {
+	message, ok := entry["message"].(map[string]any)
+	if !ok {
+		return false
+	}
+	content, ok := message["content"].([]any)
+	if !ok {
+		return false
+	}
+	if len(content) == 0 {
+		return true
+	}
+	for _, block := range content {
+		b, ok := block.(map[string]any)
+		if !ok {
+			return false
+		}
+		blockType, _ := b["type"].(string)
+		if blockType != "text" {
+			return false
+		}
+		text, _ := b["text"].(string)
+		if strings.TrimSpace(text) != "" {
+			return false
+		}
+	}
+	return true
+}
+
+// hasToolUse checks if an assistant JSONL entry contains any tool_use content blocks.
+// tool_use blocks mean the agent dispatched a tool and is waiting for user approval
+// (e.g., Bash, Edit, Write). Text-only entries mean the agent finished its turn (td-124b2e).
+func hasToolUse(entry map[string]any) bool {
+	message, ok := entry["message"].(map[string]any)
+	if !ok {
+		return false
+	}
+	content, ok := message["content"].([]any)
+	if !ok {
+		return false
+	}
+	for _, block := range content {
+		b, ok := block.(map[string]any)
+		if !ok {
+			continue
+		}
+		if b["type"] == "tool_use" {
+			return true
+		}
+	}
+	return false
 }
 
 // findCodexSessionForPath finds the most recent Codex session matching CWD.
@@ -941,4 +1117,3 @@ func getOpenCodeLastMessageStatus(storageDir, sessionID string) (WorktreeStatus,
 		return 0, false
 	}
 }
-
