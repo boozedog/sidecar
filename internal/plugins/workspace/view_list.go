@@ -415,14 +415,10 @@ func (p *Plugin) renderWorktreeItem(wt *Worktree, selected bool, width int) stri
 	isSelected := selected
 	isActiveFocus := selected && p.activePane == PaneSidebar
 
-	// Status indicator - use agent-aware icon for main worktree when detected (td-3616aa)
+	// Status indicator - use special icon for main worktree
 	var statusIcon string
 	if wt.IsMain {
-		if wt.Status != StatusPaused {
-			statusIcon = wt.Status.Icon() // Show agent status icon
-		} else {
-			statusIcon = "◉" // Bullseye icon when no external agent detected
-		}
+		statusIcon = "◉" // Bullseye icon for main/primary worktree
 	} else {
 		statusIcon = wt.Status.Icon()
 	}
@@ -492,16 +488,8 @@ func (p *Plugin) renderWorktreeItem(wt *Worktree, selected bool, width int) stri
 	// Build second line parts (plain text)
 	var parts []string
 	if wt.IsMain {
-		// Show detected agent type before branch when present (td-3616aa)
-		if wt.ChosenAgentType != "" && wt.ChosenAgentType != AgentNone {
-			agentAbbrev := shellAgentAbbreviations[wt.ChosenAgentType]
-			if agentAbbrev == "" {
-				agentAbbrev = string(wt.ChosenAgentType)
-			}
-			parts = append(parts, agentAbbrev+" · "+wt.Branch)
-		} else {
-			parts = append(parts, wt.Branch)
-		}
+		// For root workspace, show branch name instead of agent
+		parts = append(parts, wt.Branch)
 	} else if wt.Agent != nil {
 		parts = append(parts, string(wt.Agent.Type))
 	} else if wt.ChosenAgentType != "" && wt.ChosenAgentType != AgentNone {
@@ -566,8 +554,8 @@ func (p *Plugin) renderWorktreeItem(wt *Worktree, selected bool, width int) stri
 
 	// Not selected - use colored styles for visual interest
 	var statusStyle lipgloss.Style
-	if wt.IsMain && wt.Status == StatusPaused {
-		// Primary/cyan color for main worktree when no external agent detected (td-3616aa)
+	if wt.IsMain {
+		// Primary/cyan color for main worktree to stand out
 		statusStyle = lipgloss.NewStyle().Foreground(styles.Primary)
 	} else {
 		switch wt.Status {
@@ -606,16 +594,8 @@ func (p *Plugin) renderWorktreeItem(wt *Worktree, selected bool, width int) stri
 	// For non-selected, style parts individually
 	var styledParts []string
 	if wt.IsMain {
-		// Show detected agent type before branch when present (td-3616aa)
-		if wt.ChosenAgentType != "" && wt.ChosenAgentType != AgentNone {
-			agentAbbrev := shellAgentAbbreviations[wt.ChosenAgentType]
-			if agentAbbrev == "" {
-				agentAbbrev = string(wt.ChosenAgentType)
-			}
-			styledParts = append(styledParts, agentAbbrev+" · "+wt.Branch)
-		} else {
-			styledParts = append(styledParts, wt.Branch)
-		}
+		// For root workspace, show branch name instead of agent
+		styledParts = append(styledParts, wt.Branch)
 	} else if wt.Agent != nil {
 		styledParts = append(styledParts, string(wt.Agent.Type))
 	} else if wt.ChosenAgentType != "" && wt.ChosenAgentType != AgentNone {
@@ -727,7 +707,16 @@ func (p *Plugin) renderShellEntryForSession(shell *ShellSession, selected bool, 
 			agentAbbrev = string(shell.ChosenAgent)
 		}
 		if shell.Agent != nil {
-			statusText = fmt.Sprintf("%s · running", agentAbbrev)
+			statusLabel := "active"
+			switch shell.Agent.Status {
+			case AgentStatusWaiting:
+				statusLabel = "waiting"
+			case AgentStatusDone:
+				statusLabel = "done"
+			case AgentStatusError:
+				statusLabel = "error"
+			}
+			statusText = fmt.Sprintf("%s · %s", agentAbbrev, statusLabel)
 		} else {
 			statusText = fmt.Sprintf("%s · stopped", agentAbbrev)
 		}

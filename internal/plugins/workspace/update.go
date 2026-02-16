@@ -123,8 +123,6 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			if !p.initialReconnectDone {
 				p.initialReconnectDone = true
 				cmds = append(cmds, p.reconnectAgents())
-				// Start polling main worktree for externally started agents (td-9233a4)
-				cmds = append(cmds, p.scheduleMainWorktreePoll(0))
 			}
 		}
 
@@ -517,32 +515,6 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		cmds = append(cmds, p.scheduleAgentPoll(msg.WorkspaceName, interval))
 		return p, tea.Batch(cmds...)
 
-	// Main worktree session-file polling (td-9233a4)
-	case pollMainWorktreeMsg:
-		// Generation guard: drop stale ticks from superseded poll loops
-		if msg.Generation != p.mainWorktreePollGen {
-			return p, nil
-		}
-		return p, p.pollMainWorktreeStatus()
-
-	case mainWorktreeStatusMsg:
-		for _, wt := range p.worktrees {
-			if !wt.IsMain {
-				continue
-			}
-			if msg.Detected {
-				wt.Status = msg.Status
-				wt.ChosenAgentType = msg.AgentType
-			} else if wt.Agent == nil {
-				// No external agent detected and no managed agent — reset to paused
-				wt.Status = StatusPaused
-				wt.ChosenAgentType = ""
-			}
-			break
-		}
-		cmds = append(cmds, p.scheduleMainWorktreePoll(pollIntervalMainWorktree))
-		return p, tea.Batch(cmds...)
-
 	// Shell session messages
 	case ShellCreatedMsg:
 		if msg.Err != nil {
@@ -866,10 +838,17 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		}
 
 	case ShellOutputMsg:
-		// Update last output time if content changed
+		// Update last output time and agent status (td-6b350b)
 		shell := p.findShellByName(msg.TmuxName)
-		if shell != nil && msg.Changed && shell.Agent != nil {
-			shell.Agent.LastOutput = time.Now()
+		if shell != nil && shell.Agent != nil {
+			if msg.Changed {
+				shell.Agent.LastOutput = time.Now()
+			}
+			// Apply session-file-detected status (runs every poll, not just on change)
+			if shell.ChosenAgent != AgentNone && shell.ChosenAgent != "" && msg.Status != 0 {
+				shell.Agent.Status = msg.Status
+				shell.Agent.WaitingFor = msg.WaitingFor
+			}
 		}
 		// Update bracketed paste mode and cursor position if in interactive mode (td-79ab6163)
 		if p.viewMode == ViewModeInteractive && p.shellSelected {
