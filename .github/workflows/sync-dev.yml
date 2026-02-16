@@ -1,0 +1,77 @@
+name: Sync develop branch
+
+on:
+  schedule:
+    - cron: "0 8 * * *" # daily at 8am UTC
+  workflow_dispatch: # manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/marcus/sidecar.git
+          git fetch upstream main
+          git fetch origin --tags
+
+      - name: Sync main to upstream
+        run: |
+          git checkout -B main upstream/main
+          git push origin main --force
+
+      - name: Discover topic branches
+        id: branches
+        run: |
+          BRANCHES=$(git branch -r --list 'origin/fix/*' 'origin/feature/*' 'origin/ci/*' | sed 's|origin/||' | xargs)
+          echo "Found topic branches: $BRANCHES"
+          echo "branches=$BRANCHES" >> "$GITHUB_OUTPUT"
+
+      - name: Rebuild develop
+        run: |
+          BRANCHES="${{ steps.branches.outputs.branches }}"
+          if [ -z "$BRANCHES" ]; then
+            echo "No topic branches found, develop = main"
+            git checkout -B develop main
+          else
+            git checkout -B develop main
+            for branch in $BRANCHES; do
+              echo "Merging $branch..."
+              git merge "origin/$branch" --no-edit -m "develop: merge $branch" || {
+                echo "::error::Merge conflict with $branch - needs rebase"
+                exit 1
+              }
+            done
+          fi
+
+      - name: Update .version from latest tag
+        run: |
+          LATEST=$(git tag --sort=-v:refname | head -1)
+          if [ -n "$LATEST" ] && [ -f .version ]; then
+            CLEAN=${LATEST#v}
+            CURRENT=$(cat .version)
+            if [ "$CLEAN" != "$CURRENT" ]; then
+              echo "Updating .version: $CURRENT -> $CLEAN"
+              printf '%s' "$CLEAN" > .version
+              git add .version
+              git commit -m "chore: bump .version to $CLEAN"
+            else
+              echo ".version already at $CLEAN"
+            fi
+          fi
+
+      - name: Push develop
+        run: |
+          git push origin develop --force
+          git push origin --tags
