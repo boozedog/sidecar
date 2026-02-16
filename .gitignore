@@ -70,3 +70,6 @@ screenshots/
 
 # Benchmarks
 .benchmarks/
+
+# Nix build output
+/result
