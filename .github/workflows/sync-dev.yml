@@ -55,20 +55,13 @@ jobs:
             done
           fi
 
-      - name: Update .version from latest tag
+      - name: Set .version from latest tag
         run: |
           LATEST=$(git tag --sort=-v:refname | head -1)
-          if [ -n "$LATEST" ] && [ -f .version ]; then
-            CLEAN=${LATEST#v}
-            CURRENT=$(cat .version)
-            if [ "$CLEAN" != "$CURRENT" ]; then
-              echo "Updating .version: $CURRENT -> $CLEAN"
-              printf '%s' "$CLEAN" > .version
-              git add .version
-              git commit -m "chore: bump .version to $CLEAN"
-            else
-              echo ".version already at $CLEAN"
-            fi
+          if [ -n "$LATEST" ]; then
+            printf '%s' "${LATEST#v}" > .version
+            git add .version
+            git diff --cached --quiet || git commit -m "chore: bump .version to ${LATEST#v}"
           fi
 
       - name: Push develop
