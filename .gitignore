@@ -43,7 +43,8 @@ config.local.json
 # Temporary files
 /tmp/
 *.tmp
-.todos/
+.todos/*
+!.todos/backup.sql
 
 # Worktree state files
 .sidecar-agent

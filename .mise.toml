@@ -46,3 +46,21 @@ make install-dev
 echo "==> Done! Version:"
 sidecar --version
 """
+
+[tasks.td-backup]
+description = "Dump td SQLite database to .todos/backup.sql"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+DB=".todos/issues.db"
+BACKUP=".todos/backup.sql"
+
+if [ ! -f "$DB" ]; then
+  echo "No td database found at $DB"
+  exit 0
+fi
+
+sqlite3 "$DB" .dump > "$BACKUP"
+echo "Backed up td database to $BACKUP ($(wc -c < "$BACKUP" | tr -d ' ') bytes)"
+"""
