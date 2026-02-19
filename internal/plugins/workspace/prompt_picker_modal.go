@@ -124,7 +124,7 @@ func (p *Plugin) promptPickerEmptySection() modal.Section {
 		sb.WriteString("\n")
 		sb.WriteString(styles.Muted.Render("  Global:  ~/.config/sidecar/config.json"))
 		sb.WriteString("\n")
-		sb.WriteString(styles.Muted.Render("  Project: .sidecar/config.json"))
+		sb.WriteString(styles.Muted.Render("  Project: ~/.config/sidecar/projects/<name>/config.json"))
 		sb.WriteString("\n\n")
 		sb.WriteString(styles.Muted.Render("See: .claude/skills/create-prompt/SKILL.md"))
 		sb.WriteString("\n\n")

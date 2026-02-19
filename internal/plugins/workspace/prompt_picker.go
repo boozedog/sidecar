@@ -196,7 +196,7 @@ func (pp *PromptPicker) View() string {
 		sb.WriteString("\n")
 		sb.WriteString(dimText("  Global:  ~/.config/sidecar/config.json"))
 		sb.WriteString("\n")
-		sb.WriteString(dimText("  Project: .sidecar/config.json"))
+		sb.WriteString(dimText("  Project: ~/.config/sidecar/projects/<name>/config.json"))
 		sb.WriteString("\n\n")
 		sb.WriteString(dimText("See: .claude/skills/create-prompt/SKILL.md"))
 		sb.WriteString("\n\n")

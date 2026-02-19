@@ -554,7 +554,7 @@ func (p *Plugin) saveSelectionState() {
 		}
 	}
 
-	// td-f88fdd: Shell display names now persisted in .sidecar/shells.json manifest
+	// td-f88fdd: Shell display names now persisted in shells.json manifest
 	// Only save selection state (which worktree/shell is selected)
 	if wtState.WorkspaceName != "" || wtState.ShellTmuxName != "" {
 		_ = state.SetWorkspaceState(p.ctx.ProjectRoot, wtState)
