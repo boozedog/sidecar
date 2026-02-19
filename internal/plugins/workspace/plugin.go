@@ -273,6 +273,9 @@ type Plugin struct {
 	// State restoration tracking (only restore once on startup)
 	stateRestored bool
 
+	// Legacy file migration tracking (once per Init)
+	legacyMigrated bool
+
 	// Interactive mode state (feature-gated behind tmux_interactive_input)
 	interactiveState   *InteractiveState
 	lastScrollTime     time.Time // For scroll debouncing (td-e2ce50)
@@ -397,13 +400,11 @@ func (p *Plugin) Init(ctx *plugin.Context) error {
 
 	// Reset state restoration flag for project switching
 	p.stateRestored = false
+	p.legacyMigrated = false
 
-	// Migrate legacy project files to centralized storage (must run before shell manifest load)
-	var wtPaths []string
-	for _, wt := range p.worktrees {
-		wtPaths = append(wtPaths, wt.Path)
-	}
-	if err := projectdir.Migrate(ctx.ProjectRoot, wtPaths); err != nil {
+	// Migrate legacy project-level files to centralized storage (must run before shell manifest load).
+	// Worktree-level migration runs later when worktrees are first discovered (RefreshDoneMsg).
+	if err := projectdir.Migrate(ctx.ProjectRoot, nil); err != nil {
 		p.ctx.Logger.Warn("failed to migrate legacy project files", "error", err)
 	}
 

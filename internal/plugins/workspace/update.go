@@ -11,6 +11,7 @@ import (
 	app "github.com/marcus/sidecar/internal/app"
 	"github.com/marcus/sidecar/internal/plugin"
 	"github.com/marcus/sidecar/internal/plugins/gitstatus"
+	"github.com/marcus/sidecar/internal/projectdir"
 )
 
 // Update handles messages.
@@ -74,6 +75,18 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 						p.selectedIdx = i
 						break
 					}
+				}
+			}
+
+			// Migrate legacy worktree files on first refresh (when worktrees are known)
+			if !p.legacyMigrated {
+				p.legacyMigrated = true
+				var wtPaths []string
+				for _, wt := range p.worktrees {
+					wtPaths = append(wtPaths, wt.Path)
+				}
+				if len(wtPaths) > 0 {
+					_ = projectdir.Migrate(p.ctx.ProjectRoot, wtPaths)
 				}
 			}
 
