@@ -104,14 +104,14 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 					continue // Skip metadata for worktrees with missing directories
 				}
 				cmds = append(cmds, p.loadStats(wt.Path))
-				// Load linked task ID from .sidecar-task file
-				wt.TaskID = loadTaskLink(wt.Path)
-				// Load chosen agent type from .sidecar-agent file
-				wt.ChosenAgentType = loadAgentType(wt.Path)
-				// Load PR URL from .sidecar-pr file
-				wt.PRURL = loadPRURL(wt.Path)
-				// Load base branch from .sidecar-base file
-				wt.BaseBranch = loadBaseBranch(wt.Path)
+				// Load linked task ID from centralized worktree data directory
+				wt.TaskID = loadTaskLink(p.ctx.ProjectRoot, wt.Path)
+				// Load chosen agent type from centralized worktree data directory
+				wt.ChosenAgentType = loadAgentType(p.ctx.ProjectRoot, wt.Path)
+				// Load PR URL from centralized worktree data directory
+				wt.PRURL = loadPRURL(p.ctx.ProjectRoot, wt.Path)
+				// Load base branch from centralized worktree data directory
+				wt.BaseBranch = loadBaseBranch(p.ctx.ProjectRoot, wt.Path)
 			}
 			// Detect conflicts across worktrees
 			cmds = append(cmds, p.loadConflicts())
@@ -1110,7 +1110,7 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 					// Save PR URL to worktree for indicator in list
 					if wt := p.mergeState.Worktree; wt != nil && msg.Data != "" {
 						wt.PRURL = msg.Data
-						_ = savePRURL(wt.Path, msg.Data)
+						_ = savePRURL(p.ctx.ProjectRoot, wt.Path, msg.Data)
 					}
 					// PR created (or existing found) - advanceMergeStep handles status transition
 					cmds = append(cmds, p.advanceMergeStep())

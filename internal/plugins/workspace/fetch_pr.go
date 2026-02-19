@@ -45,6 +45,7 @@ func (p *Plugin) fetchPRList() tea.Cmd {
 // fetchAndCreateWorktree fetches a PR branch and creates a worktree from it.
 func (p *Plugin) fetchAndCreateWorktree(pr PRListItem) tea.Cmd {
 	workDir := p.ctx.WorkDir
+	projectRoot := p.ctx.ProjectRoot
 	dirPrefix := p.ctx.Config != nil && p.ctx.Config.Plugins.Workspace.DirPrefix
 
 	return func() tea.Msg {
@@ -83,17 +84,17 @@ func (p *Plugin) fetchAndCreateWorktree(pr PRListItem) tea.Cmd {
 					if strings.Contains(outStr2, "already") {
 						existingPath := findWorktreePathForBranch(workDir, branch)
 						if existingPath != "" {
-							_ = savePRURL(existingPath, pr.URL)
-							_ = saveBaseBranch(existingPath, detectDefaultBranch(workDir))
+							_ = savePRURL(projectRoot, existingPath, pr.URL)
+							_ = saveBaseBranch(projectRoot, existingPath, detectDefaultBranch(workDir))
 						}
 						return FetchPRDoneMsg{AlreadyLocal: true, Branch: branch}
 					}
 					return FetchPRDoneMsg{Err: fmt.Errorf("git worktree add: %s", outStr2)}
 				}
 				// Worktree created from existing local branch
-				_ = savePRURL(wtPath, pr.URL)
+				_ = savePRURL(projectRoot, wtPath, pr.URL)
 				baseBranch := detectDefaultBranch(workDir)
-				_ = saveBaseBranch(wtPath, baseBranch)
+				_ = saveBaseBranch(projectRoot, wtPath, baseBranch)
 
 				wt := &Worktree{
 					Name:       dirName,
@@ -110,14 +111,14 @@ func (p *Plugin) fetchAndCreateWorktree(pr PRListItem) tea.Cmd {
 			return FetchPRDoneMsg{Err: fmt.Errorf("git worktree add: %s", outStr)}
 		}
 
-		// Write .sidecar-pr file with PR URL (non-fatal)
-		_ = savePRURL(wtPath, pr.URL)
+		// Write PR URL to centralized worktree data directory (non-fatal)
+		_ = savePRURL(projectRoot, wtPath, pr.URL)
 
 		// Detect base branch for diff
 		baseBranch := detectDefaultBranch(workDir)
 
-		// Persist base branch to .sidecar-base file (non-fatal)
-		_ = saveBaseBranch(wtPath, baseBranch)
+		// Persist base branch to centralized worktree data directory (non-fatal)
+		_ = saveBaseBranch(projectRoot, wtPath, baseBranch)
 
 		wt := &Worktree{
 			Name:       dirName,

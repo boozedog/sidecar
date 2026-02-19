@@ -1369,9 +1369,9 @@ func (p *Plugin) detectOrphanedWorktrees() {
 		// Skip main worktree - can't attach agents to it anyway
 		if wt.IsMain {
 			wt.IsOrphaned = false
-			// Clean up any stale .sidecar-agent file from main worktree
+			// Clean up any stale agent file from main worktree
 			if wt.ChosenAgentType != "" && wt.ChosenAgentType != AgentNone {
-				_ = os.Remove(filepath.Join(wt.Path, sidecarAgentFile))
+				_ = saveAgentType(p.ctx.ProjectRoot, wt.Path, AgentNone)
 				wt.ChosenAgentType = ""
 			}
 			continue
