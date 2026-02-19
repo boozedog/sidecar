@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/marcus/sidecar/internal/app"
+	"github.com/marcus/sidecar/internal/projectdir"
 )
 
 // fetchPRList runs gh pr list and returns open PRs.
@@ -66,8 +68,15 @@ func (p *Plugin) fetchAndCreateWorktree(pr PRListItem) tea.Cmd {
 				dirName = repoName + "-" + branch
 			}
 		}
-		parentDir := filepath.Dir(workDir)
-		wtPath := filepath.Join(parentDir, dirName)
+		projDir, resolveErr := projectdir.Resolve(projectRoot)
+		if resolveErr != nil {
+			return FetchPRDoneMsg{Err: fmt.Errorf("resolve project dir: %w", resolveErr)}
+		}
+		worktreesDir := filepath.Join(projDir, "worktrees")
+		if err := os.MkdirAll(worktreesDir, 0755); err != nil {
+			return FetchPRDoneMsg{Err: fmt.Errorf("create worktrees dir: %w", err)}
+		}
+		wtPath := filepath.Join(worktreesDir, dirName)
 
 		// Create worktree tracking the remote branch
 		addCmd := exec.Command("git", "worktree", "add", "-b", branch, wtPath, "origin/"+branch)

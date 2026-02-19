@@ -274,9 +274,16 @@ func (p *Plugin) doCreateWorktree(name, baseBranch, taskID, taskTitle string, ag
 		}
 	}
 
-	// Determine worktree path (sibling to main repo)
-	parentDir := filepath.Dir(p.ctx.WorkDir)
-	wtPath := filepath.Join(parentDir, dirName)
+	// Determine worktree path (under centralized project data directory)
+	projDir, err := projectdir.Resolve(p.ctx.ProjectRoot)
+	if err != nil {
+		return nil, fmt.Errorf("resolve project dir: %w", err)
+	}
+	worktreesDir := filepath.Join(projDir, "worktrees")
+	if err := os.MkdirAll(worktreesDir, 0755); err != nil {
+		return nil, fmt.Errorf("create worktrees dir: %w", err)
+	}
+	wtPath := filepath.Join(worktreesDir, dirName)
 
 	// Create worktree with new branch (branch name stays simple, just the user-provided name)
 	args := []string{"worktree", "add", "-b", name, wtPath, baseBranch}
