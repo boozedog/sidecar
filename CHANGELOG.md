@@ -2,6 +2,21 @@
 
 All notable changes to sidecar are documented here.
 
+## [v0.74.1] - 2026-02-19
+
+### Bug Fixes
+
+- Fix git locking errors in background operations by using `--no-optional-locks` (PR #186 by @borisvu)
+- Fix tmux agent reconnection type handling (PR #150 by @jacola)
+
+### Added
+
+- MIT LICENSE file (Issue #182)
+
+### Dependencies
+
+- Updated td to v0.38.0 — approval workflow fix
+
 ## [v0.73.1] - 2026-02-15
 
 ### Bug Fixes
