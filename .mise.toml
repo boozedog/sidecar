@@ -1,0 +1,66 @@
+[tasks.sync]
+description = "Sync upstream, rebuild develop, and install"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "==> Fetching upstream tags..."
+git fetch upstream --tags
+
+echo "==> Pushing tags to fork..."
+git push origin --tags
+
+echo "==> Triggering sync-dev workflow..."
+gh workflow run sync-dev.yml
+
+echo "==> Waiting for workflow to complete..."
+sleep 5
+while true; do
+  STATUS=$(gh run list --workflow=sync-dev.yml --limit 1 --json status -q '.[0].status')
+  if [ "$STATUS" = "completed" ]; then
+    CONCLUSION=$(gh run list --workflow=sync-dev.yml --limit 1 --json conclusion -q '.[0].conclusion')
+    if [ "$CONCLUSION" = "success" ]; then
+      echo "==> Workflow succeeded"
+    else
+      echo "==> Workflow failed (conclusion: $CONCLUSION)"
+      exit 1
+    fi
+    break
+  fi
+  printf "."
+  sleep 3
+done
+
+echo "==> Fetching updated develop..."
+git fetch origin
+
+echo "==> Updating local main to match origin/main..."
+git fetch origin main:main
+
+echo "==> Resetting to origin/develop..."
+git reset --hard origin/develop
+
+echo "==> Installing sidecar..."
+make install-dev
+
+echo "==> Done! Version:"
+sidecar --version
+"""
+
+[tasks.td-backup]
+description = "Dump td SQLite database to .todos/backup.sql"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+DB=".todos/issues.db"
+BACKUP=".todos/backup.sql"
+
+if [ ! -f "$DB" ]; then
+  echo "No td database found at $DB"
+  exit 0
+fi
+
+sqlite3 "$DB" .dump > "$BACKUP"
+echo "Backed up td database to $BACKUP ($(wc -c < "$BACKUP" | tr -d ' ') bytes)"
+"""

@@ -1,0 +1,57 @@
+name: Update vendorHash
+
+on:
+  workflow_run:
+    workflows: ["Sync develop branch"]
+    types: [completed]
+
+jobs:
+  update:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - name: Check for flake.nix
+        id: check
+        run: |
+          if [ -f flake.nix ]; then
+            echo "has_flake=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No flake.nix found, skipping"
+            echo "has_flake=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Nix
+        if: steps.check.outputs.has_flake == 'true'
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Set up Go
+        if: steps.check.outputs.has_flake == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Update vendorHash
+        if: steps.check.outputs.has_flake == 'true'
+        run: |
+          go mod vendor
+          NEW_HASH=$(nix hash path --sri --type sha256 vendor/)
+          rm -rf vendor/
+          echo "New vendorHash: $NEW_HASH"
+          OLD_HASH=$(grep -oP 'vendorHash = "\K[^"]+' flake.nix)
+          if [ "$NEW_HASH" != "$OLD_HASH" ]; then
+            echo "vendorHash changed: $OLD_HASH -> $NEW_HASH"
+            sed -i "s|vendorHash = \".*\"|vendorHash = \"$NEW_HASH\"|" flake.nix
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add flake.nix
+            git commit -m "fix: update vendorHash for new Go dependencies"
+            git push
+          else
+            echo "vendorHash unchanged, skipping"
+          fi
