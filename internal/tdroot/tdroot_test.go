@@ -10,13 +10,13 @@ import (
 	"github.com/marcus/sidecar/internal/config"
 )
 
-// setupTestConfig sets up an isolated config path for testing so that
-// projectdir.Resolve does not pollute the real config directory.
+// setupTestConfig sets up an isolated state directory for testing so that
+// projectdir.Resolve does not pollute the real state directory.
 func setupTestConfig(t *testing.T) {
 	t.Helper()
-	configDir := t.TempDir()
-	config.SetTestConfigPath(filepath.Join(configDir, "config.json"))
-	t.Cleanup(config.ResetTestConfigPath)
+	stateDir := t.TempDir()
+	config.SetTestStateDir(stateDir)
+	t.Cleanup(config.ResetTestStateDir)
 }
 
 func TestResolveTDRoot_NoFile(t *testing.T) {

@@ -147,10 +147,10 @@ func TestLoadPrompts(t *testing.T) {
 	globalDir := t.TempDir()
 	projectRoot := t.TempDir()
 
-	// Set up config path so projectdir resolves to our temp dir
-	configBase := t.TempDir()
-	config.SetTestConfigPath(filepath.Join(configBase, "config.json"))
-	t.Cleanup(config.ResetTestConfigPath)
+	// Set up state dir so projectdir resolves to our temp dir
+	stateDir := t.TempDir()
+	config.SetTestStateDir(stateDir)
+	t.Cleanup(config.ResetTestStateDir)
 
 	// Create global config with prompts
 	globalConfig := `{

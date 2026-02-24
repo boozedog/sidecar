@@ -851,10 +851,10 @@ func TestWriteAgentLauncher(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Set up config path so projectdir resolves to our temp dir
-	configDir := filepath.Join(tmpDir, "config")
-	config.SetTestConfigPath(filepath.Join(configDir, "config.json"))
-	t.Cleanup(config.ResetTestConfigPath)
+	// Set up state dir so projectdir resolves to our temp dir
+	stateDir := filepath.Join(tmpDir, "state")
+	config.SetTestStateDir(stateDir)
+	t.Cleanup(config.ResetTestStateDir)
 
 	// Resolve worktree dir to get expected path
 	wtDir, err := projectdir.WorktreeDir(projectRoot, worktreePath)

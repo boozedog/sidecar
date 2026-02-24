@@ -17,6 +17,9 @@ const (
 // testConfigPath overrides the config path for testing.
 var testConfigPath string
 
+// testStateDir overrides the state directory for testing.
+var testStateDir string
+
 // SetTestConfigPath sets a custom config path for testing.
 // Call ResetTestConfigPath() in test cleanup to restore default behavior.
 func SetTestConfigPath(path string) {
@@ -26,6 +29,16 @@ func SetTestConfigPath(path string) {
 // ResetTestConfigPath clears the test config path override.
 func ResetTestConfigPath() {
 	testConfigPath = ""
+}
+
+// SetTestStateDir sets a custom state directory for testing.
+func SetTestStateDir(dir string) {
+	testStateDir = dir
+}
+
+// ResetTestStateDir clears the test state directory override.
+func ResetTestStateDir() {
+	testStateDir = ""
 }
 
 // rawConfig is the JSON-unmarshaling intermediary.
@@ -273,4 +286,22 @@ func ConfigPath() string {
 		return ""
 	}
 	return filepath.Join(home, configDir, configFile)
+}
+
+// StateDir returns the directory for sidecar state files.
+// Follows XDG Base Directory Specification: $XDG_STATE_HOME/sidecar
+// (defaults to ~/.local/state/sidecar).
+func StateDir() string {
+	if testStateDir != "" {
+		return testStateDir
+	}
+	stateHome := os.Getenv("XDG_STATE_HOME")
+	if stateHome == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		stateHome = filepath.Join(home, ".local", "state")
+	}
+	return filepath.Join(stateHome, "sidecar")
 }

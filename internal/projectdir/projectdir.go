@@ -1,7 +1,8 @@
-// Package projectdir resolves project-specific data directories under
-// ~/.config/sidecar/projects/<slug>/. Each project root gets a unique
-// slug-named directory containing a meta.json that maps back to the
-// original project path.
+// Package projectdir resolves project-specific state directories under
+// $XDG_STATE_HOME/sidecar/projects/<slug>/ (defaults to
+// ~/.local/state/sidecar/projects/<slug>/). Each project root gets a
+// unique slug-named directory containing a meta.json that maps back to
+// the original project path.
 package projectdir
 
 import (
@@ -24,14 +25,14 @@ type projectMeta struct {
 // On subsequent calls with the same projectRoot, the existing directory is
 // returned.
 func Resolve(projectRoot string) (string, error) {
-	base := filepath.Dir(config.ConfigPath())
+	base := config.StateDir()
 	return resolveWithBase(base, projectRoot)
 }
 
 // WorktreeDir returns the worktree-specific data directory for a project.
 // The directory is created if it does not exist.
 func WorktreeDir(projectRoot, worktreePath string) (string, error) {
-	base := filepath.Dir(config.ConfigPath())
+	base := config.StateDir()
 	return worktreeDirWithBase(base, projectRoot, worktreePath)
 }
 
@@ -52,8 +53,8 @@ func worktreeDirWithBase(base, projectRoot, worktreePath string) (string, error)
 }
 
 // resolveWithBase is the testable core of Resolve. It uses base as the
-// sidecar config directory (e.g. ~/.config/sidecar) instead of deriving
-// it from config.ConfigPath().
+// sidecar state directory (e.g. ~/.local/state/sidecar) instead of
+// deriving it from config.StateDir().
 func resolveWithBase(base, projectRoot string) (string, error) {
 	projectsDir := filepath.Join(base, "projects")
 
