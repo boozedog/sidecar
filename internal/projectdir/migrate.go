@@ -9,15 +9,6 @@ import (
 	"github.com/marcus/sidecar/internal/config"
 )
 
-// legacyWorktreeFiles maps legacy per-worktree file names to their
-// centralized equivalents (stored under projects/<slug>/worktrees/<wt>/).
-var legacyWorktreeFiles = map[string]string{
-	".sidecar-task":  "task",
-	".sidecar-agent": "agent",
-	".sidecar-pr":    "pr",
-	".sidecar-base":  "base",
-}
-
 // legacySidecarDirFiles lists files inside the .sidecar/ directory that
 // should be moved to the centralized project directory.
 var legacySidecarDirFiles = []string{
@@ -33,18 +24,17 @@ var legacyTransientFiles = []string{
 }
 
 // Migrate moves legacy project files from project directories to centralized
-// storage under ~/.config/sidecar/projects/<slug>/. worktreePaths is the list
-// of known worktree paths to check for legacy files. Does nothing if no
+// storage under ~/.config/sidecar/projects/<slug>/. Does nothing if no
 // legacy files are found.
-func Migrate(projectRoot string, worktreePaths []string) error {
+func Migrate(projectRoot string) error {
 	base := filepath.Dir(config.ConfigPath())
-	return migrateWithBase(base, projectRoot, worktreePaths)
+	return migrateWithBase(base, projectRoot)
 }
 
 // migrateWithBase is the testable core of Migrate. It uses base as the
 // sidecar config directory instead of deriving it from config.ConfigPath().
-func migrateWithBase(base, projectRoot string, worktreePaths []string) error {
-	if !hasLegacyFiles(projectRoot, worktreePaths) {
+func migrateWithBase(base, projectRoot string) error {
+	if !hasLegacyFiles(projectRoot) {
 		return nil
 	}
 
@@ -81,28 +71,12 @@ func migrateWithBase(base, projectRoot string, worktreePaths []string) error {
 		log.Printf("sidecar: migrate %s: %v", tdRootSrc, err)
 	}
 
-	// Migrate per-worktree files
-	for _, wtPath := range worktreePaths {
-		wtDir, wtErr := worktreeDirWithBase(base, projectRoot, wtPath)
-		if wtErr != nil {
-			log.Printf("sidecar: resolve worktree dir for %s: %v", wtPath, wtErr)
-			continue
-		}
-		for legacyName, newName := range legacyWorktreeFiles {
-			src := filepath.Join(wtPath, legacyName)
-			dst := filepath.Join(wtDir, newName)
-			if err := moveFile(src, dst); err != nil {
-				log.Printf("sidecar: migrate %s: %v", src, err)
-			}
-		}
-	}
-
 	return nil
 }
 
 // hasLegacyFiles performs a quick scan to determine whether any legacy files
 // exist that need migration.
-func hasLegacyFiles(projectRoot string, worktreePaths []string) bool {
+func hasLegacyFiles(projectRoot string) bool {
 	// Check .sidecar/ directory
 	sidecarDir := filepath.Join(projectRoot, ".sidecar")
 	if _, err := os.Stat(sidecarDir); err == nil {
@@ -112,15 +86,6 @@ func hasLegacyFiles(projectRoot string, worktreePaths []string) bool {
 	// Check .td-root
 	if _, err := os.Stat(filepath.Join(projectRoot, ".td-root")); err == nil {
 		return true
-	}
-
-	// Check per-worktree files
-	for _, wtPath := range worktreePaths {
-		for legacyName := range legacyWorktreeFiles {
-			if _, err := os.Stat(filepath.Join(wtPath, legacyName)); err == nil {
-				return true
-			}
-		}
 	}
 
 	return false

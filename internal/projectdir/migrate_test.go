@@ -21,7 +21,6 @@ func TestMigrate_MovesLegacyFiles(t *testing.T) {
 	configDir := setupMigrateTestConfig(t)
 
 	projectRoot := t.TempDir()
-	wtPath := t.TempDir()
 
 	// Create legacy .sidecar/ directory with files
 	sidecarDir := filepath.Join(projectRoot, ".sidecar")
@@ -47,23 +46,9 @@ func TestMigrate_MovesLegacyFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create legacy worktree files
-	if err := os.WriteFile(filepath.Join(wtPath, ".sidecar-task"), []byte("td-abc123\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(wtPath, ".sidecar-agent"), []byte("claude\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(wtPath, ".sidecar-pr"), []byte("https://github.com/foo/bar/pull/1\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(wtPath, ".sidecar-base"), []byte("main\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
 	// Run migration
 	base := filepath.Dir(config.ConfigPath())
-	if err := migrateWithBase(base, projectRoot, []string{wtPath}); err != nil {
+	if err := migrateWithBase(base, projectRoot); err != nil {
 		t.Fatalf("migrateWithBase: %v", err)
 	}
 
@@ -91,33 +76,16 @@ func TestMigrate_MovesLegacyFiles(t *testing.T) {
 	// Check .td-root was moved
 	assertFileContent(t, filepath.Join(projDir, "td-root"), "/some/root\n")
 	assertFileNotExists(t, filepath.Join(projectRoot, ".td-root"))
-
-	// Check worktree files were moved
-	wtDir, err := worktreeDirWithBase(configDir, projectRoot, wtPath)
-	if err != nil {
-		t.Fatalf("worktreeDirWithBase: %v", err)
-	}
-	assertFileContent(t, filepath.Join(wtDir, "task"), "td-abc123\n")
-	assertFileContent(t, filepath.Join(wtDir, "agent"), "claude\n")
-	assertFileContent(t, filepath.Join(wtDir, "pr"), "https://github.com/foo/bar/pull/1\n")
-	assertFileContent(t, filepath.Join(wtDir, "base"), "main\n")
-
-	// Verify legacy worktree files are gone
-	assertFileNotExists(t, filepath.Join(wtPath, ".sidecar-task"))
-	assertFileNotExists(t, filepath.Join(wtPath, ".sidecar-agent"))
-	assertFileNotExists(t, filepath.Join(wtPath, ".sidecar-pr"))
-	assertFileNotExists(t, filepath.Join(wtPath, ".sidecar-base"))
 }
 
 func TestMigrate_NoopWhenNoLegacyFiles(t *testing.T) {
 	setupMigrateTestConfig(t)
 
 	projectRoot := t.TempDir()
-	wtPath := t.TempDir()
 
 	// No legacy files exist — migration should be a no-op
 	base := filepath.Dir(config.ConfigPath())
-	if err := migrateWithBase(base, projectRoot, []string{wtPath}); err != nil {
+	if err := migrateWithBase(base, projectRoot); err != nil {
 		t.Fatalf("migrateWithBase: %v", err)
 	}
 
@@ -141,19 +109,15 @@ func TestMigrate_PartialLegacyFiles(t *testing.T) {
 	configDir := setupMigrateTestConfig(t)
 
 	projectRoot := t.TempDir()
-	wtPath := t.TempDir()
 
-	// Create only some legacy files: .td-root and .sidecar-task
+	// Create only .td-root (partial legacy)
 	if err := os.WriteFile(filepath.Join(projectRoot, ".td-root"), []byte("/partial/root\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(wtPath, ".sidecar-task"), []byte("td-partial\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
 	// Run migration
 	base := filepath.Dir(config.ConfigPath())
-	if err := migrateWithBase(base, projectRoot, []string{wtPath}); err != nil {
+	if err := migrateWithBase(base, projectRoot); err != nil {
 		t.Fatalf("migrateWithBase: %v", err)
 	}
 
@@ -167,20 +131,9 @@ func TestMigrate_PartialLegacyFiles(t *testing.T) {
 	assertFileContent(t, filepath.Join(projDir, "td-root"), "/partial/root\n")
 	assertFileNotExists(t, filepath.Join(projectRoot, ".td-root"))
 
-	// Check worktree task was moved
-	wtDir, err := worktreeDirWithBase(configDir, projectRoot, wtPath)
-	if err != nil {
-		t.Fatalf("worktreeDirWithBase: %v", err)
-	}
-	assertFileContent(t, filepath.Join(wtDir, "task"), "td-partial\n")
-	assertFileNotExists(t, filepath.Join(wtPath, ".sidecar-task"))
-
 	// Files that didn't exist should not have been created
 	assertFileNotExists(t, filepath.Join(projDir, "shells.json"))
 	assertFileNotExists(t, filepath.Join(projDir, "config.json"))
-	assertFileNotExists(t, filepath.Join(wtDir, "agent"))
-	assertFileNotExists(t, filepath.Join(wtDir, "pr"))
-	assertFileNotExists(t, filepath.Join(wtDir, "base"))
 }
 
 // assertFileContent reads a file and asserts its content matches expected.

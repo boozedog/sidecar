@@ -16,7 +16,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/marcus/sidecar/internal/features"
-	"github.com/marcus/sidecar/internal/projectdir"
 )
 
 // paneCacheEntry holds cached capture output with timestamp
@@ -467,11 +466,7 @@ func (p *Plugin) buildAgentCommand(agentType AgentType, wt *Worktree, skipPerms 
 // Returns the command to execute the launcher. This avoids shell escaping issues
 // with complex markdown content (backticks, newlines, quotes, etc).
 func (p *Plugin) writeAgentLauncher(worktreePath string, agentType AgentType, baseCmd, prompt string) (string, error) {
-	wtDir, err := projectdir.WorktreeDir(p.ctx.ProjectRoot, worktreePath)
-	if err != nil {
-		return "", fmt.Errorf("resolve worktree dir: %w", err)
-	}
-	launcherFile := filepath.Join(wtDir, "start.sh")
+	launcherFile := filepath.Join(worktreePath, ".sidecar-start.sh")
 
 	// Build shell profile sourcing command.
 	// This ensures tools like claude (installed via nvm) are in PATH.
@@ -1374,9 +1369,9 @@ func (p *Plugin) detectOrphanedWorktrees() {
 		// Skip main worktree - can't attach agents to it anyway
 		if wt.IsMain {
 			wt.IsOrphaned = false
-			// Clean up any stale agent file from main worktree
+			// Clean up any stale .sidecar-agent file from main worktree
 			if wt.ChosenAgentType != "" && wt.ChosenAgentType != AgentNone {
-				_ = saveAgentType(p.ctx.ProjectRoot, wt.Path, AgentNone)
+				_ = os.Remove(filepath.Join(wt.Path, sidecarAgentFile))
 				wt.ChosenAgentType = ""
 			}
 			continue

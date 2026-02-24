@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -12,7 +11,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/marcus/sidecar/internal/app"
-	"github.com/marcus/sidecar/internal/projectdir"
 )
 
 // fetchPRList runs gh pr list and returns open PRs.
@@ -47,7 +45,6 @@ func (p *Plugin) fetchPRList() tea.Cmd {
 // fetchAndCreateWorktree fetches a PR branch and creates a worktree from it.
 func (p *Plugin) fetchAndCreateWorktree(pr PRListItem) tea.Cmd {
 	workDir := p.ctx.WorkDir
-	projectRoot := p.ctx.ProjectRoot
 	dirPrefix := p.ctx.Config != nil && p.ctx.Config.Plugins.Workspace.DirPrefix
 
 	return func() tea.Msg {
@@ -68,15 +65,8 @@ func (p *Plugin) fetchAndCreateWorktree(pr PRListItem) tea.Cmd {
 				dirName = repoName + "-" + branch
 			}
 		}
-		projDir, resolveErr := projectdir.Resolve(projectRoot)
-		if resolveErr != nil {
-			return FetchPRDoneMsg{Err: fmt.Errorf("resolve project dir: %w", resolveErr)}
-		}
-		worktreesDir := filepath.Join(projDir, "worktrees")
-		if err := os.MkdirAll(worktreesDir, 0755); err != nil {
-			return FetchPRDoneMsg{Err: fmt.Errorf("create worktrees dir: %w", err)}
-		}
-		wtPath := filepath.Join(worktreesDir, dirName)
+		parentDir := filepath.Dir(workDir)
+		wtPath := filepath.Join(parentDir, dirName)
 
 		// Create worktree tracking the remote branch
 		addCmd := exec.Command("git", "worktree", "add", "-b", branch, wtPath, "origin/"+branch)
@@ -93,17 +83,17 @@ func (p *Plugin) fetchAndCreateWorktree(pr PRListItem) tea.Cmd {
 					if strings.Contains(outStr2, "already") {
 						existingPath := findWorktreePathForBranch(workDir, branch)
 						if existingPath != "" {
-							_ = savePRURL(projectRoot, existingPath, pr.URL)
-							_ = saveBaseBranch(projectRoot, existingPath, detectDefaultBranch(workDir))
+							_ = savePRURL(existingPath, pr.URL)
+							_ = saveBaseBranch(existingPath, detectDefaultBranch(workDir))
 						}
 						return FetchPRDoneMsg{AlreadyLocal: true, Branch: branch}
 					}
 					return FetchPRDoneMsg{Err: fmt.Errorf("git worktree add: %s", outStr2)}
 				}
 				// Worktree created from existing local branch
-				_ = savePRURL(projectRoot, wtPath, pr.URL)
+				_ = savePRURL(wtPath, pr.URL)
 				baseBranch := detectDefaultBranch(workDir)
-				_ = saveBaseBranch(projectRoot, wtPath, baseBranch)
+				_ = saveBaseBranch(wtPath, baseBranch)
 
 				wt := &Worktree{
 					Name:       dirName,
@@ -120,14 +110,14 @@ func (p *Plugin) fetchAndCreateWorktree(pr PRListItem) tea.Cmd {
 			return FetchPRDoneMsg{Err: fmt.Errorf("git worktree add: %s", outStr)}
 		}
 
-		// Write PR URL to centralized worktree data directory (non-fatal)
-		_ = savePRURL(projectRoot, wtPath, pr.URL)
+		// Write .sidecar-pr file with PR URL (non-fatal)
+		_ = savePRURL(wtPath, pr.URL)
 
 		// Detect base branch for diff
 		baseBranch := detectDefaultBranch(workDir)
 
-		// Persist base branch to centralized worktree data directory (non-fatal)
-		_ = saveBaseBranch(projectRoot, wtPath, baseBranch)
+		// Persist base branch to .sidecar-base file (non-fatal)
+		_ = saveBaseBranch(wtPath, baseBranch)
 
 		wt := &Worktree{
 			Name:       dirName,
