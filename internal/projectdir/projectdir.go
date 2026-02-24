@@ -28,6 +28,29 @@ func Resolve(projectRoot string) (string, error) {
 	return resolveWithBase(base, projectRoot)
 }
 
+// WorktreeDir returns the worktree-specific data directory for a project.
+// The directory is created if it does not exist.
+func WorktreeDir(projectRoot, worktreePath string) (string, error) {
+	base := filepath.Dir(config.ConfigPath())
+	return worktreeDirWithBase(base, projectRoot, worktreePath)
+}
+
+// worktreeDirWithBase is the testable core of WorktreeDir.
+func worktreeDirWithBase(base, projectRoot, worktreePath string) (string, error) {
+	projectDir, err := resolveWithBase(base, projectRoot)
+	if err != nil {
+		return "", err
+	}
+
+	wtSlug := sanitizeSlug(filepath.Base(worktreePath))
+	dir := filepath.Join(projectDir, "worktrees", wtSlug)
+
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", fmt.Errorf("creating worktree dir: %w", err)
+	}
+	return dir, nil
+}
+
 // resolveWithBase is the testable core of Resolve. It uses base as the
 // sidecar config directory (e.g. ~/.config/sidecar) instead of deriving
 // it from config.ConfigPath().

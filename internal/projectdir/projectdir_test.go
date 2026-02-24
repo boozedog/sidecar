@@ -124,6 +124,38 @@ func TestResolveWithBase_FindsExistingByMeta(t *testing.T) {
 	}
 }
 
+func TestWorktreeDirWithBase(t *testing.T) {
+	base := t.TempDir()
+	projectRoot := "/Users/dave/Projects/repo"
+	worktreePath := "/Users/dave/Projects/repo-feature"
+
+	dir, err := worktreeDirWithBase(base, projectRoot, worktreePath)
+	if err != nil {
+		t.Fatalf("worktreeDirWithBase: %v", err)
+	}
+
+	// Should be a subdirectory of the project dir.
+	projectDir, err := resolveWithBase(base, projectRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rel, err := filepath.Rel(projectDir, dir)
+	if err != nil {
+		t.Fatalf("Rel: %v", err)
+	}
+
+	expected := filepath.Join("worktrees", "repo-feature")
+	if rel != expected {
+		t.Errorf("worktree relative path = %q, want %q", rel, expected)
+	}
+
+	// Directory should exist.
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		t.Fatalf("expected worktree directory to exist: %s", dir)
+	}
+}
+
 func TestSanitizeSlug(t *testing.T) {
 	tests := []struct {
 		input string

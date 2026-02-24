@@ -14,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/marcus/sidecar/internal/app"
 	"github.com/marcus/sidecar/internal/palette"
+	"github.com/marcus/sidecar/internal/projectdir"
 	"github.com/marcus/sidecar/internal/tdroot"
 )
 
@@ -291,11 +292,16 @@ func (p *Plugin) doCreateWorktree(name, baseBranch, taskID, taskTitle string, ag
 		p.ctx.Logger.Warn("failed to setup .td-root", "path", wtPath, "error", err)
 	}
 
-	// If task is linked, create .sidecar-task file and start the task
+	// If task is linked, create task file in centralized dir and start the task
 	if taskID != "" {
-		taskPath := filepath.Join(wtPath, sidecarTaskFile)
-		if err := os.WriteFile(taskPath, []byte(taskID+"\n"), 0644); err != nil {
-			p.ctx.Logger.Warn("failed to write .sidecar-task", "path", taskPath, "error", err)
+		wtDir, wtDirErr := projectdir.WorktreeDir(p.ctx.ProjectRoot, wtPath)
+		if wtDirErr != nil {
+			p.ctx.Logger.Warn("failed to resolve worktree dir for task", "path", wtPath, "error", wtDirErr)
+		} else {
+			taskPath := filepath.Join(wtDir, sidecarTaskFile)
+			if err := os.WriteFile(taskPath, []byte(taskID+"\n"), 0644); err != nil {
+				p.ctx.Logger.Warn("failed to write task file", "path", taskPath, "error", err)
+			}
 		}
 
 		// Auto-start the task in td (if td is available)
@@ -327,13 +333,13 @@ func (p *Plugin) doCreateWorktree(name, baseBranch, taskID, taskTitle string, ag
 		UpdatedAt:       time.Now(),
 	}
 
-	// Persist agent type to .sidecar-agent file
-	if err := saveAgentType(wtPath, agentType); err != nil {
+	// Persist agent type to centralized worktree data directory
+	if err := saveAgentType(p.ctx.ProjectRoot, wtPath, agentType); err != nil {
 		p.ctx.Logger.Warn("failed to save agent type", "path", wtPath, "error", err)
 	}
 
-	// Persist base branch to .sidecar-base file
-	if err := saveBaseBranch(wtPath, actualBase); err != nil {
+	// Persist base branch to centralized worktree data directory
+	if err := saveBaseBranch(p.ctx.ProjectRoot, wtPath, actualBase); err != nil {
 		p.ctx.Logger.Warn("failed to save base branch", "path", wtPath, "error", err)
 	}
 
@@ -550,25 +556,33 @@ func (p *Plugin) setupTDRoot(worktreePath string) error {
 	return tdroot.CreateTDRoot(p.ctx.ProjectRoot, worktreePath, mainPath)
 }
 
-const sidecarTaskFile = ".sidecar-task"
-const sidecarAgentFile = ".sidecar-agent"
-const sidecarPRFile = ".sidecar-pr"
-const sidecarBaseFile = ".sidecar-base"
+const sidecarTaskFile = "task"
+const sidecarAgentFile = "agent"
+const sidecarPRFile = "pr"
+const sidecarBaseFile = "base"
 
-// saveBaseBranch persists the base branch to the worktree.
-func saveBaseBranch(worktreePath string, branch string) error {
+// saveBaseBranch persists the base branch to the centralized worktree data directory.
+func saveBaseBranch(projectRoot, worktreePath string, branch string) error {
+	wtDir, err := projectdir.WorktreeDir(projectRoot, worktreePath)
+	if err != nil {
+		return fmt.Errorf("resolve worktree dir: %w", err)
+	}
 	if branch == "" {
-		basePath := filepath.Join(worktreePath, sidecarBaseFile)
+		basePath := filepath.Join(wtDir, sidecarBaseFile)
 		_ = os.Remove(basePath)
 		return nil
 	}
-	basePath := filepath.Join(worktreePath, sidecarBaseFile)
+	basePath := filepath.Join(wtDir, sidecarBaseFile)
 	return os.WriteFile(basePath, []byte(branch+"\n"), 0644)
 }
 
-// loadBaseBranch reads the base branch from the worktree.
-func loadBaseBranch(worktreePath string) string {
-	basePath := filepath.Join(worktreePath, sidecarBaseFile)
+// loadBaseBranch reads the base branch from the centralized worktree data directory.
+func loadBaseBranch(projectRoot, worktreePath string) string {
+	wtDir, err := projectdir.WorktreeDir(projectRoot, worktreePath)
+	if err != nil {
+		return ""
+	}
+	basePath := filepath.Join(wtDir, sidecarBaseFile)
 	content, err := os.ReadFile(basePath)
 	if err != nil {
 		return ""
@@ -576,9 +590,13 @@ func loadBaseBranch(worktreePath string) string {
 	return strings.TrimSpace(string(content))
 }
 
-// loadTaskLink reads the linked task ID from the .sidecar-task file.
-func loadTaskLink(worktreePath string) string {
-	taskPath := filepath.Join(worktreePath, sidecarTaskFile)
+// loadTaskLink reads the linked task ID from the centralized worktree data directory.
+func loadTaskLink(projectRoot, worktreePath string) string {
+	wtDir, err := projectdir.WorktreeDir(projectRoot, worktreePath)
+	if err != nil {
+		return ""
+	}
+	taskPath := filepath.Join(wtDir, sidecarTaskFile)
 	content, err := os.ReadFile(taskPath)
 	if err != nil {
 		return ""
@@ -586,21 +604,29 @@ func loadTaskLink(worktreePath string) string {
 	return strings.TrimSpace(string(content))
 }
 
-// saveAgentType persists the chosen agent type to the worktree.
-func saveAgentType(worktreePath string, agentType AgentType) error {
+// saveAgentType persists the chosen agent type to the centralized worktree data directory.
+func saveAgentType(projectRoot, worktreePath string, agentType AgentType) error {
+	wtDir, err := projectdir.WorktreeDir(projectRoot, worktreePath)
+	if err != nil {
+		return fmt.Errorf("resolve worktree dir: %w", err)
+	}
 	if agentType == AgentNone || agentType == "" {
 		// Remove file if None selected
-		agentPath := filepath.Join(worktreePath, sidecarAgentFile)
+		agentPath := filepath.Join(wtDir, sidecarAgentFile)
 		_ = os.Remove(agentPath)
 		return nil
 	}
-	agentPath := filepath.Join(worktreePath, sidecarAgentFile)
+	agentPath := filepath.Join(wtDir, sidecarAgentFile)
 	return os.WriteFile(agentPath, []byte(string(agentType)+"\n"), 0644)
 }
 
-// loadAgentType reads the chosen agent type from the worktree.
-func loadAgentType(worktreePath string) AgentType {
-	agentPath := filepath.Join(worktreePath, sidecarAgentFile)
+// loadAgentType reads the chosen agent type from the centralized worktree data directory.
+func loadAgentType(projectRoot, worktreePath string) AgentType {
+	wtDir, err := projectdir.WorktreeDir(projectRoot, worktreePath)
+	if err != nil {
+		return AgentNone
+	}
+	agentPath := filepath.Join(wtDir, sidecarAgentFile)
 	content, err := os.ReadFile(agentPath)
 	if err != nil {
 		return AgentNone
@@ -608,21 +634,29 @@ func loadAgentType(worktreePath string) AgentType {
 	return AgentType(strings.TrimSpace(string(content)))
 }
 
-// savePRURL persists the PR URL to the worktree.
-func savePRURL(worktreePath string, prURL string) error {
+// savePRURL persists the PR URL to the centralized worktree data directory.
+func savePRURL(projectRoot, worktreePath string, prURL string) error {
+	wtDir, err := projectdir.WorktreeDir(projectRoot, worktreePath)
+	if err != nil {
+		return fmt.Errorf("resolve worktree dir: %w", err)
+	}
 	if prURL == "" {
 		// Remove file if empty
-		prPath := filepath.Join(worktreePath, sidecarPRFile)
+		prPath := filepath.Join(wtDir, sidecarPRFile)
 		_ = os.Remove(prPath)
 		return nil
 	}
-	prPath := filepath.Join(worktreePath, sidecarPRFile)
+	prPath := filepath.Join(wtDir, sidecarPRFile)
 	return os.WriteFile(prPath, []byte(prURL+"\n"), 0644)
 }
 
-// loadPRURL reads the PR URL from the worktree.
-func loadPRURL(worktreePath string) string {
-	prPath := filepath.Join(worktreePath, sidecarPRFile)
+// loadPRURL reads the PR URL from the centralized worktree data directory.
+func loadPRURL(projectRoot, worktreePath string) string {
+	wtDir, err := projectdir.WorktreeDir(projectRoot, worktreePath)
+	if err != nil {
+		return ""
+	}
+	prPath := filepath.Join(wtDir, sidecarPRFile)
 	content, err := os.ReadFile(prPath)
 	if err != nil {
 		return ""
@@ -632,6 +666,7 @@ func loadPRURL(worktreePath string) string {
 
 // linkTask returns a command to link a td task to a worktree.
 func (p *Plugin) linkTask(wt *Worktree, taskID string) tea.Cmd {
+	projectRoot := p.ctx.ProjectRoot
 	return func() tea.Msg {
 		// Validate task exists by running td show
 		cmd := exec.Command("td", "show", taskID)
@@ -643,12 +678,19 @@ func (p *Plugin) linkTask(wt *Worktree, taskID string) tea.Cmd {
 			}
 		}
 
-		// Write task link file
-		taskPath := filepath.Join(wt.Path, sidecarTaskFile)
+		// Write task link file to centralized worktree data directory
+		wtDir, err := projectdir.WorktreeDir(projectRoot, wt.Path)
+		if err != nil {
+			return TaskLinkedMsg{
+				WorkspaceName: wt.Name,
+				Err:           fmt.Errorf("resolve worktree dir: %w", err),
+			}
+		}
+		taskPath := filepath.Join(wtDir, sidecarTaskFile)
 		if err := os.WriteFile(taskPath, []byte(taskID+"\n"), 0644); err != nil {
 			return TaskLinkedMsg{
 				WorkspaceName: wt.Name,
-				Err:           fmt.Errorf("write .sidecar-task: %w", err),
+				Err:           fmt.Errorf("write task file: %w", err),
 			}
 		}
 
@@ -661,12 +703,20 @@ func (p *Plugin) linkTask(wt *Worktree, taskID string) tea.Cmd {
 
 // unlinkTask returns a command to unlink a td task from a worktree.
 func (p *Plugin) unlinkTask(wt *Worktree) tea.Cmd {
+	projectRoot := p.ctx.ProjectRoot
 	return func() tea.Msg {
-		taskPath := filepath.Join(wt.Path, sidecarTaskFile)
+		wtDir, err := projectdir.WorktreeDir(projectRoot, wt.Path)
+		if err != nil {
+			return TaskLinkedMsg{
+				WorkspaceName: wt.Name,
+				Err:           fmt.Errorf("resolve worktree dir: %w", err),
+			}
+		}
+		taskPath := filepath.Join(wtDir, sidecarTaskFile)
 		if err := os.Remove(taskPath); err != nil && !os.IsNotExist(err) {
 			return TaskLinkedMsg{
 				WorkspaceName: wt.Name,
-				Err:           fmt.Errorf("remove .sidecar-task: %w", err),
+				Err:           fmt.Errorf("remove task file: %w", err),
 			}
 		}
 
