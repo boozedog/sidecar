@@ -37,6 +37,7 @@ const (
 	ModalProjectSwitcher                   // Project switcher
 	ModalWorktreeSwitcher                  // Worktree switcher
 	ModalThemeSwitcher                     // Theme switcher
+	ModalOpenIn                            // Open In IDE picker
 	ModalIssueInput                        // Issue ID text input
 	ModalIssuePreview                      // Issue preview display (lowest priority)
 )
@@ -61,6 +62,8 @@ func (m *Model) activeModal() ModalKind {
 		return ModalWorktreeSwitcher
 	case m.showThemeSwitcher:
 		return ModalThemeSwitcher
+	case m.showOpenIn:
+		return ModalOpenIn
 	case m.showIssueInput:
 		return ModalIssueInput
 	case m.showIssuePreview:
@@ -159,6 +162,16 @@ type Model struct {
 
 	// Worktree info cache (avoids git subprocess forks on every View render)
 	cachedWorktreeInfo *WorktreeInfo
+
+	// Open In modal
+	showOpenIn         bool
+	openInCursor       int
+	openInScroll       int
+	openInApps         []openInApp
+	openInLastID       string
+	openInModal        *modal.Modal
+	openInModalWidth   int
+	openInMouseHandler *mouse.Handler
 
 	// Theme switcher modal
 	showThemeSwitcher          bool
