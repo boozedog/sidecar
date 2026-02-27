@@ -144,6 +144,7 @@ func TestGetAgentCommand(t *testing.T) {
 		{AgentCursor, "cursor-agent"},
 		{AgentOpenCode, "opencode"},
 		{AgentPi, "pi"},
+		{AgentAmp, "amp"},
 		{AgentCustom, "claude"}, // Falls back to claude
 	}
 
@@ -458,6 +459,7 @@ func TestShouldShowSkipPermissions(t *testing.T) {
 		{AgentCursor, true},    // Has -f flag
 		{AgentOpenCode, false}, // No known flag
 		{AgentPi, false},       // No known flag
+		{AgentAmp, true},       // Has --dangerously-allow-all
 	}
 
 	p := &Plugin{}
@@ -566,6 +568,23 @@ func TestBuildAgentCommand(t *testing.T) {
 			wantFlag:   "",
 			wantPrompt: false,
 		},
+		// Amp tests
+		{
+			name:       "amp no skip no task",
+			agentType:  AgentAmp,
+			skipPerms:  false,
+			taskID:     "",
+			wantFlag:   "",
+			wantPrompt: false,
+		},
+		{
+			name:       "amp with skip no task",
+			agentType:  AgentAmp,
+			skipPerms:  true,
+			taskID:     "",
+			wantFlag:   "--dangerously-allow-all",
+			wantPrompt: false,
+		},
 		// Aider tests
 		{
 			name:       "aider no skip no task",
@@ -635,6 +654,8 @@ func TestBuildAgentCommandSyntax(t *testing.T) {
 		{AgentOpenCode, true, "opencode"}, // No skip flag
 		{AgentPi, false, "pi"},
 		{AgentPi, true, "pi"}, // No skip flag
+		{AgentAmp, false, "amp"},
+		{AgentAmp, true, "amp --dangerously-allow-all"},
 		{AgentAider, false, "aider"},
 		{AgentAider, true, "aider --yes"},
 	}
@@ -898,6 +919,13 @@ func TestWriteAgentLauncher(t *testing.T) {
 			prompt:    "Task: fix bug",
 			wantCmd:   "bash '" + expectedLauncherPath + "'",
 		},
+		{
+			name:      "amp pipes via stdin",
+			agentType: AgentAmp,
+			baseCmd:   "amp --dangerously-allow-all",
+			prompt:    "Task: fix bug",
+			wantCmd:   "bash '" + tmpDir + "/.sidecar-start.sh'",
+		},
 	}
 
 	for _, tt := range tests {
@@ -940,6 +968,13 @@ func TestWriteAgentLauncher(t *testing.T) {
 			// Check that the script starts with shebang
 			if !strings.HasPrefix(scriptStr, "#!/bin/bash") {
 				t.Error("launcher script should start with #!/bin/bash")
+			}
+
+			// Amp-specific: verify pipe syntax (prompt piped to command via stdin)
+			if tt.agentType == AgentAmp {
+				if !strings.Contains(scriptStr, "SIDECAR_PROMPT_EOF' | "+tt.baseCmd) {
+					t.Errorf("amp script should pipe prompt to command via stdin, got:\n%s", scriptStr)
+				}
 			}
 
 			// Cleanup for next test
