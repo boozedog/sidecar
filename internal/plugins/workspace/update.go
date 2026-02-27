@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	app "github.com/marcus/sidecar/internal/app"
+	"github.com/marcus/sidecar/internal/migration"
 	"github.com/marcus/sidecar/internal/plugin"
 	"github.com/marcus/sidecar/internal/plugins/gitstatus"
 )
@@ -78,6 +79,7 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 			}
 
 			// On first refresh after startup/project-switch, restore saved selection
+			// and run one-time legacy migration.
 			if !p.stateRestored {
 				p.stateRestored = true
 				// Only restore if we don't already have a valid selection from above
@@ -85,6 +87,17 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 				if selectedName == "" && (len(p.worktrees) > 0 || len(p.shells) > 0) {
 					p.restoreSelectionState()
 				}
+
+				// Migrate legacy per-project and per-worktree files to the
+				// centralized XDG state directory. This is idempotent and
+				// non-destructive — originals are never deleted.
+				wtPaths := make([]string, 0, len(p.worktrees))
+				for _, wt := range p.worktrees {
+					if !wt.IsMissing {
+						wtPaths = append(wtPaths, wt.Path)
+					}
+				}
+				go migration.MigrateProject(p.ctx.ProjectRoot, wtPaths)
 			}
 
 			// Bounds check in case the selected worktree was deleted
@@ -104,14 +117,14 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 					continue // Skip metadata for worktrees with missing directories
 				}
 				cmds = append(cmds, p.loadStats(wt.Path))
-				// Load linked task ID from .sidecar-task file
-				wt.TaskID = loadTaskLink(wt.Path)
-				// Load chosen agent type from .sidecar-agent file
-				wt.ChosenAgentType = loadAgentType(wt.Path)
-				// Load PR URL from .sidecar-pr file
-				wt.PRURL = loadPRURL(wt.Path)
-				// Load base branch from .sidecar-base file
-				wt.BaseBranch = loadBaseBranch(wt.Path)
+				// Load linked task ID from centralized worktree data directory
+				wt.TaskID = loadTaskLink(p.ctx.ProjectRoot, wt.Path)
+				// Load chosen agent type from centralized worktree data directory
+				wt.ChosenAgentType = loadAgentType(p.ctx.ProjectRoot, wt.Path)
+				// Load PR URL from centralized worktree data directory
+				wt.PRURL = loadPRURL(p.ctx.ProjectRoot, wt.Path)
+				// Load base branch from centralized worktree data directory
+				wt.BaseBranch = loadBaseBranch(p.ctx.ProjectRoot, wt.Path)
 			}
 			// Detect conflicts across worktrees
 			cmds = append(cmds, p.loadConflicts())
@@ -241,7 +254,7 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 		}
 		configDir := filepath.Join(home, ".config", "sidecar")
 		if WriteDefaultPromptsToConfig(configDir) {
-			p.createPrompts = LoadPrompts(configDir, p.ctx.WorkDir)
+			p.createPrompts = LoadPrompts(configDir, p.ctx.ProjectRoot)
 			p.promptPicker = NewPromptPicker(p.createPrompts, p.width, p.height)
 			p.clearPromptPickerModal()
 		} else {
@@ -1110,7 +1123,7 @@ func (p *Plugin) Update(msg tea.Msg) (plugin.Plugin, tea.Cmd) {
 					// Save PR URL to worktree for indicator in list
 					if wt := p.mergeState.Worktree; wt != nil && msg.Data != "" {
 						wt.PRURL = msg.Data
-						_ = savePRURL(wt.Path, msg.Data)
+						_ = savePRURL(p.ctx.ProjectRoot, wt.Path, msg.Data)
 					}
 					// PR created (or existing found) - advanceMergeStep handles status transition
 					cmds = append(cmds, p.advanceMergeStep())

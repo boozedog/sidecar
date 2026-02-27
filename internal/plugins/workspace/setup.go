@@ -1,29 +1,16 @@
 package workspace
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 )
 
 // Default setup configuration
 const (
 	setupScriptName = ".worktree-setup.sh"
 )
-
-// Sidecar files that should be in .gitignore
-var sidecarGitignoreEntries = []string{
-	".sidecar/",
-	".sidecar-agent",
-	".sidecar-task",
-	".sidecar-pr",
-	".sidecar-start.sh",
-	".sidecar-base",
-	".td-root",
-}
 
 var (
 	// Default env files to copy
@@ -52,12 +39,6 @@ func DefaultSetupConfig() *SetupConfig {
 // This includes copying env files, creating symlinks, and running setup scripts.
 func (p *Plugin) setupWorktree(worktreePath, branchName string) error {
 	config := DefaultSetupConfig()
-
-	// 0. Ensure sidecar files are in main repo's .gitignore
-	if err := p.ensureSidecarGitignore(); err != nil {
-		p.ctx.Logger.Warn("failed to update .gitignore", "error", err)
-		// Don't fail creation for gitignore errors
-	}
 
 	// 1. Copy environment files
 	if config.CopyEnv {
@@ -226,61 +207,3 @@ func (p *Plugin) runSetupScript(worktreePath, branchName string) error {
 	return nil
 }
 
-// ensureSidecarGitignore ensures sidecar worktree files are in .gitignore.
-// This prevents .sidecar-agent, .sidecar-task, and .td-root from being
-// accidentally committed when using the worktree commit workflow.
-func (p *Plugin) ensureSidecarGitignore() error {
-	gitignorePath := filepath.Join(p.ctx.WorkDir, ".gitignore")
-
-	// Read existing .gitignore (or empty if doesn't exist)
-	var existingContent string
-	if data, err := os.ReadFile(gitignorePath); err == nil {
-		existingContent = string(data)
-	}
-
-	// Check which entries are missing
-	var missingEntries []string
-	for _, entry := range sidecarGitignoreEntries {
-		// Check if entry exists (as whole line)
-		found := false
-		for _, line := range strings.Split(existingContent, "\n") {
-			if strings.TrimSpace(line) == entry {
-				found = true
-				break
-			}
-		}
-		if !found {
-			missingEntries = append(missingEntries, entry)
-		}
-	}
-
-	// Nothing to add
-	if len(missingEntries) == 0 {
-		return nil
-	}
-
-	// Build content to append
-	var toAppend strings.Builder
-	// Add newline if file doesn't end with one
-	if existingContent != "" && !strings.HasSuffix(existingContent, "\n") {
-		toAppend.WriteString("\n")
-	}
-	toAppend.WriteString("\n# Sidecar worktree state files\n")
-	for _, entry := range missingEntries {
-		toAppend.WriteString(entry + "\n")
-	}
-
-	// Append to .gitignore
-	f, err := os.OpenFile(gitignorePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("open .gitignore: %w", err)
-	}
-	defer func() { _ = f.Close() }()
-
-	if _, err := f.WriteString(toAppend.String()); err != nil {
-		return fmt.Errorf("write .gitignore: %w", err)
-	}
-
-	p.ctx.Logger.Info("added sidecar entries to .gitignore", "entries", missingEntries)
-	return nil
-}

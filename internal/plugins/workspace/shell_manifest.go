@@ -13,7 +13,7 @@ import (
 )
 
 // ShellManifest stores persistent shell definitions for cross-instance sync
-// and reboot survival. Stored in {project}/.sidecar/shells.json.
+// and reboot survival. Stored in ~/.config/sidecar/projects/<slug>/shells.json.
 type ShellManifest struct {
 	Version int               `json:"version"`
 	Shells  []ShellDefinition `json:"shells"`
