@@ -10,7 +10,6 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/marcus/sidecar/internal/adapter"
-	"gopkg.in/yaml.v3"
 )
 
 // Watch watches for changes to Copilot CLI sessions.
@@ -61,6 +60,14 @@ func (a *Adapter) Watch(projectRoot string) (<-chan adapter.Event, io.Closer, er
 			case event, ok := <-watcher.Events:
 				if !ok {
 					return
+				}
+
+				// Handle new session directory creation
+				if event.Op&fsnotify.Create != 0 {
+					if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
+						_ = watcher.Add(event.Name)
+						continue
+					}
 				}
 
 				// Only watch for events.jsonl or workspace.yaml changes
@@ -141,18 +148,12 @@ func (a *Adapter) sessionMatchesProject(sessionID, projectRoot string) bool {
 	a.mu.RUnlock()
 
 	if !ok {
-		// Try to find it
 		sessionDir = filepath.Join(a.stateDir, sessionID)
 	}
 
 	workspaceFile := filepath.Join(sessionDir, "workspace.yaml")
-	data, err := os.ReadFile(workspaceFile)
+	ws, err := a.readWorkspaceCached(workspaceFile)
 	if err != nil {
-		return false
-	}
-
-	var ws WorkspaceYAML
-	if err := yaml.Unmarshal(data, &ws); err != nil {
 		return false
 	}
 
