@@ -2,6 +2,26 @@
 
 All notable changes to sidecar are documented here.
 
+## [v0.77.0] - 2026-02-28
+
+### Features
+
+- Add GitHub Copilot CLI adapter for conversations plugin
+
+### Bug Fixes
+
+- Restore mobile sidebar nav visibility (#220)
+- Resolve worktree path from ProjectRoot, not WorkDir (#174) (#218)
+- Fix task title truncation in td view (#215) (#217)
+
+### Documentation
+
+- Worktree setup hooks (#219)
+
+### Developer
+
+- Add pre-commit hooks for gofmt/vet/build (#216)
+
 ## [v0.76.0] - 2026-02-27
 
 ### Features
