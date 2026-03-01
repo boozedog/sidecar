@@ -34,7 +34,7 @@
 
             src = ./.;
 
-            vendorHash = "sha256-E9SFghqsVxJO+fVoGWk36Qq+J64GVqUeAo66yPT1E/E=";
+            vendorHash = "sha256-UpccauexSoMQy76Xdyf7AcVlomMVd0M9PtISjWa5bio=";
 
             subPackages = [ "cmd/sidecar" ];
 
