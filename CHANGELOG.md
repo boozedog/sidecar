@@ -2,6 +2,11 @@
 
 All notable changes to sidecar are documented here.
 
+## [v0.79.0] - 2026-03-20
+
+### Dependencies
+- chore: bump td to v0.42.1 — fixes lossless import round-trip for all issue fields and associated data (#64)
+
 ## [v0.78.0] - 2026-03-09
 
 ### Features
