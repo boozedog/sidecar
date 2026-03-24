@@ -24,6 +24,8 @@ func (p *Plugin) handleKeyPress(msg tea.KeyMsg) tea.Cmd {
 		return p.handleTaskLinkKeys(msg)
 	case ViewModeMerge:
 		return p.handleMergeKeys(msg)
+	case ViewModeAgentConfig:
+		return p.handleAgentConfigKeys(msg)
 	case ViewModeAgentChoice:
 		return p.handleAgentChoiceKeys(msg)
 	case ViewModeConfirmDelete:
@@ -282,6 +284,94 @@ func (p *Plugin) handleAgentChoiceKeys(msg tea.KeyMsg) tea.Cmd {
 	return cmd
 }
 
+// handleAgentConfigKeys handles keys in agent config modal.
+func (p *Plugin) handleAgentConfigKeys(msg tea.KeyMsg) tea.Cmd {
+	p.ensureAgentConfigModal()
+	if p.agentConfigModal == nil {
+		return nil
+	}
+
+	key := msg.String()
+
+	// Handle Enter manually to respect focused element — the modal's HandleKey
+	// falls through to primaryAction (submit) when the focused section doesn't
+	// consume Enter, which incorrectly submits when prompt or agent list is focused.
+	if key == "enter" {
+		focusID := p.agentConfigModal.FocusedID()
+		switch {
+		case focusID == agentConfigPromptFieldID:
+			// Open prompt picker
+			p.openPromptPicker(p.agentConfigPrompts, ViewModeAgentConfig)
+			return nil
+		case focusID == agentConfigSubmitID:
+			return p.executeAgentConfig()
+		case focusID == agentConfigCancelID:
+			p.viewMode = ViewModeList
+			p.clearAgentConfigModal()
+			return nil
+		case strings.HasPrefix(focusID, agentConfigAgentItemPrefix):
+			// Enter on agent list item — just absorb (selection already tracked by index)
+			return nil
+		case focusID == agentConfigSkipPermissionsID:
+			// Toggle checkbox
+			p.agentConfigSkipPerms = !p.agentConfigSkipPerms
+			return nil
+		}
+		return nil
+	}
+
+	// Delegate all other keys to the modal
+	prevAgentIdx := p.agentConfigAgentIdx
+	action, cmd := p.agentConfigModal.HandleKey(msg)
+
+	// Sync agent type when selection changes
+	if p.agentConfigAgentIdx != prevAgentIdx {
+		if p.agentConfigAgentIdx >= 0 && p.agentConfigAgentIdx < len(AgentTypeOrder) {
+			p.agentConfigAgentType = AgentTypeOrder[p.agentConfigAgentIdx]
+		}
+	}
+
+	switch action {
+	case "cancel", agentConfigCancelID:
+		p.viewMode = ViewModeList
+		p.clearAgentConfigModal()
+		return nil
+	}
+
+	return cmd
+}
+
+// executeAgentConfig executes the agent config modal action (start or restart).
+func (p *Plugin) executeAgentConfig() tea.Cmd {
+	wt := p.agentConfigWorktree
+	agentType := p.agentConfigAgentType
+	skipPerms := p.agentConfigSkipPerms
+	prompt := p.getAgentConfigPrompt()
+	isRestart := p.agentConfigIsRestart
+
+	p.viewMode = ViewModeList
+	p.clearAgentConfigModal()
+
+	if wt == nil {
+		return nil
+	}
+
+	if isRestart {
+		return tea.Sequence(
+			p.StopAgent(wt),
+			func() tea.Msg {
+				return restartAgentWithOptionsMsg{
+					worktree:  wt,
+					agentType: agentType,
+					skipPerms: skipPerms,
+					prompt:    prompt,
+				}
+			},
+		)
+	}
+	return p.StartAgentWithOptions(wt, agentType, skipPerms, prompt)
+}
+
 // executeAgentChoice executes the selected agent choice action.
 func (p *Plugin) executeAgentChoice() tea.Cmd {
 	wt := p.agentChoiceWorktree
@@ -295,13 +385,9 @@ func (p *Plugin) executeAgentChoice() tea.Cmd {
 		// Attach to existing session
 		return p.AttachToSession(wt)
 	}
-	// Restart agent: stop first, then start
-	return tea.Sequence(
-		p.StopAgent(wt),
-		func() tea.Msg {
-			return restartAgentMsg{worktree: wt}
-		},
-	)
+	// Restart agent: open config modal to choose options
+	p.openAgentConfigModal(wt, true)
+	return nil
 }
 
 // handleConfirmDeleteKeys handles keys in delete confirmation modal.
@@ -803,8 +889,9 @@ func (p *Plugin) handleListKeys(msg tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		if wt.Agent == nil {
-			// No agent running - start new one
-			return p.StartAgent(wt, p.resolveWorktreeAgentType(wt))
+			// No agent running - open agent config modal
+			p.openAgentConfigModal(wt, false)
+			return nil
 		}
 		// Agent exists - show choice modal (attach or restart)
 		p.agentChoiceWorktree = wt
@@ -1001,9 +1088,7 @@ func (p *Plugin) handleCreateKeys(msg tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		if focusID == createPromptFieldID {
-			p.promptPicker = NewPromptPicker(p.createPrompts, p.width, p.height)
-			p.clearPromptPickerModal()
-			p.viewMode = ViewModePromptPicker
+			p.openPromptPicker(p.createPrompts, ViewModeCreate)
 			return nil
 		}
 		if focusID == createSubmitID {
@@ -1023,9 +1108,7 @@ func (p *Plugin) handleCreateKeys(msg tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		if p.createFocus == 2 {
-			p.promptPicker = NewPromptPicker(p.createPrompts, p.width, p.height)
-			p.clearPromptPickerModal()
-			p.viewMode = ViewModePromptPicker
+			p.openPromptPicker(p.createPrompts, ViewModeCreate)
 			return nil
 		}
 		if p.createFocus == 3 && len(p.taskSearchFiltered) > 0 {

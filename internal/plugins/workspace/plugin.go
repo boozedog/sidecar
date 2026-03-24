@@ -246,6 +246,20 @@ type Plugin struct {
 	agentChoiceModal      *modal.Modal // Modal instance
 	agentChoiceModalWidth int          // Cached width for rebuild detection
 
+	// Agent config modal state (start/restart with options)
+	agentConfigWorktree   *Worktree
+	agentConfigIsRestart  bool
+	agentConfigAgentType  AgentType
+	agentConfigAgentIdx   int
+	agentConfigSkipPerms  bool
+	agentConfigPromptIdx  int
+	agentConfigPrompts    []Prompt
+	agentConfigModal      *modal.Modal
+	agentConfigModalWidth int
+
+	// Prompt picker return routing
+	promptPickerReturnMode ViewMode
+
 	// Delete confirmation modal state
 	deleteConfirmWorktree   *Worktree // Worktree pending deletion
 	deleteLocalBranchOpt    bool      // Checkbox: delete local branch
@@ -443,6 +457,12 @@ func (p *Plugin) Init(ctx *plugin.Context) error {
 		ctx.Keymap.RegisterPluginBinding("k", "cursor-up", "workspace-agent-choice")
 		ctx.Keymap.RegisterPluginBinding("down", "cursor-down", "workspace-agent-choice")
 		ctx.Keymap.RegisterPluginBinding("up", "cursor-up", "workspace-agent-choice")
+
+		// Agent config modal context
+		ctx.Keymap.RegisterPluginBinding("esc", "cancel", "workspace-agent-config")
+		ctx.Keymap.RegisterPluginBinding("enter", "confirm", "workspace-agent-config")
+		ctx.Keymap.RegisterPluginBinding("tab", "next-field", "workspace-agent-config")
+		ctx.Keymap.RegisterPluginBinding("shift+tab", "prev-field", "workspace-agent-config")
 
 		// Interactive mode context - uses configured keys (td-18098d)
 		ctx.Keymap.RegisterPluginBinding(p.getInteractiveExitKey(), "exit-interactive", "workspace-interactive")
