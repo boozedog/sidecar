@@ -999,8 +999,8 @@ func (p *Plugin) handlePollAgent(worktreeName string) tea.Cmd {
 				}
 			}
 			// Session file check runs every poll — mtime changes independently of tmux output.
-			// Only override active/waiting; preserve tmux-detected thinking/done/error.
-			if status == StatusActive || status == StatusWaiting {
+			// Only override active/waiting/done; preserve tmux-detected thinking/error.
+			if status == StatusActive || status == StatusWaiting || status == StatusDone {
 				if sessionStatus, ok := detectAgentSessionStatus(agentType, wtPath); ok {
 					prevStatus := status
 					status = sessionStatus
