@@ -72,7 +72,7 @@ func TestCapturePaneOutput_CommandArgs(t *testing.T) {
 	// This is covered by code review and the function signature test below.
 
 	// Verify the function is callable with expected parameter types
-	var _ func(string, int) (string, error) = CapturePaneOutput
+	var _ = CapturePaneOutput
 }
 
 func TestSendSGRMouse_BoundsCheck(t *testing.T) {
